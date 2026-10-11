@@ -2,22 +2,26 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+// Five tabs keep it simple on her phone; less-used tools live inside Classes and Settings.
 const items = [
-  ["/admin", "Today"], ["/admin/classes", "Classes"], ["/admin/timetable", "Timetable"], ["/admin/closures", "Closures"], ["/admin/clients", "Clients"],
-  ["/admin/outbox", "Outbox"], ["/admin/stats", "Stats"], ["/admin/import", "Import"], ["/admin/settings", "Settings"], ["/admin/compliance", "Compliance"],
-] as const;
+  { href: "/admin", label: "Today", also: [] as string[] },
+  { href: "/admin/classes", label: "Classes", also: ["/admin/timetable", "/admin/closures"] },
+  { href: "/admin/clients", label: "Clients", also: [] },
+  { href: "/admin/stats", label: "Stats", also: [] },
+  { href: "/admin/settings", label: "Settings", also: ["/admin/outbox", "/admin/import", "/admin/compliance", "/admin/texts", "/admin/team"] },
+];
 
 export function AdminNav() {
   const path = usePathname();
   return (
-    <nav aria-label="Studio admin" className="no-scrollbar mx-auto max-w-3xl overflow-x-auto px-3 pb-2">
-      <ul className="flex gap-1.5">
-        {items.map(([href, label]) => {
-          const active = href === "/admin" ? path === href : path.startsWith(href);
+    <nav aria-label="Studio admin" className="mx-auto max-w-3xl px-3 pb-2">
+      <ul className="grid grid-cols-5 gap-1">
+        {items.map(({ href, label, also }) => {
+          const active = href === "/admin" ? path === href : path.startsWith(href) || also.some((a) => path.startsWith(a));
           return (
             <li key={href}>
               <Link href={href} aria-current={active ? "page" : undefined}
-                className={`inline-flex min-h-10 items-center whitespace-nowrap rounded-full px-3.5 text-sm transition ${active ? "bg-ink text-paper" : "text-ink hover:bg-lilac-100"}`}>
+                className={`flex min-h-10 items-center justify-center rounded-full text-sm transition ${active ? "bg-ink text-paper" : "text-ink hover:bg-lilac-100"}`}>
                 {label}
               </Link>
             </li>

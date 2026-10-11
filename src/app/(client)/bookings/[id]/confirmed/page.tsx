@@ -4,7 +4,7 @@ import { CalendarPlus } from "lucide-react";
 import { Celebrate } from "@/components/Celebrate";
 import { ShareButton } from "@/components/ShareButton";
 import { Flower } from "@/components/Flower";
-import { STUDIO_RULES } from "@/lib/policy";
+import { getTexts } from "@/lib/content";
 import { ButtonLink, Notice } from "@/components/ui";
 import { requireViewer } from "@/lib/auth";
 import { sessionInfo } from "@/lib/booking";
@@ -24,6 +24,7 @@ export default async function Confirmed({ params }: { params: Promise<{ id: stri
   const { count: previous } = await db().from("bookings").select("id", { count: "exact", head: true })
     .eq("profile_id", viewer.profile.id).in("status", ["confirmed", "late_cancelled", "no_show"]).neq("id", b.id);
   const firstClass = (previous ?? 0) === 0;
+  const rules = (await getTexts()).studio_rules;
 
   return (
     <div className="px-5 pt-10 text-center">
@@ -43,7 +44,7 @@ export default async function Confirmed({ params }: { params: Promise<{ id: stri
               <h2 id="first" className="font-serif text-2xl text-ink">Your first class</h2>
               <p className="mt-1 text-sm text-ink-soft">Here&apos;s what to expect. Small class, three reformers, all the attention.</p>
               <ul className="mt-3 space-y-2 text-sm text-ink">
-                {[STUDIO_RULES[0], STUDIO_RULES[2], STUDIO_RULES[1], STUDIO_RULES[4]].map((r) => (
+                {rules.map((r) => (
                   <li key={r} className="flex gap-2"><Flower className="mt-[3px] size-4 shrink-0 text-plum-700/80" />{r}</li>
                 ))}
               </ul>

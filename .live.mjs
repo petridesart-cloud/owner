@@ -1,0 +1,12 @@
+import { chromium, devices } from "@playwright/test";
+const b = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
+const ctx = await b.newContext({ ...devices["Pixel 7"] });
+const p = await ctx.newPage();
+p.on("console", (m) => m.type() === "error" && console.log("console:", m.text().slice(0, 200)));
+p.on("response", (r) => r.status() >= 400 && console.log("HTTP", r.status(), r.url().slice(0, 100)));
+await p.goto("https://reform-pilates-seven.vercel.app/login");
+await p.getByLabel("Email").fill(process.argv[2]);
+await p.getByRole("button", { name: "Send my code" }).click();
+await p.waitForTimeout(4000);
+console.log("after send:", (await p.locator("main").innerText()).replace(/\s+/g, " ").slice(0, 300));
+await b.close();

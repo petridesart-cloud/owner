@@ -21,7 +21,7 @@ test("client requests a pack, studio marks it paid, client books with a class cr
   await admin.goto("/login");
   await admin.getByLabel("Email").fill(ADMIN);
   await admin.getByRole("button", { name: "Send my code" }).click();
-  await admin.getByLabel("Admin code").fill(CODE);
+  await admin.getByLabel("Studio password").fill(CODE);
   await admin.getByRole("button", { name: "Continue" }).click();
   await expect(admin).toHaveURL(/\/admin/);
   const row = admin.getByRole("listitem").filter({ hasText: name });

@@ -2,12 +2,10 @@ import Link from "next/link";
 import { getSettings } from "@/lib/auth";
 
 const legal = [
-  { href: "/policy/payments", label: "Payments & Cancellation" },
-  { href: "/legal/terms", label: "Terms & Conditions" },
-  { href: "/legal/privacy", label: "Privacy Policy" },
-  { href: "/legal/cookies", label: "Cookies" },
-  { href: "/legal/health", label: "Health & Safety" },
   { href: "/policy", label: "Studio Rules" },
+  { href: "/policy/payments", label: "Payments & Cancellation" },
+  { href: "/legal/terms", label: "Terms" },
+  { href: "/legal/privacy", label: "Privacy" },
 ];
 
 export async function Footer() {
@@ -30,7 +28,7 @@ export async function Footer() {
         {s.vat_registered && s.vat_number && <><br />VAT {s.vat_number}</>}
         <br /><a className="underline underline-offset-4" href={`mailto:${s.contact_email}`}>{s.contact_email}</a> · <a className="underline underline-offset-4" href={`tel:${s.contact_phone.replace(/\s/g, "")}`}>{s.contact_phone}</a>
       </address>
-      <p className="mt-4">© {new Date().getFullYear()} Re·Form Pilates Studio. This site uses essential cookies only.</p>
+      <p className="mt-4">© {new Date().getFullYear()} Re·Form Pilates Studio · Essential cookies only · <Link href="/contact" className="underline underline-offset-4">Contact</Link></p>
     </footer>
   );
 }

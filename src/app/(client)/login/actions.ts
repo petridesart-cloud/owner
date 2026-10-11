@@ -11,6 +11,13 @@ import { notify } from "@/lib/notifications";
 const sha = (s: string) => createHash("sha256").update(s).digest("hex");
 const Email = z.string().trim().toLowerCase().email();
 
+/** Admins: emails in ADMIN_EMAILS (bootstrap) plus anyone she added under Studio team. */
+async function isStudioAdmin(email: string) {
+  if (env.adminEmails.includes(email)) return true;
+  const { data } = await db().from("profiles").select("id").ilike("email", email).eq("role", "admin").is("deleted_at", null).maybeSingle();
+  return !!data;
+}
+
 export type RequestState = { ok: boolean; email?: string; error?: string; demoCode?: string; adminCode?: boolean };
 
 /**
@@ -52,7 +59,7 @@ export async function requestCode(_: RequestState, form: FormData): Promise<Requ
   await notify({ profileId: profile?.id, email }, "login_code", { code });
 
   // Demo mode shows client codes on screen. Never for admin emails: those need DEMO_ADMIN_CODE.
-  if (env.demoMode && env.adminEmails.includes(email)) return { ok: true, email, adminCode: true };
+  if (env.demoMode && (await isStudioAdmin(email))) return { ok: true, email, adminCode: true };
   return { ok: true, email, demoCode: env.demoMode ? code : undefined };
 }
 
@@ -66,9 +73,9 @@ export async function verifyCode(_: VerifyState, form: FormData): Promise<Verify
   if (!email.success || token.length < 6 || token.length > 12) return { ok: false, error: "Enter the code from your email." };
 
   let otp = token;
-  if (env.demoMode && env.adminEmails.includes(email.data)) {
+  if (env.demoMode && (await isStudioAdmin(email.data))) {
     if (env.demoAdminCode.length < 8 || token !== env.demoAdminCode) {
-      return { ok: false, error: "That admin code isn't right." };
+      return { ok: false, error: "That password isn't right." };
     }
     const link = await db().auth.admin.generateLink({ type: "magiclink", email: email.data });
     otp = link.data?.properties?.email_otp ?? "";

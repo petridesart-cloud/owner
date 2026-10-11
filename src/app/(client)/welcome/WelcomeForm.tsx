@@ -54,8 +54,7 @@ export function WelcomeForm({ email, name, phone, next }: { email: string; name:
 
       <fieldset className="space-y-1 border-t border-line pt-4">
         <legend className="pt-4 text-sm font-medium text-ink">News &amp; offers <span className="font-normal text-ink-soft">(optional)</span></legend>
-        <Checkbox id="marketing_email" name="marketing_email">Email me about new schedules and events.</Checkbox>
-        <Checkbox id="marketing_sms" name="marketing_sms">Text me about new schedules and events.</Checkbox>
+        <Checkbox id="marketing_email" name="marketing_email">Send me news about new schedules and events.</Checkbox>
         <p className="text-xs text-ink-soft">Booking confirmations and reminders are always sent. Unsubscribe from news any time.</p>
       </fieldset>
 

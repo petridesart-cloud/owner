@@ -62,7 +62,9 @@ Booking web app for **Re·Form Pilates Studio**, Limassol, Cyprus (Instagram @re
   - Cyprus public holidays for the next 12 months are preloaded as suggestions she confirms.
   - "Missed class: public holiday" returns a class with a reason.
 - **Waitlist:** the first in line gets 2h (or until the cutoff) to claim. A live offer reserves the spot.
-- **Her texts** live in `src/lib/policy.ts` and are reused across the policy pages, the first-class welcome, reminders and "What to bring".
+- **Her texts** are editable by her (Admin → Settings → Your texts, table `site_content`), falling back to the defaults in `src/lib/policy.ts`. They're reused across the policy pages, the first-class welcome, "What to bring", The Magic and Our Studio.
+- **Studio team:** she adds or removes admins in Admin → Settings → Studio team (`profiles.role`). `ADMIN_EMAILS` is only the bootstrap.
+- **Keep it simple:** 5 admin tabs (Today, Classes, Clients, Stats, Settings); less-used tools sit inside Classes and Settings. Settings shows the essentials first, with technical options under "Advanced".
 
 ## Decisions (and why)
 | Decision | Why |

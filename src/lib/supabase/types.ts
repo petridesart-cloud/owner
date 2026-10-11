@@ -417,6 +417,20 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"site_content": {
+                  Row: {
+                    "key": string,"updated_at": string,"value": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "key": string,"updated_at"?: string,"value": string
+                  }
+                  Update: {
+                    "key"?: string,"updated_at"?: string,"value"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"studio_settings": {
                   Row: {
                     "address": string,"allow_pay_later": boolean,"bank_account_name": string,"bank_iban": string,"cancellation_cutoff_hours": number,"contact_email": string,"contact_phone": string,"currency": string,"expiry_reminder_days": number,"hold_minutes": number,"id": number,"instagram_handle": string,"intro_line": string,"legal_name": string,"map_url": string,"membership_period_mode": string,"online_payments_enabled": boolean,"policy_version": string,"refund_late_cancel_if_filled": boolean,"registration_number": string,"reminder_offsets_minutes": (number)[],"revolut_link": string,"rollover_max": number,"status_banner": string,"student_discount_pct": number,"studio_name": string,"timezone": string,"trader_name": string,"unpaid_request_expiry_hours": number,"updated_at": string,"vat_number": string,"vat_rate": number,"vat_registered": boolean,"waitlist_window_minutes": number

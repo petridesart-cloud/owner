@@ -339,7 +339,7 @@ export async function saveSettings(_: ActionResult, form: FormData): Promise<Act
     revolut_link: str("revolut_link"), bank_account_name: str("bank_account_name"), bank_iban: str("bank_iban").replace(/\s+/g, " "),
     legal_name: str("legal_name"), trader_name: str("trader_name"), address: str("address"),
     contact_email: str("contact_email"), contact_phone: str("contact_phone"), instagram_handle: str("instagram_handle").replace(/^@/, ""),
-    intro_line: str("intro_line"), policy_version: str("policy_version"),
+    policy_version: str("policy_version"),
     updated_at: new Date().toISOString(),
   }).eq("id", 1);
   if (error) return { ok: false, error: "Some values are out of range. Please check them." };
@@ -462,4 +462,39 @@ export async function resetDemoData(): Promise<ActionResult> {
   if (error) return { ok: false, error: "Reset failed. Check the server logs." };
   revalidatePath("/", "layout");
   return { ok: true, message: "Demo data reset. Fresh classes, clients and bookings are ready." };
+}
+
+// ── Her texts & team ───────────────────────────────────────────────────
+const TEXT_KEYS = ["studio_rules", "payments_policy", "what_to_bring", "magic_text", "studio_text"] as const;
+
+export async function saveTexts(_: ActionResult, form: FormData): Promise<ActionResult> {
+  await admin("save_texts");
+  const rows = TEXT_KEYS.map((key) => ({ key, value: String(form.get(key) ?? "").trim().slice(0, 6000), updated_at: new Date().toISOString() }))
+    .filter((r) => r.value);
+  const { error } = await db().from("site_content").upsert(rows);
+  if (error) return { ok: false, error: "Couldn't save the texts." };
+  const intro = String(form.get("intro_line") ?? "").trim();
+  if (intro) await db().from("studio_settings").update({ intro_line: intro.slice(0, 300) }).eq("id", 1);
+  revalidatePath("/", "layout");
+  return { ok: true, message: "Saved. Your changes are live." };
+}
+
+/** Add someone to the studio team (admin access). They sign in with this email. */
+export async function addTeamMember(_: ActionResult, form: FormData): Promise<ActionResult> {
+  await admin("team_add");
+  const email = String(form.get("email") ?? "").trim().toLowerCase();
+  if (!z.string().email().safeParse(email).success) return { ok: false, error: "Enter a valid email." };
+  const { data: existing } = await db().from("profiles").select("id").ilike("email", email).is("deleted_at", null).maybeSingle();
+  if (existing) await db().from("profiles").update({ role: "admin" }).eq("id", existing.id);
+  else await db().from("profiles").insert({ email, role: "admin", full_name: String(form.get("name") ?? "").trim() || null });
+  revalidatePath("/admin/team");
+  return { ok: true, message: `${email} can now sign in to the studio admin.` };
+}
+
+export async function removeTeamMember(profileId: string): Promise<ActionResult> {
+  const viewer = await admin("team_remove", { profileId });
+  if (profileId === viewer.profile.id) return { ok: false, error: "You can't remove yourself." };
+  await db().from("profiles").update({ role: "client" }).eq("id", profileId);
+  revalidatePath("/admin/team");
+  return { ok: true };
 }

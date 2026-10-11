@@ -17,6 +17,10 @@ export default async function ClassesPage({ searchParams }: { searchParams: Prom
     <div>
       <AdminTitle title="Classes" sub="Next 14 days. Tap a class to edit, add clients or cancel."
         action={<ButtonLink href="/admin/classes/new" className="min-h-11 px-4 text-[0.7rem]">New class</ButtonLink>} />
+      <div className="mb-3 grid grid-cols-2 gap-2">
+        <Link href="/admin/timetable" className="card flex min-h-14 flex-col justify-center px-4 py-2"><span className="font-medium text-ink">Monthly timetable</span><span className="text-xs text-ink-soft">Set next month&apos;s weekly classes</span></Link>
+        <Link href="/admin/closures" className="card flex min-h-14 flex-col justify-center px-4 py-2"><span className="font-medium text-ink">Holidays &amp; closures</span><span className="text-xs text-ink-soft">Close the studio, freeze packages</span></Link>
+      </div>
       <div className="mb-4 flex gap-2">
         <Link href={`/admin/classes?from=${addDaysKey(start, -14)}`} className="inline-flex min-h-11 items-center rounded-full border border-line bg-white px-4 text-sm">← Earlier</Link>
         <Link href={`/admin/classes?from=${addDaysKey(start, 14)}`} className="inline-flex min-h-11 items-center rounded-full border border-line bg-white px-4 text-sm">Later →</Link>

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { ActionForm } from "@/components/ActionForm";
 import { Checkbox, Field, inputClass } from "@/components/ui";
 import { getSettings } from "@/lib/auth";
@@ -12,7 +13,7 @@ export default async function SettingsPage() {
   const [s, { data: types }, { data: products }, unlocked] = await Promise.all([
     getSettings(),
     db().from("class_types").select("*").order("sort_order"),
-    db().from("products").select("*").order("sort_order"),
+    db().from("products").select("*").or("active.eq.true,kind.neq.membership").order("sort_order"),
     paymentsUnlocked(),
   ]);
   const n = (id: string, label: string, value: number, hint?: string, step = 1) => (
@@ -26,6 +27,18 @@ export default async function SettingsPage() {
     <div className="space-y-6">
       <AdminTitle title="Settings" sub="Times are in Europe/Nicosia; prices in EUR." />
 
+      <nav aria-label="More tools" className="grid grid-cols-2 gap-2">
+        {[
+          ["/admin/texts", "Your texts", "Rules, policy, about you"],
+          ["/admin/team", "Studio team", "Who can open this admin"],
+          ["/admin/outbox", "Messages", "Emails & texts sent"],
+          ["/admin/import", "Import", "Clients from a spreadsheet"],
+          ["/admin/compliance", "Launch checklist", "Before going live"],
+        ].map(([href, label, sub]) => (
+          <Link key={href} href={href} className="card flex min-h-14 flex-col justify-center px-4 py-2"><span className="font-medium text-ink">{label}</span><span className="text-xs text-ink-soft">{sub}</span></Link>
+        ))}
+      </nav>
+
       {env.demoMode && (
         <section className="card border-mauve/50 bg-mauve-soft/50 px-5 py-5">
           <h2 className="display mb-1 text-[0.95rem]">Demo data</h2>
@@ -37,51 +50,65 @@ export default async function SettingsPage() {
       <section className="card px-5 py-5">
         <h2 className="display mb-4 text-[0.95rem]">Booking rules</h2>
         <ActionForm action={saveSettings} submit="Save settings">
+          <h3 className="display text-[0.85rem]">Your studio</h3>
           <div className="grid grid-cols-2 gap-3">
-            {n("cancellation_cutoff_hours", "Cancellation cutoff (hours)", s.cancellation_cutoff_hours)}
-            {n("waitlist_window_hours", "Waitlist claim window (hours)", s.waitlist_window_minutes / 60, undefined, 0.25)}
-            {n("hold_minutes", "Payment hold (minutes)", s.hold_minutes)}
-            {t("reminder_offsets", "Reminders (hours before)", s.reminder_offsets_minutes.map((m) => m / 60).join(", "), "e.g. 24, 2")}
+            {t("legal_name", "Studio name", s.legal_name)}
+            {t("trader_name", "Your full name", s.trader_name, "Shown in the footer (EU law).")}
           </div>
-          <Checkbox id="refund_late_cancel_if_filled" name="refund_late_cancel_if_filled" defaultChecked={s.refund_late_cancel_if_filled}>
-            Return the credit for a late cancellation if the spot gets re-booked
-          </Checkbox>
-          <h3 className="display pt-3 text-[0.85rem]">Payments</h3>
-          <Checkbox id="online_payments_enabled" name="online_payments_enabled" defaultChecked={s.online_payments_enabled} disabled={!unlocked}>
-            Online payments (Stripe){process.env.DEMO_MODE === "true" ? ", test mode in this demo" : ""}
-          </Checkbox>
-          {!unlocked && <p className="-mt-2 pl-8 text-xs text-ink-soft">Locked until every item under “Before online payments” is ticked in <a href="/admin/compliance" className="underline">Compliance</a>. Until then clients pay at the studio.</p>}
-          <Checkbox id="allow_pay_later" name="allow_pay_later" defaultChecked={s.allow_pay_later}>Allow booking one class before paying (your policy: off, everything is paid in advance)</Checkbox>
-          <div className="grid grid-cols-2 gap-3">
-            {n("unpaid_request_expiry_hours", "Unpaid requests expire after (hours)", s.unpaid_request_expiry_hours)}
-            {n("expiry_reminder_days", "Expiry reminder (days before)", s.expiry_reminder_days)}
-            {n("student_discount_pct", "Student discount (%)", s.student_discount_pct, "Group packages only")}
-          </div>
-          {t("revolut_link", "Revolut payment link", s.revolut_link, "e.g. https://revolut.me/yourname")}
-          <div className="grid grid-cols-2 gap-3">
-            {t("bank_account_name", "Bank account name", s.bank_account_name)}
-            {t("bank_iban", "IBAN", s.bank_iban, "Clients use their booking code as the reference")}
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Field id="membership_period_mode" label="Monthly package period">
-              <select id="membership_period_mode" name="membership_period_mode" defaultValue={s.membership_period_mode} className={inputClass}>
-                <option value="rolling">Rolling 30 days from purchase</option><option value="calendar">Calendar month</option>
-              </select>
-            </Field>
-            {n("rollover_max", "Max classes rolling over", s.rollover_max, "0 = none")}
-          </div>
-          <h3 className="display pt-3 text-[0.85rem]">Studio details</h3>
-          {t("status_banner", "Status banner (optional)", s.status_banner, "Shown on every page, e.g. “DM us on Instagram to book while we fix an issue”. Leave empty to hide.")}
-          {t("intro_line", "Home page intro", s.intro_line)}
-          {t("legal_name", "Trading name", s.legal_name)}
-          {t("trader_name", "Your full name (the trader)", s.trader_name, "EU law requires identifying the seller, even for individuals.")}
           {t("address", "Studio address", s.address)}
           <div className="grid grid-cols-2 gap-3">
             {t("contact_email", "Email", s.contact_email)}
             {t("contact_phone", "Phone", s.contact_phone)}
-            {t("instagram_handle", "Instagram", s.instagram_handle)}
-            {t("policy_version", "Policy version", s.policy_version, "Change when the policy text changes")}
           </div>
+          {t("instagram_handle", "Instagram", s.instagram_handle)}
+
+          <h3 className="display pt-3 text-[0.85rem]">How clients pay you</h3>
+          {t("revolut_link", "Revolut link", s.revolut_link, "e.g. https://revolut.me/yourname")}
+          <div className="grid grid-cols-2 gap-3">
+            {t("bank_account_name", "Name on bank account", s.bank_account_name)}
+            {t("bank_iban", "IBAN", s.bank_iban)}
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {n("student_discount_pct", "Student discount (%)", s.student_discount_pct, "Group packages only")}
+            {n("unpaid_request_expiry_hours", "Unpaid requests expire (hours)", s.unpaid_request_expiry_hours)}
+          </div>
+
+          <h3 className="display pt-3 text-[0.85rem]">Cancellations</h3>
+          <div className="grid grid-cols-2 gap-3">
+            {n("cancellation_cutoff_hours", "Free cancellation until (hours before)", s.cancellation_cutoff_hours)}
+            {n("expiry_reminder_days", "Remind before package expires (days)", s.expiry_reminder_days)}
+          </div>
+
+          <h3 className="display pt-3 text-[0.85rem]">Message on every page</h3>
+          {t("status_banner", "Status banner (optional)", s.status_banner, "e.g. “Studio closed this week, see you Monday!” Leave empty to hide.")}
+
+          <details className="rounded-2xl border border-line px-4 py-2">
+            <summary className="min-h-11 cursor-pointer content-center text-sm font-medium text-ink">Advanced</summary>
+            <div className="space-y-4 pb-3 pt-2">
+              <div className="grid grid-cols-2 gap-3">
+                {n("waitlist_window_hours", "Waitlist claim window (hours)", s.waitlist_window_minutes / 60, undefined, 0.25)}
+                {t("reminder_offsets", "Class reminders (hours before)", s.reminder_offsets_minutes.map((m) => m / 60).join(", "), "e.g. 24, 2")}
+                {n("hold_minutes", "Online payment hold (minutes)", s.hold_minutes)}
+                {t("policy_version", "Policy version", s.policy_version, "Change when the policy text changes")}
+              </div>
+              <Checkbox id="refund_late_cancel_if_filled" name="refund_late_cancel_if_filled" defaultChecked={s.refund_late_cancel_if_filled}>
+                Return the class for a late cancellation if someone else takes the spot
+              </Checkbox>
+              <Checkbox id="allow_pay_later" name="allow_pay_later" defaultChecked={s.allow_pay_later}>Allow booking one class before paying (your policy: off)</Checkbox>
+              <Checkbox id="online_payments_enabled" name="online_payments_enabled" defaultChecked={s.online_payments_enabled} disabled={!unlocked}>
+                Online card payments (Stripe){process.env.DEMO_MODE === "true" ? ", test mode in this demo" : ""}
+              </Checkbox>
+              {!unlocked && <p className="-mt-2 pl-8 text-xs text-ink-soft">Locked until the Launch checklist&apos;s “Before online payments” items are ticked.</p>}
+              <div className="grid grid-cols-2 gap-3">
+                <Field id="membership_period_mode" label="Monthly package period (future)">
+                  <select id="membership_period_mode" name="membership_period_mode" defaultValue={s.membership_period_mode} className={inputClass}>
+                    <option value="rolling">Rolling 30 days</option><option value="calendar">Calendar month</option>
+                  </select>
+                </Field>
+                {n("rollover_max", "Classes rolling over (future)", s.rollover_max, "0 = none")}
+              </div>
+            </div>
+          </details>
         </ActionForm>
       </section>
 

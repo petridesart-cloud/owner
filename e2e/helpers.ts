@@ -7,10 +7,8 @@ export async function signIn(page: Page, email: string, next = "/") {
   await page.goto(`/login?next=${encodeURIComponent(next)}`);
   await page.getByLabel("Email").fill(email);
   await page.getByRole("button", { name: "Send my code" }).click();
-  const notice = page.getByText(/your code is/i);
-  await expect(notice).toBeVisible();
-  const code = (await notice.textContent())!.match(/(\d{6,10})/)![1];
-  await page.getByLabel("Code from your email").fill(code);
+  // Demo mode pre-fills the code.
+  await expect(page.getByLabel("Code from your email")).toHaveValue(/^\d{6,10}$/);
   await page.getByRole("button", { name: "Continue" }).click();
 }
 

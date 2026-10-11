@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { ClickToLoadMap } from "@/components/ClickToLoadMap";
 import { ButtonLink, PageTitle, Section } from "@/components/ui";
 import { getSettings } from "@/lib/auth";
+import { getTexts } from "@/lib/content";
 
 export const metadata: Metadata = { title: "Our Studio" };
 
@@ -14,11 +15,11 @@ const gallery = [
 ];
 
 export default async function StudioPage() {
-  const s = await getSettings();
+  const [s, t] = await Promise.all([getSettings(), getTexts()]);
   return (
     <div>
       <PageTitle eyebrow="Limassol, Cyprus" title="Our Studio">
-        A calm, light-filled space with three reformers, so every class gets real attention.
+        {t.studio_text}
       </PageTitle>
       <section aria-label="Gallery" className="no-scrollbar -mx-0 flex snap-x gap-3 overflow-x-auto px-5 pb-2">
         {gallery.map((g) => (

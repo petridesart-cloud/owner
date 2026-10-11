@@ -55,7 +55,7 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
             );
           })}
         </div>
-        <div className="mt-1 flex gap-4"><Link href="/membership" className="inline-flex min-h-11 items-center text-sm font-medium text-ink underline underline-offset-4">Membership &amp; history</Link><Link href="/packs" className="inline-flex min-h-11 items-center text-sm font-medium text-ink underline underline-offset-4">Packages</Link></div>
+        <div className="mt-1 flex gap-4"><Link href="/membership" className="inline-flex min-h-11 items-center text-sm font-medium text-ink underline underline-offset-4">My package &amp; history</Link><Link href="/packs" className="inline-flex min-h-11 items-center text-sm font-medium text-ink underline underline-offset-4">Packages</Link></div>
       </section>
 
       {(waits ?? []).length > 0 && (

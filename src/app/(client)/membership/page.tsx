@@ -10,7 +10,7 @@ import { dayMonth, longDate } from "@/lib/time";
 import { toggleRenewal } from "./actions";
 import { paymentReference } from "@/lib/pricing";
 
-export const metadata: Metadata = { title: "Membership" };
+export const metadata: Metadata = { title: "My package" };
 export const dynamic = "force-dynamic";
 
 const ENTRY: Record<string, string> = {
@@ -38,7 +38,7 @@ export default async function MembershipPage({ searchParams }: { searchParams: P
 
   return (
     <div>
-      <PageTitle eyebrow="Your package" title="Membership" />
+      <PageTitle eyebrow="Classes & payments" title="My package" />
       <div className="space-y-6">
         {requested && <div className="px-5"><Notice tone="success">Request noted. Once your payment is received, your classes are added straight away.</Notice></div>}
         {started && <div className="px-5"><Notice tone="success">Welcome! Your classes are ready to book.</Notice></div>}

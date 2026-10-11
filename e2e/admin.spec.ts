@@ -15,11 +15,11 @@ test("admin signs in with the demo admin code, not an on-screen code", async ({ 
   await page.goto("/login");
   await page.getByLabel("Email").fill(ADMIN);
   await page.getByRole("button", { name: "Send my code" }).click();
-  await expect(page.getByText(/your code is/i)).toHaveCount(0);
-  await page.getByLabel("Admin code").fill("11112222");
+  await expect(page.getByText(/no email is sent/i)).toHaveCount(0);
+  await page.getByLabel("Studio password").fill("11112222");
   await page.getByRole("button", { name: "Continue" }).click();
-  await expect(page.getByText("That admin code isn't right.")).toBeVisible();
-  await page.getByLabel("Admin code").fill(CODE);
+  await expect(page.getByText("That password isn't right.")).toBeVisible();
+  await page.getByLabel("Studio password").fill(CODE);
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page).toHaveURL(/\/admin/);
   await page.getByRole("link", { name: "Classes" }).click();

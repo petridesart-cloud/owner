@@ -32,12 +32,15 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
       <PageTitle eyebrow={p.email ?? ""} title="Account" />
       <div className="space-y-8">
         <div className="px-5">
-          <Link href="/membership" className="card flex min-h-14 items-center justify-between px-5 py-3 font-medium text-ink">Membership, classes &amp; receipts <span aria-hidden>→</span></Link>
+          <Link href="/membership" className="card flex min-h-14 items-center justify-between px-5 py-3 font-medium text-ink">My package, classes &amp; receipts <span aria-hidden>→</span></Link>
         </div>
         <Section title="Your details"><Card className="px-5 py-5"><ProfileForm name={p.full_name ?? ""} phone={p.phone ?? ""} email={viewer.email} me={p.marketing_email} ms={p.marketing_sms} /></Card></Section>
         <Section title="Health"><Card className="px-5 py-5"><HealthForm note={health?.note ?? ""} /></Card></Section>
-        <Section title="Consents">
-          <Card className="px-5 py-4">
+        <Section title="Privacy & data">
+          <details className="card px-5 py-1">
+            <summary className="min-h-12 cursor-pointer content-center text-sm font-medium text-ink">Consents, download or delete my data</summary>
+            <div className="space-y-4 pb-4">
+              <div>
             <ul className="divide-y divide-line text-sm">
               {[...latest.entries()].map(([type, c]) => (
                 <li key={type} className="flex justify-between gap-3 py-2.5">
@@ -47,10 +50,8 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
               ))}
               {latest.size === 0 && <li className="py-2 text-ink-soft">No consents recorded yet.</li>}
             </ul>
-          </Card>
-        </Section>
-        <Section title="Your data">
-          <Card className="space-y-4 px-5 py-5">
+          </div>
+              <div className="space-y-4">
             <p className="text-sm leading-relaxed text-ink-soft">Download everything we hold about you, or delete your account. Read the <Link href="/legal/privacy" className="underline underline-offset-4">Privacy Policy</Link>.</p>
             <a href="/api/account/export" className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full border border-ink/15 bg-white/60 px-6 text-[0.8rem] font-medium uppercase tracking-[0.18em] text-ink hover:bg-white">
               <Download aria-hidden size={17} /> Download my data
@@ -65,7 +66,9 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
                 <Button type="submit" variant="danger" className="w-full">Delete my account</Button>
               </form>
             </details>
-          </Card>
+          </div>
+            </div>
+          </details>
         </Section>
         <div className="px-5">
           <form action={signOutAction}><Button type="submit" variant="ghost" className="w-full"><LogOut aria-hidden size={17} /> Sign out</Button></form>

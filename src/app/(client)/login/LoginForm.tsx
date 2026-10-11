@@ -35,22 +35,25 @@ export function LoginForm({ next }: { next: string }) {
       <input type="hidden" name="email" value={req.email} />
       <input type="hidden" name="next" value={next} />
       <p className="text-sm leading-relaxed text-ink-soft" aria-live="polite">
-        We sent a code to <strong className="font-medium text-ink">{req.email}</strong>.{" "}
-        <button type="button" onClick={() => setEditing(true)} className="min-h-11 font-medium text-ink underline underline-offset-4">Change email</button>
+        {req.adminCode ? "Studio sign-in for " : req.demoCode ? "Signing in as " : "We sent a code to "}
+        <strong className="font-medium text-ink">{req.email}</strong>.{" "}
+        <button type="button" onClick={() => setEditing(true)} className="min-h-11 font-medium text-ink underline underline-offset-4">Change</button>
       </p>
-      {req.adminCode && <Notice>Demo mode: enter your private admin code (DEMO_ADMIN_CODE) instead of an emailed code.</Notice>}
-      {req.demoCode && <Notice>Demo mode: your code is <strong className="tracking-[0.2em]">{req.demoCode}</strong> (in production it&apos;s only emailed).</Notice>}
-      <Field id="code" label={req.adminCode ? "Admin code" : "Code from your email"} error={ver.error}>
+      {req.adminCode && <Notice>Enter your studio password.</Notice>}
+      {req.demoCode && <Notice>Demo: no email is sent. Your code is filled in below, just tap Continue.</Notice>}
+      <Field id="code" label={req.adminCode ? "Studio password" : "Code from your email"} error={ver.error}>
         <input
-          ref={codeRef} id="code" name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]*" maxLength={12} required
+          ref={codeRef} id="code" name="code" inputMode="numeric" defaultValue={req.demoCode} key={req.demoCode ?? "code"} autoComplete="one-time-code" pattern="[0-9]*" maxLength={12} required
           placeholder="••••••••" className={`${inputClass} text-center font-serif text-3xl tracking-[0.35em]`}
           aria-invalid={!!ver.error} aria-describedby={ver.error ? "code-error" : undefined}
         />
       </Field>
       <Button type="submit" disabled={verifying} className="w-full">{verifying ? "Checking…" : "Continue"}</Button>
-      <button type="submit" formAction={requestAction} formNoValidate className="mx-auto block min-h-11 text-sm font-medium text-ink underline underline-offset-4">
-        Send a new code
-      </button>
+      {!req.adminCode && !req.demoCode && (
+        <button type="submit" formAction={requestAction} formNoValidate className="mx-auto block min-h-11 text-sm font-medium text-ink underline underline-offset-4">
+          Send a new code
+        </button>
+      )}
     </form>
   );
 }

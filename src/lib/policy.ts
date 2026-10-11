@@ -25,3 +25,11 @@ export function paymentsPolicy(s: { cancellation_cutoff_hours: number; student_d
     "Classes and memberships that are active during the Christmas, Easter and Summer holidays will be frozen for the days that the studio is closed.",
   ];
 }
+
+export const MAGIC_TEXT = `Re·Form is a small studio on purpose: three reformers, one instructor, and time for every body in the room.
+
+[Write a few lines about yourself: how you found Pilates, why you opened Re·Form, and what a class with you feels like.]`;
+
+export const STUDIO_TEXT = "A calm, light-filled space with three reformers, so every class gets real attention.";
+
+export type SiteTexts = { studio_rules: string[]; payments_policy: string[]; what_to_bring: string[]; magic_text: string; studio_text: string };

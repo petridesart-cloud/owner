@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CalendarDays, Clock, MapPin, Users, X } from "lucide-react";
+import { CalendarDays, MapPin, Users, X } from "lucide-react";
 import { Badge, ButtonLink, Eyebrow, Notice } from "@/components/ui";
 import { spotsLabel } from "@/components/ClassRow";
 import { getSettings, getViewer } from "@/lib/auth";
@@ -10,7 +10,7 @@ import { db } from "@/lib/supabase/admin";
 import { eur, vatLine } from "@/lib/money";
 import { longDate, relativeHours, time } from "@/lib/time";
 import { BookActions } from "./BookActions";
-import { WHAT_TO_BRING } from "@/lib/policy";
+import { getTexts } from "@/lib/content";
 import { Flower } from "@/components/Flower";
 
 export const metadata: Metadata = { title: "Book a class" };
@@ -27,7 +27,7 @@ export default async function BookPage({ params, searchParams }: { params: Promi
   const [c] = await availability(new Date(start.getTime() - 1000), new Date(start.getTime() + 1000)).then((r) => r.filter((x) => x.id === id));
   if (!c) notFound();
 
-  const [viewer, settings] = await Promise.all([getViewer(), getSettings()]);
+  const [viewer, settings, texts] = await Promise.all([getViewer(), getSettings(), getTexts()]);
   const profile = viewer?.profile;
   const [booking, entry] = profile
     ? await Promise.all([
@@ -46,7 +46,6 @@ export default async function BookPage({ params, searchParams }: { params: Promi
   const past = start <= new Date();
   const offered = entry?.status === "offered" && new Date(entry.offer_expires_at!) > new Date();
   const full = c.spots_left === 0 && !offered;
-  const mins = Math.round((new Date(c.ends_at).getTime() - start.getTime()) / 60000);
   const usable = profile && c.credit_kind
     ? (await db().rpc("usable_credits", { p_profile: profile.id, p_kind: c.credit_kind, p_class: c.starts_at })).data?.[0]
     : null;
@@ -65,7 +64,7 @@ export default async function BookPage({ params, searchParams }: { params: Promi
         </div>
         <div className="flex items-start justify-between gap-3">
           <div>
-            <Eyebrow>{c.kind === "event" ? "Special event" : c.kind === "mat" ? "Mat class" : "Reformer class"}</Eyebrow>
+            {c.kind === "event" && <Eyebrow>Special event</Eyebrow>}
             <h1 className="mt-2 text-[2rem] leading-tight text-ink">
               {c.kind === "reformer" ? (
                 <><span className="font-script text-[2.6rem] text-plum-700">Reformer</span> <span className="display text-[1.6rem]">Pilates</span></>
@@ -81,31 +80,21 @@ export default async function BookPage({ params, searchParams }: { params: Promi
           </Link>
         </div>
 
-        <dl className="mt-5 grid grid-cols-2 gap-2.5 text-sm">
-          <div className="rounded-2xl bg-lilac-50 p-3.5">
-            <dt className="flex items-center gap-1.5 text-xs text-ink-soft"><CalendarDays aria-hidden size={14} />Date</dt>
-            <dd className="mt-1 font-medium text-ink">{longDate(c.starts_at)}</dd>
-          </div>
-          <div className="rounded-2xl bg-lilac-50 p-3.5">
-            <dt className="flex items-center gap-1.5 text-xs text-ink-soft"><Clock aria-hidden size={14} />Time</dt>
-            <dd className="mt-1 font-medium text-ink">{time(c.starts_at)}–{time(c.ends_at)} · {mins} min</dd>
-          </div>
-          <div className="rounded-2xl bg-lilac-50 p-3.5">
-            <dt className="flex items-center gap-1.5 text-xs text-ink-soft"><Users aria-hidden size={14} />Spots</dt>
-            <dd className="mt-1 font-medium text-ink">{c.status === "cancelled" ? "Cancelled" : spotsLabel(c)}</dd>
-          </div>
-          <div className="rounded-2xl bg-lilac-50 p-3.5">
-            <dt className="flex items-center gap-1.5 text-xs text-ink-soft"><MapPin aria-hidden size={14} />Where</dt>
-            <dd className="mt-1 font-medium text-ink">{c.location ?? "Re·Form Studio"}</dd>
-          </div>
+        <dl className="mt-4 space-y-2 text-[0.95rem] text-ink">
+          <div className="flex items-center gap-2.5"><dt><CalendarDays aria-label="When" size={17} className="text-ink-soft" /></dt>
+            <dd><span className="font-medium">{longDate(c.starts_at)}</span> · {time(c.starts_at)}–{time(c.ends_at)}</dd></div>
+          <div className="flex items-center gap-2.5"><dt><MapPin aria-label="Where" size={17} className="text-ink-soft" /></dt>
+            <dd>{c.location ?? "Re·Form Studio"}</dd></div>
+          <div className="flex items-center gap-2.5"><dt><Users aria-label="Spots" size={17} className="text-ink-soft" /></dt>
+            <dd className={c.spots_left === 1 ? "font-medium text-plum-700" : ""}>{c.status === "cancelled" ? "Cancelled" : spotsLabel(c)}</dd></div>
         </dl>
 
         {c.description && <p className="mt-5 text-[0.95rem] leading-relaxed text-ink-soft">{c.description}</p>}
 
         <section aria-labelledby="bring" className="mt-5 rounded-2xl border border-line bg-paper/70 px-4 py-3.5">
           <h2 id="bring" className="eyebrow">What to bring</h2>
-          <ul className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm text-ink">
-            {WHAT_TO_BRING.map((w) => <li key={w} className="flex items-start gap-1.5"><Flower className="mt-[3px] size-3.5 shrink-0 text-plum-700/70" />{w}</li>)}
+          <ul className="mt-2 space-y-1.5 text-sm text-ink">
+            {texts.what_to_bring.map((w) => <li key={w} className="flex items-start gap-1.5"><Flower className="mt-[3px] size-3.5 shrink-0 text-plum-700/70" />{w}</li>)}
           </ul>
         </section>
 
@@ -148,7 +137,8 @@ export default async function BookPage({ params, searchParams }: { params: Promi
               {blockedByExpiry && (
                 <Notice>Your package is valid until {longDate(new Date(new Date(usable!.latest_expiry!).getTime() - 1))}, so this class is after it. A new package will cover it.</Notice>
               )}
-              <PriceSummary price={c.price_cents} settings={settings} />
+              {creditCount === 0 && <PriceSummary price={c.price_cents} settings={settings} />}
+              {creditCount > 0 && <p className="text-sm text-ink-soft">Free cancellation up to {settings.cancellation_cutoff_hours}h before class.</p>}
               <BookActions
                 mode="book" sessionId={id} priceLabel={eur(c.price_cents)} credits={creditCount}
                 creditKind={c.credit_kind} creditCost={ctype?.credit_cost ?? 1} offered={offered}
