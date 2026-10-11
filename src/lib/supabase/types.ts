@@ -1,0 +1,647 @@
+
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
+
+export type Database = {
+  
+  "graphql_public": {
+          Tables: {
+            [_ in never]: never
+          }
+          Views: {
+            [_ in never]: never
+          }
+          Functions: {
+            "graphql":
+{ Args: { "extensions"?: Json,"operationName"?: string,"query"?: string,"variables"?: Json }; Returns: Json
+                           }
+          }
+          Enums: {
+            [_ in never]: never
+          }
+          CompositeTypes: {
+            [_ in never]: never
+          }
+        },"public": {
+          Tables: {
+            "audit_log": {
+                  Row: {
+                    "action": string,"actor_profile_id": string | null,"created_at": string,"details": Json | null,"id": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "action": string,"actor_profile_id"?: string | null,"created_at"?: string,"details"?: Json | null,"id"?: never
+                  }
+                  Update: {
+                    "action"?: string,"actor_profile_id"?: string | null,"created_at"?: string,"details"?: Json | null,"id"?: never
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "audit_log_actor_profile_id_fkey"
+      columns: ["actor_profile_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"bookings": {
+                  Row: {
+                    "cancelled_at": string | null,"checked_in_at": string | null,"confirmed_at": string | null,"created_at": string,"credit_lot_id": string | null,"hold_expires_at": string | null,"id": string,"late_refund_pending": boolean,"paid_with": Database["public"]['Enums']["paid_with"] | null,"payment_id": string | null,"profile_id": string,"session_id": string,"source": Database["public"]['Enums']["booking_source"],"status": Database["public"]['Enums']["booking_status"]
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "cancelled_at"?: string | null,"checked_in_at"?: string | null,"confirmed_at"?: string | null,"created_at"?: string,"credit_lot_id"?: string | null,"hold_expires_at"?: string | null,"id"?: string,"late_refund_pending"?: boolean,"paid_with"?: Database["public"]['Enums']["paid_with"] | null,"payment_id"?: string | null,"profile_id": string,"session_id": string,"source"?: Database["public"]['Enums']["booking_source"],"status": Database["public"]['Enums']["booking_status"]
+                  }
+                  Update: {
+                    "cancelled_at"?: string | null,"checked_in_at"?: string | null,"confirmed_at"?: string | null,"created_at"?: string,"credit_lot_id"?: string | null,"hold_expires_at"?: string | null,"id"?: string,"late_refund_pending"?: boolean,"paid_with"?: Database["public"]['Enums']["paid_with"] | null,"payment_id"?: string | null,"profile_id"?: string,"session_id"?: string,"source"?: Database["public"]['Enums']["booking_source"],"status"?: Database["public"]['Enums']["booking_status"]
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "bookings_credit_lot_id_fkey"
+      columns: ["credit_lot_id"]
+isOneToOne: false
+      referencedRelation: "credit_lots"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "bookings_payment_id_fkey"
+      columns: ["payment_id"]
+isOneToOne: false
+      referencedRelation: "payments"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "bookings_profile_id_fkey"
+      columns: ["profile_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "bookings_session_id_fkey"
+      columns: ["session_id"]
+isOneToOne: false
+      referencedRelation: "class_sessions"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"class_sessions": {
+                  Row: {
+                    "cancelled_reason": string | null,"capacity": number,"class_type_id": string,"created_at": string,"description": string | null,"ends_at": string,"id": string,"location": string | null,"price_cents": number | null,"starts_at": string,"status": Database["public"]['Enums']["session_status"],"template_id": string | null,"title": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "cancelled_reason"?: string | null,"capacity": number,"class_type_id": string,"created_at"?: string,"description"?: string | null,"ends_at": string,"id"?: string,"location"?: string | null,"price_cents"?: number | null,"starts_at": string,"status"?: Database["public"]['Enums']["session_status"],"template_id"?: string | null,"title"?: string | null
+                  }
+                  Update: {
+                    "cancelled_reason"?: string | null,"capacity"?: number,"class_type_id"?: string,"created_at"?: string,"description"?: string | null,"ends_at"?: string,"id"?: string,"location"?: string | null,"price_cents"?: number | null,"starts_at"?: string,"status"?: Database["public"]['Enums']["session_status"],"template_id"?: string | null,"title"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "class_sessions_class_type_id_fkey"
+      columns: ["class_type_id"]
+isOneToOne: false
+      referencedRelation: "class_types"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "class_sessions_template_id_fkey"
+      columns: ["template_id"]
+isOneToOne: false
+      referencedRelation: "timetable_templates"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"class_types": {
+                  Row: {
+                    "active": boolean,"created_at": string,"credit_kind": Database["public"]['Enums']["credit_kind"] | null,"default_capacity": number,"default_duration_minutes": number,"default_location": string | null,"description": string | null,"id": string,"kind": Database["public"]['Enums']["class_kind"],"name": string,"price_cents": number,"slug": string,"sort_order": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "active"?: boolean,"created_at"?: string,"credit_kind"?: Database["public"]['Enums']["credit_kind"] | null,"default_capacity": number,"default_duration_minutes"?: number,"default_location"?: string | null,"description"?: string | null,"id"?: string,"kind": Database["public"]['Enums']["class_kind"],"name": string,"price_cents": number,"slug": string,"sort_order"?: number
+                  }
+                  Update: {
+                    "active"?: boolean,"created_at"?: string,"credit_kind"?: Database["public"]['Enums']["credit_kind"] | null,"default_capacity"?: number,"default_duration_minutes"?: number,"default_location"?: string | null,"description"?: string | null,"id"?: string,"kind"?: Database["public"]['Enums']["class_kind"],"name"?: string,"price_cents"?: number,"slug"?: string,"sort_order"?: number
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"compliance_items": {
+                  Row: {
+                    "done": boolean,"key": string,"note": string | null,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "done"?: boolean,"key": string,"note"?: string | null,"updated_at"?: string
+                  }
+                  Update: {
+                    "done"?: boolean,"key"?: string,"note"?: string | null,"updated_at"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"consents": {
+                  Row: {
+                    "created_at": string,"granted": boolean,"id": number,"profile_id": string,"type": Database["public"]['Enums']["consent_type"],"version": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"granted": boolean,"id"?: never,"profile_id": string,"type": Database["public"]['Enums']["consent_type"],"version"?: string | null
+                  }
+                  Update: {
+                    "created_at"?: string,"granted"?: boolean,"id"?: never,"profile_id"?: string,"type"?: Database["public"]['Enums']["consent_type"],"version"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "consents_profile_id_fkey"
+      columns: ["profile_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"credit_ledger": {
+                  Row: {
+                    "booking_id": string | null,"created_at": string,"credit_kind": Database["public"]['Enums']["credit_kind"],"delta": number,"id": number,"lot_id": string | null,"profile_id": string,"reason": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "booking_id"?: string | null,"created_at"?: string,"credit_kind": Database["public"]['Enums']["credit_kind"],"delta": number,"id"?: never,"lot_id"?: string | null,"profile_id": string,"reason": string
+                  }
+                  Update: {
+                    "booking_id"?: string | null,"created_at"?: string,"credit_kind"?: Database["public"]['Enums']["credit_kind"],"delta"?: number,"id"?: never,"lot_id"?: string | null,"profile_id"?: string,"reason"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "credit_ledger_booking_id_fkey"
+      columns: ["booking_id"]
+isOneToOne: false
+      referencedRelation: "bookings"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "credit_ledger_lot_id_fkey"
+      columns: ["lot_id"]
+isOneToOne: false
+      referencedRelation: "credit_lots"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "credit_ledger_profile_id_fkey"
+      columns: ["profile_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"credit_lots": {
+                  Row: {
+                    "created_at": string,"credit_kind": Database["public"]['Enums']["credit_kind"],"expires_at": string | null,"id": string,"note": string | null,"payment_id": string | null,"profile_id": string,"remaining": number,"total": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"credit_kind": Database["public"]['Enums']["credit_kind"],"expires_at"?: string | null,"id"?: string,"note"?: string | null,"payment_id"?: string | null,"profile_id": string,"remaining": number,"total": number
+                  }
+                  Update: {
+                    "created_at"?: string,"credit_kind"?: Database["public"]['Enums']["credit_kind"],"expires_at"?: string | null,"id"?: string,"note"?: string | null,"payment_id"?: string | null,"profile_id"?: string,"remaining"?: number,"total"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "credit_lots_payment_id_fkey"
+      columns: ["payment_id"]
+isOneToOne: false
+      referencedRelation: "payments"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "credit_lots_profile_id_fkey"
+      columns: ["profile_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"health_notes": {
+                  Row: {
+                    "consent_at": string,"note": string,"profile_id": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "consent_at": string,"note": string,"profile_id": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "consent_at"?: string,"note"?: string,"profile_id"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "health_notes_profile_id_fkey"
+      columns: ["profile_id"]
+isOneToOne: true
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"notifications": {
+                  Row: {
+                    "body": string,"booking_id": string | null,"channel": Database["public"]['Enums']["notification_channel"],"created_at": string,"dedupe_key": string | null,"error": string | null,"id": string,"profile_id": string | null,"provider_ref": string | null,"recipient": string,"session_id": string | null,"status": Database["public"]['Enums']["notification_status"],"subject": string | null,"template": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "body": string,"booking_id"?: string | null,"channel": Database["public"]['Enums']["notification_channel"],"created_at"?: string,"dedupe_key"?: string | null,"error"?: string | null,"id"?: string,"profile_id"?: string | null,"provider_ref"?: string | null,"recipient": string,"session_id"?: string | null,"status": Database["public"]['Enums']["notification_status"],"subject"?: string | null,"template": string
+                  }
+                  Update: {
+                    "body"?: string,"booking_id"?: string | null,"channel"?: Database["public"]['Enums']["notification_channel"],"created_at"?: string,"dedupe_key"?: string | null,"error"?: string | null,"id"?: string,"profile_id"?: string | null,"provider_ref"?: string | null,"recipient"?: string,"session_id"?: string | null,"status"?: Database["public"]['Enums']["notification_status"],"subject"?: string | null,"template"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "notifications_booking_id_fkey"
+      columns: ["booking_id"]
+isOneToOne: false
+      referencedRelation: "bookings"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "notifications_profile_id_fkey"
+      columns: ["profile_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "notifications_session_id_fkey"
+      columns: ["session_id"]
+isOneToOne: false
+      referencedRelation: "class_sessions"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"otp_requests": {
+                  Row: {
+                    "created_at": string,"email_hash": string,"id": number,"ip_hash": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"email_hash": string,"id"?: never,"ip_hash"?: string | null
+                  }
+                  Update: {
+                    "created_at"?: string,"email_hash"?: string,"id"?: never,"ip_hash"?: string | null
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"payments": {
+                  Row: {
+                    "amount_cents": number,"booking_id": string | null,"created_at": string,"currency": string,"description": string,"id": string,"paid_at": string | null,"product_id": string | null,"profile_id": string | null,"provider": string,"provider_ref": string | null,"purpose": string,"status": Database["public"]['Enums']["payment_status"],"vat_cents": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "amount_cents": number,"booking_id"?: string | null,"created_at"?: string,"currency"?: string,"description": string,"id"?: string,"paid_at"?: string | null,"product_id"?: string | null,"profile_id"?: string | null,"provider": string,"provider_ref"?: string | null,"purpose": string,"status"?: Database["public"]['Enums']["payment_status"],"vat_cents"?: number
+                  }
+                  Update: {
+                    "amount_cents"?: number,"booking_id"?: string | null,"created_at"?: string,"currency"?: string,"description"?: string,"id"?: string,"paid_at"?: string | null,"product_id"?: string | null,"profile_id"?: string | null,"provider"?: string,"provider_ref"?: string | null,"purpose"?: string,"status"?: Database["public"]['Enums']["payment_status"],"vat_cents"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "payments_booking_id_fkey"
+      columns: ["booking_id"]
+isOneToOne: false
+      referencedRelation: "bookings"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "payments_product_id_fkey"
+      columns: ["product_id"]
+isOneToOne: false
+      referencedRelation: "products"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "payments_profile_id_fkey"
+      columns: ["profile_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"products": {
+                  Row: {
+                    "active": boolean,"credit_kind": Database["public"]['Enums']["credit_kind"] | null,"credits": number,"id": string,"kind": Database["public"]['Enums']["product_kind"],"name": string,"price_cents": number,"sort_order": number,"validity_days": number | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "active"?: boolean,"credit_kind"?: Database["public"]['Enums']["credit_kind"] | null,"credits"?: number,"id"?: string,"kind": Database["public"]['Enums']["product_kind"],"name": string,"price_cents": number,"sort_order"?: number,"validity_days"?: number | null
+                  }
+                  Update: {
+                    "active"?: boolean,"credit_kind"?: Database["public"]['Enums']["credit_kind"] | null,"credits"?: number,"id"?: string,"kind"?: Database["public"]['Enums']["product_kind"],"name"?: string,"price_cents"?: number,"sort_order"?: number,"validity_days"?: number | null
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"profiles": {
+                  Row: {
+                    "admin_notes": string | null,"created_at": string,"deleted_at": string | null,"email": string | null,"full_name": string | null,"id": string,"marketing_email": boolean,"marketing_sms": boolean,"onboarded_at": string | null,"phone": string | null,"role": Database["public"]['Enums']["user_role"],"user_id": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "admin_notes"?: string | null,"created_at"?: string,"deleted_at"?: string | null,"email"?: string | null,"full_name"?: string | null,"id"?: string,"marketing_email"?: boolean,"marketing_sms"?: boolean,"onboarded_at"?: string | null,"phone"?: string | null,"role"?: Database["public"]['Enums']["user_role"],"user_id"?: string | null
+                  }
+                  Update: {
+                    "admin_notes"?: string | null,"created_at"?: string,"deleted_at"?: string | null,"email"?: string | null,"full_name"?: string | null,"id"?: string,"marketing_email"?: boolean,"marketing_sms"?: boolean,"onboarded_at"?: string | null,"phone"?: string | null,"role"?: Database["public"]['Enums']["user_role"],"user_id"?: string | null
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"studio_settings": {
+                  Row: {
+                    "address": string,"cancellation_cutoff_hours": number,"contact_email": string,"contact_phone": string,"currency": string,"hold_minutes": number,"id": number,"instagram_handle": string,"intro_line": string,"legal_name": string,"map_url": string,"policy_version": string,"refund_late_cancel_if_filled": boolean,"registration_number": string,"reminder_offsets_minutes": (number)[],"studio_name": string,"timezone": string,"updated_at": string,"vat_number": string,"vat_rate": number,"vat_registered": boolean,"waitlist_window_minutes": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "address"?: string,"cancellation_cutoff_hours"?: number,"contact_email"?: string,"contact_phone"?: string,"currency"?: string,"hold_minutes"?: number,"id"?: number,"instagram_handle"?: string,"intro_line"?: string,"legal_name"?: string,"map_url"?: string,"policy_version"?: string,"refund_late_cancel_if_filled"?: boolean,"registration_number"?: string,"reminder_offsets_minutes"?: (number)[],"studio_name"?: string,"timezone"?: string,"updated_at"?: string,"vat_number"?: string,"vat_rate"?: number,"vat_registered"?: boolean,"waitlist_window_minutes"?: number
+                  }
+                  Update: {
+                    "address"?: string,"cancellation_cutoff_hours"?: number,"contact_email"?: string,"contact_phone"?: string,"currency"?: string,"hold_minutes"?: number,"id"?: number,"instagram_handle"?: string,"intro_line"?: string,"legal_name"?: string,"map_url"?: string,"policy_version"?: string,"refund_late_cancel_if_filled"?: boolean,"registration_number"?: string,"reminder_offsets_minutes"?: (number)[],"studio_name"?: string,"timezone"?: string,"updated_at"?: string,"vat_number"?: string,"vat_rate"?: number,"vat_registered"?: boolean,"waitlist_window_minutes"?: number
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"template_slots": {
+                  Row: {
+                    "capacity": number | null,"class_type_id": string,"duration_minutes": number | null,"id": string,"start_time": string,"template_id": string,"weekday": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "capacity"?: number | null,"class_type_id": string,"duration_minutes"?: number | null,"id"?: string,"start_time": string,"template_id": string,"weekday": number
+                  }
+                  Update: {
+                    "capacity"?: number | null,"class_type_id"?: string,"duration_minutes"?: number | null,"id"?: string,"start_time"?: string,"template_id"?: string,"weekday"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "template_slots_class_type_id_fkey"
+      columns: ["class_type_id"]
+isOneToOne: false
+      referencedRelation: "class_types"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "template_slots_template_id_fkey"
+      columns: ["template_id"]
+isOneToOne: false
+      referencedRelation: "timetable_templates"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"timetable_templates": {
+                  Row: {
+                    "created_at": string,"id": string,"name": string,"valid_from": string,"valid_to": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"id"?: string,"name": string,"valid_from": string,"valid_to": string
+                  }
+                  Update: {
+                    "created_at"?: string,"id"?: string,"name"?: string,"valid_from"?: string,"valid_to"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"waitlist_entries": {
+                  Row: {
+                    "created_at": string,"id": string,"offer_expires_at": string | null,"offered_at": string | null,"profile_id": string,"session_id": string,"status": Database["public"]['Enums']["waitlist_status"]
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"id"?: string,"offer_expires_at"?: string | null,"offered_at"?: string | null,"profile_id": string,"session_id": string,"status"?: Database["public"]['Enums']["waitlist_status"]
+                  }
+                  Update: {
+                    "created_at"?: string,"id"?: string,"offer_expires_at"?: string | null,"offered_at"?: string | null,"profile_id"?: string,"session_id"?: string,"status"?: Database["public"]['Enums']["waitlist_status"]
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "waitlist_entries_profile_id_fkey"
+      columns: ["profile_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "waitlist_entries_session_id_fkey"
+      columns: ["session_id"]
+isOneToOne: false
+      referencedRelation: "class_sessions"
+      referencedColumns: ["id"]
+    }
+                  ]
+                }
+          }
+          Views: {
+            [_ in never]: never
+          }
+          Functions: {
+            "apply_late_fill_refund":
+{ Args: { "p_session": string }; Returns: string
+                           },
+"book_session":
+{ Args: { "p_mode": string,"p_profile": string,"p_session": string,"p_source"?: Database["public"]['Enums']["booking_source"] }; Returns: Json
+                           },
+"cancel_booking":
+{ Args: { "p_admin"?: boolean,"p_booking": string,"p_profile": string }; Returns: Json
+                           },
+"cancel_session":
+{ Args: { "p_reason": string,"p_session": string }; Returns: {
+              "booking_id": string,"profile_id": string
+            }[]
+                           },
+"confirm_payment":
+{ Args: { "p_payment": string,"p_provider_ref"?: string }; Returns: Json
+                           },
+"credit_balance":
+{ Args: { "p_profile": string }; Returns: {
+              "credit_kind": Database["public"]['Enums']["credit_kind"],"next_expiry": string,"remaining": number
+            }[]
+                           },
+"erase_profile":
+{ Args: { "p_profile": string }; Returns: string
+                           },
+"generate_sessions":
+{ Args: { "p_template": string }; Returns: number
+                           },
+"is_admin":
+{ Args: Record<PropertyKey, never>; Returns: boolean
+                           },
+"join_waitlist":
+{ Args: { "p_profile": string,"p_session": string }; Returns: Json
+                           },
+"leave_waitlist":
+{ Args: { "p_entry": string,"p_profile": string }; Returns: {
+              "entry_id": string,"offer_expires_at": string,"profile_id": string
+            }[]
+                           },
+"my_profile_id":
+{ Args: Record<PropertyKey, never>; Returns: string
+                           },
+"process_waitlist":
+{ Args: { "p_session": string }; Returns: {
+              "entry_id": string,"offer_expires_at": string,"profile_id": string
+            }[]
+                           },
+"return_credit":
+{ Args: { "p_booking": string,"p_reason": string }; Returns: undefined
+                           },
+"session_availability":
+{ Args: { "p_from": string,"p_to": string }; Returns: {
+              "capacity": number,"class_type_id": string,"credit_kind": Database["public"]['Enums']["credit_kind"],"description": string,"ends_at": string,"id": string,"kind": Database["public"]['Enums']["class_kind"],"location": string,"price_cents": number,"spots_left": number,"starts_at": string,"status": Database["public"]['Enums']["session_status"],"title": string,"type_name": string,"type_slug": string,"waitlist_count": number
+            }[]
+                           },
+"settings":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "address": string,
+"cancellation_cutoff_hours": number,
+"contact_email": string,
+"contact_phone": string,
+"currency": string,
+"hold_minutes": number,
+"id": number,
+"instagram_handle": string,
+"intro_line": string,
+"legal_name": string,
+"map_url": string,
+"policy_version": string,
+"refund_late_cancel_if_filled": boolean,
+"registration_number": string,
+"reminder_offsets_minutes": (number)[],
+"studio_name": string,
+"timezone": string,
+"updated_at": string,
+"vat_number": string,
+"vat_rate": number,
+"vat_registered": boolean,
+"waitlist_window_minutes": number
+            }
+                          SetofOptions: {
+        from: "*"
+        to: "studio_settings"
+        isOneToOne: true
+        isSetofReturn: false
+      } },
+"spots_taken":
+{ Args: { "p_exclude_profile"?: string,"p_session": string }; Returns: number
+                           },
+"tick":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "entry_id": string,"offer_expires_at": string,"profile_id": string
+            }[]
+                           }
+          }
+          Enums: {
+            "booking_source": "online"|"manual","booking_status": "held"|"confirmed"|"cancelled"|"late_cancelled"|"studio_cancelled"|"expired"|"no_show","class_kind": "reformer"|"mat"|"event","consent_type": "policy"|"terms"|"health_data"|"fitness_declaration"|"marketing_email"|"marketing_sms","credit_kind": "reformer"|"mat","notification_channel": "email"|"sms","notification_status": "logged"|"sent"|"failed","paid_with": "payment"|"credit"|"manual"|"free","payment_status": "pending"|"paid"|"failed"|"refunded"|"needs_refund"|"cancelled","product_kind": "single"|"pack","session_status": "scheduled"|"cancelled","user_role": "client"|"admin","waitlist_status": "waiting"|"offered"|"claimed"|"expired"|"left"|"cancelled"
+          }
+          CompositeTypes: {
+            [_ in never]: never
+          }
+        }
+}
+
+type DatabaseWithoutInternals = Omit<Database, '__InternalSupabase'>
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+
+export type Tables<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never = never
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      Row: infer R
+    }
+    ? R
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+  ? (DefaultSchema["Tables"] & DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+      Row: infer R
+    }
+    ? R
+    : never
+  : never
+
+export type TablesInsert<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Insert: infer I
+    }
+    ? I
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+  ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+      Insert: infer I
+    }
+    ? I
+    : never
+  : never
+
+export type TablesUpdate<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Update: infer U
+    }
+    ? U
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+  ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+      Update: infer U
+    }
+    ? U
+    : never
+  : never
+
+export type Enums<
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never = never
+> = DefaultSchemaEnumNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+  ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+  : never
+
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never
+> = PublicCompositeTypeNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+  ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+  : never
+
+export const Constants = {
+  "graphql_public": {
+          Enums: {
+            
+          }
+        },"public": {
+          Enums: {
+            "booking_source": ["online", "manual"],"booking_status": ["held", "confirmed", "cancelled", "late_cancelled", "studio_cancelled", "expired", "no_show"],"class_kind": ["reformer", "mat", "event"],"consent_type": ["policy", "terms", "health_data", "fitness_declaration", "marketing_email", "marketing_sms"],"credit_kind": ["reformer", "mat"],"notification_channel": ["email", "sms"],"notification_status": ["logged", "sent", "failed"],"paid_with": ["payment", "credit", "manual", "free"],"payment_status": ["pending", "paid", "failed", "refunded", "needs_refund", "cancelled"],"product_kind": ["single", "pack"],"session_status": ["scheduled", "cancelled"],"user_role": ["client", "admin"],"waitlist_status": ["waiting", "offered", "claimed", "expired", "left", "cancelled"]
+          }
+        }
+} as const
