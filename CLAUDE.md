@@ -101,7 +101,8 @@ Booking web app for **Re·Form Pilates Studio**, Limassol, Cyprus (Instagram @re
 - **URL:** https://reform-pilates-seven.vercel.app (Vercel project `reform-pilates`, account petridesart-cloud).
 - **Database:** Supabase **reform-db**, free plan, Frankfurt, created through the Vercel Marketplace. Its env vars are injected automatically.
 - **App env vars set in Vercel:** `DEMO_MODE=true`, `ADMIN_EMAILS`, `DEMO_ADMIN_CODE`, `CRON_SECRET`, `NEXT_PUBLIC_SITE_URL`.
-- **Deploys:** `vercel deploy --prod` from this repo (GitHub auto-deploy isn't connected yet; it needs the Vercel GitHub app approved on the repo).
+- **Deploys:** automatic on every push to `claude/pilates-booking-app-sk3trx` (the GitHub repo is connected to Vercel). `vercel deploy --prod` also works.
+- **Lighthouse (mobile, production build):** Accessibility, Best Practices and SEO 100 on all audited pages; Performance 90–99. Keep entrance animations transform-only, keep loading skeletons full height (CLS), and don't preload accent fonts.
 - **Migrations run on deploy:** the `vercel-build` script runs `scripts/migrate.mjs` (tracked in `_app_migrations`), and a fresh demo database is seeded. The dev sandbox can't reach the database directly; Vercel can.
 - **Login codes:** hosted Supabase sends 8-digit codes, so the app accepts 6–10 digits.
 - **Cloud session:** Node CLIs need `NODE_USE_ENV_PROXY=1 NODE_EXTRA_CA_CERTS=/root/.ccr/ca-bundle.crt`.
