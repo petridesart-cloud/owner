@@ -12,7 +12,9 @@
     "db:reset": "supabase db reset",
     "db:types": "supabase gen types typescript --local > src/lib/supabase/types.ts",
     "db:bundle": "node scripts/bundle-sql.mjs",
-    "test:engine": "node --test --import tsx tests/engine.test.ts"
+    "test:engine": "node --test --import tsx tests/engine.test.ts",
+    "vercel-build": "node scripts/migrate.mjs && next build",
+    "db:migrate": "node scripts/migrate.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
@@ -20,6 +22,7 @@
     "lucide-react": "^1.55.0",
     "next": "16.4.0",
     "papaparse": "^5.7.0",
+    "postgres": "^3.4.9",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "read-excel-file": "^9.3.12",
