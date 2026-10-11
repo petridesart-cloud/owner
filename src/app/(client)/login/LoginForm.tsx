@@ -38,10 +38,11 @@ export function LoginForm({ next }: { next: string }) {
         We sent a code to <strong className="font-medium text-ink">{req.email}</strong>.{" "}
         <button type="button" onClick={() => setEditing(true)} className="min-h-11 font-medium text-ink underline underline-offset-4">Change email</button>
       </p>
+      {req.adminCode && <Notice>Demo mode: enter your private admin code (DEMO_ADMIN_CODE) instead of an emailed code.</Notice>}
       {req.demoCode && <Notice>Demo mode: your code is <strong className="tracking-[0.2em]">{req.demoCode}</strong> (in production it&apos;s only emailed).</Notice>}
-      <Field id="code" label="6-digit code" error={ver.error}>
+      <Field id="code" label={req.adminCode ? "Admin code" : "6-digit code"} error={ver.error}>
         <input
-          ref={codeRef} id="code" name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]*" maxLength={6} required
+          ref={codeRef} id="code" name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]*" maxLength={req.adminCode ? 12 : 6} required
           placeholder="••••••" className={`${inputClass} text-center font-serif text-3xl tracking-[0.5em]`}
           aria-invalid={!!ver.error} aria-describedby={ver.error ? "code-error" : undefined}
         />

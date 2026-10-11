@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: "Sign in" };
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
   const { next = "/" } = await searchParams;
   const viewer = await getViewer();
-  if (viewer) redirect(viewer.profile.onboarded_at || viewer.profile.role === "admin" ? next : `/welcome?next=${encodeURIComponent(next)}`);
+  if (viewer) redirect(viewer.profile.role === "admin" && next === "/" ? "/admin" : viewer.profile.onboarded_at || viewer.profile.role === "admin" ? next : `/welcome?next=${encodeURIComponent(next)}`);
   return (
     <div className="px-5 pt-8">
       <div className="card animate-rise mx-auto max-w-md px-6 pb-8 pt-7">

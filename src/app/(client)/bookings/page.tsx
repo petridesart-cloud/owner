@@ -5,7 +5,7 @@ import { Badge, ButtonLink, Card, Notice, PageTitle, Section } from "@/component
 import { getSettings, requireViewer } from "@/lib/auth";
 import { creditBalance } from "@/lib/data";
 import { db } from "@/lib/supabase/admin";
-import { dayMonth, longDate, relativeHours, time, weekdayShort } from "@/lib/time";
+import { dayMonth, longDate, nowMs, relativeHours, time, weekdayShort } from "@/lib/time";
 import { CancelButton } from "./CancelButton";
 
 export const metadata: Metadata = { title: "My classes" };
@@ -29,7 +29,7 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
       .eq("profile_id", p.id).in("status", ["waiting", "offered"]),
   ]);
 
-  const now = Date.now();
+  const now = nowMs();
   const all = (bookings ?? []).map((b) => ({ ...b, s: b.class_sessions, name: b.class_sessions.title ?? b.class_sessions.class_types?.name ?? "Class" }));
   all.sort((a, b) => a.s.starts_at.localeCompare(b.s.starts_at));
   const upcoming = all.filter((b) => b.status === "confirmed" && new Date(b.s.starts_at).getTime() > now);

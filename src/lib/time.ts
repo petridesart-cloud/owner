@@ -63,3 +63,4 @@ export function localToUtc(dateKey: string, hhmm: string) {
   const asLocal = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"));
   return new Date(guess.getTime() - (asLocal - guess.getTime())).toISOString();
 }
+export const nowMs = () => Date.now();

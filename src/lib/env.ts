@@ -15,6 +15,8 @@ export const env = {
   adminEmails: (process.env.ADMIN_EMAILS || "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean),
   // Demo mode: login codes are shown on screen and messages only go to the admin Outbox.
   demoMode: process.env.DEMO_MODE === "true",
+  // In demo mode, admin emails sign in with this secret instead of an on-screen code.
+  demoAdminCode: (process.env.DEMO_ADMIN_CODE || "").replace(/\D/g, ""),
 };
 
 export const paymentsLive = () => Boolean(env.stripeSecret);

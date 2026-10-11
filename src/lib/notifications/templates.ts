@@ -24,8 +24,12 @@ type Rendered = { subject: string; heading: string; lines: string[]; cta?: { lab
 
 const first = (n?: string) => (n ? n.split(" ")[0] : "there");
 
-export function render(t: TemplateName, d: TemplateData): Rendered {
-  const link = d.link ?? env.siteUrl;
+const escapeHtml = (v: string) => v.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+
+export function render(t: TemplateName, raw: TemplateData): Rendered {
+  // Escape every value: names and notes are user-supplied and end up in HTML email.
+  const d = Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, typeof v === "string" ? escapeHtml(v) : v])) as TemplateData;
+  const link = raw.link ?? env.siteUrl;
   switch (t) {
     case "login_code":
       return {

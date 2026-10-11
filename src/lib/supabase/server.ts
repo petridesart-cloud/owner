@@ -8,6 +8,7 @@ import type { Database } from "./types";
 export async function supabaseServer() {
   const store = await cookies();
   return createServerClient<Database>(env.supabaseUrl, env.supabaseAnonKey, {
+    cookieOptions: { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/" },
     cookies: {
       getAll: () => store.getAll(),
       setAll: (list) => {

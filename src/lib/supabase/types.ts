@@ -472,8 +472,14 @@ isOneToOne: false
               "entry_id": string,"offer_expires_at": string,"profile_id": string
             }[]
                            },
+"reset_demo_data":
+{ Args: Record<PropertyKey, never>; Returns: undefined
+                           },
 "return_credit":
 { Args: { "p_booking": string,"p_reason": string }; Returns: undefined
+                           },
+"seed_demo":
+{ Args: Record<PropertyKey, never>; Returns: undefined
                            },
 "session_availability":
 { Args: { "p_from": string,"p_to": string }; Returns: {

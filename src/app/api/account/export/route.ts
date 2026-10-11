@@ -16,7 +16,9 @@ export async function GET() {
     db().from("payments").select("provider, amount_cents, vat_cents, currency, status, description, created_at, paid_at").eq("profile_id", id),
     db().from("notifications").select("channel, template, subject, status, created_at").eq("profile_id", id),
   ]);
-  const { user_id: _uid, ...profile } = viewer.profile; // instructor notes are included: they are personal data too
+  // Instructor notes are included: they are personal data too.
+  const profile: Partial<typeof viewer.profile> = { ...viewer.profile };
+  delete profile.user_id;
   const body = {
     exported_at: new Date().toISOString(),
     controller: "Re·Form Pilates Studio",

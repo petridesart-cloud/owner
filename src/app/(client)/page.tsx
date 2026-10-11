@@ -78,7 +78,7 @@ export default async function Home() {
 
       <section className="mx-5 mt-8 rounded-[var(--radius-card)] bg-ink px-6 py-8 text-paper" aria-label="Daily motivation">
         <div className="flex justify-between text-[0.68rem] tracking-[0.22em] text-lilac-100" style={{ fontFamily: "var(--font-label)" }}>
-          <span>DAILY MOTIVATION</span><span>// 001</span>
+          <span>DAILY MOTIVATION</span><span>{"// 001"}</span>
         </div>
         <p className="mt-10 max-w-[15rem] text-[1.05rem] font-semibold uppercase leading-snug tracking-wide">
           Your body deserves the time you give to everything else.

@@ -59,7 +59,6 @@
     border-radius: 10px;
   }
   ::selection { background: var(--color-lilac-200); }
-  .font-serif, .display { font-variant-numeric: lining-nums; }
 }
 
 @layer components {
@@ -107,3 +106,6 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Lining numerals for times and dates (Cormorant defaults to old-style). */
+.font-serif, .display { font-variant-numeric: lining-nums; }

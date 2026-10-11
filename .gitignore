@@ -45,3 +45,4 @@ next-env.d.ts
 .shots.mjs
 supabase/.temp/
 supabase/.branches/
+.shots-admin.mjs

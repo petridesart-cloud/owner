@@ -1,6 +1,7 @@
 "use server";
 import { createHash } from "node:crypto";
 import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
@@ -10,7 +11,7 @@ import { notify } from "@/lib/notifications";
 const sha = (s: string) => createHash("sha256").update(s).digest("hex");
 const Email = z.string().trim().toLowerCase().email();
 
-export type RequestState = { ok: boolean; email?: string; error?: string; demoCode?: string };
+export type RequestState = { ok: boolean; email?: string; error?: string; demoCode?: string; adminCode?: boolean };
 
 /**
  * Step 1: email a 6-digit code. We generate the code with Supabase Auth's admin
@@ -50,6 +51,8 @@ export async function requestCode(_: RequestState, form: FormData): Promise<Requ
   const { data: profile } = await db().from("profiles").select("id").ilike("email", email).maybeSingle();
   await notify({ profileId: profile?.id, email }, "login_code", { code });
 
+  // Demo mode shows client codes on screen. Never for admin emails: those need DEMO_ADMIN_CODE.
+  if (env.demoMode && env.adminEmails.includes(email)) return { ok: true, email, adminCode: true };
   return { ok: true, email, demoCode: env.demoMode ? code : undefined };
 }
 
@@ -62,8 +65,16 @@ export async function verifyCode(_: VerifyState, form: FormData): Promise<Verify
   const next = safeNext(String(form.get("next") ?? "/"));
   if (!email.success || token.length < 6) return { ok: false, error: "Enter the 6-digit code from your email." };
 
+  let otp = token;
+  if (env.demoMode && env.adminEmails.includes(email.data)) {
+    if (env.demoAdminCode.length < 8 || token !== env.demoAdminCode) {
+      return { ok: false, error: "That admin code isn't right." };
+    }
+    const link = await db().auth.admin.generateLink({ type: "magiclink", email: email.data });
+    otp = link.data?.properties?.email_otp ?? "";
+  }
   const supabase = await supabaseServer();
-  const { data, error } = await supabase.auth.verifyOtp({ email: email.data, token, type: "email" });
+  const { data, error } = await supabase.auth.verifyOtp({ email: email.data, token: otp, type: "email" });
   if (error || !data.user) return { ok: false, error: "That code didn't work or has expired. Check it, or request a new one." };
 
   const { data: profile } = await db().from("profiles").select("id, role, onboarded_at").eq("user_id", data.user.id).maybeSingle();
@@ -71,9 +82,10 @@ export async function verifyCode(_: VerifyState, form: FormData): Promise<Verify
     await db().from("profiles").update({ role: "admin" }).eq("id", profile.id);
     profile.role = "admin";
   }
-  if (profile?.role === "admin" && next === "/") return { ok: true, redirect: "/admin" };
-  if (!profile?.onboarded_at && profile?.role !== "admin") return { ok: true, redirect: `/welcome?next=${encodeURIComponent(next)}` };
-  return { ok: true, redirect: next };
+  // Redirect from the action itself: one navigation, no race with the login page re-rendering.
+  if (profile?.role === "admin" && next === "/") redirect("/admin");
+  if (!profile?.onboarded_at && profile?.role !== "admin") redirect(`/welcome?next=${encodeURIComponent(next)}`);
+  redirect(next);
 }
 
 export async function signOut() {

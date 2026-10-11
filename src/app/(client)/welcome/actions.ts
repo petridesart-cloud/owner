@@ -1,4 +1,5 @@
 "use server";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/supabase/admin";
 import { getSettings, requireViewer } from "@/lib/auth";
@@ -52,5 +53,5 @@ export async function completeWelcome(_: WelcomeState, form: FormData): Promise<
   await db().from("consents").insert(rows);
 
   const next = String(form.get("next") ?? "/");
-  return { ok: true, redirect: next.startsWith("/") && !next.startsWith("//") ? next : "/" };
+  redirect(next.startsWith("/") && !next.startsWith("//") ? next : "/");
 }
