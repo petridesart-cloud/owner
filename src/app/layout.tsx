@@ -2,10 +2,12 @@ import type { Metadata, Viewport } from "next";
 import { Barlow_Condensed, Cormorant_Garamond, Inter, Pinyon_Script } from "next/font/google";
 import "./globals.css";
 
-const cormorant = Cormorant_Garamond({ subsets: ["latin", "latin-ext"], weight: ["300", "400", "500", "600"], style: ["normal", "italic"], variable: "--font-cormorant", display: "swap" });
-const inter = Inter({ subsets: ["latin", "latin-ext", "greek"], variable: "--font-inter", display: "swap" });
-const pinyon = Pinyon_Script({ subsets: ["latin"], weight: "400", variable: "--font-pinyon", display: "swap" });
-const barlow = Barlow_Condensed({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-barlow", display: "swap" });
+// Fonts trimmed for speed: only the weights the design uses, Latin only (add "greek" with the GR version).
+const cormorant = Cormorant_Garamond({ subsets: ["latin"], weight: ["300", "400"], variable: "--font-cormorant", display: "swap" });
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
+// Accent fonts load lazily (not preloaded); the page is readable with fallbacks meanwhile.
+const pinyon = Pinyon_Script({ subsets: ["latin"], weight: "400", variable: "--font-pinyon", display: "swap", preload: false });
+const barlow = Barlow_Condensed({ subsets: ["latin"], weight: "500", variable: "--font-barlow", display: "swap", preload: false });
 
 export const metadata: Metadata = {
   title: { default: "Re·Form Pilates Studio · Limassol", template: "%s · Re·Form Pilates" },

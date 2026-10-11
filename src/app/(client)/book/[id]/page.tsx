@@ -59,7 +59,7 @@ export default async function BookPage({ params, searchParams }: { params: Promi
   return (
     <div className="relative min-h-[70dvh]">
       <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-48 bg-gradient-to-b from-lilac-100/80 to-transparent" />
-      <article className="animate-sheet-up relative mx-2 mt-3 rounded-[var(--radius-sheet)] border border-line/80 bg-white/90 px-5 pb-8 pt-3 shadow-[var(--shadow-lift)] backdrop-blur-xl">
+      <article className="animate-rise relative mx-2 mt-3 rounded-[var(--radius-sheet)] border border-line/80 bg-white/90 px-5 pb-8 pt-3 shadow-[var(--shadow-lift)] backdrop-blur-xl">
         <div className="flex items-center justify-between">
           <span aria-hidden className="mx-auto mb-1 mt-1 block h-1.5 w-10 rounded-full bg-line" />
         </div>

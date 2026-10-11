@@ -1,6 +1,6 @@
 export default function Loading() {
   return (
-    <div aria-busy="true" aria-label="Loading schedule">
+    <div aria-busy="true" aria-label="Loading schedule" className="min-h-[100dvh]">
       <div className="px-5 pb-4 pt-6">
         <div className="skeleton h-3 w-24" />
         <div className="skeleton mt-3 h-9 w-56" />
