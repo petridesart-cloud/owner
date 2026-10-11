@@ -181,7 +181,7 @@ export async function adjustCredits(profileId: string, _: ActionResult, form: Fo
 }
 
 // ── Payments (offline "Mark as paid" and memberships) ──────────────────
-export async function markPaid(paymentId: string, method: "cash" | "card_in_person" | "bank_transfer"): Promise<ActionResult> {
+export async function markPaid(paymentId: string, method: "cash" | "card_in_person" | "bank_transfer" | "revolut"): Promise<ActionResult> {
   await admin("mark_paid", { paymentId, method });
   try {
     await onPaymentPaid(paymentId, undefined, method);
@@ -200,7 +200,7 @@ export async function cancelPaymentRequest(paymentId: string): Promise<ActionRes
 }
 
 /** Record an in-person renewal for an offline monthly package and grant the next period. */
-export async function renewMembership(membershipId: string, method: "cash" | "card_in_person" | "bank_transfer"): Promise<ActionResult> {
+export async function renewMembership(membershipId: string, method: "cash" | "card_in_person" | "bank_transfer" | "revolut"): Promise<ActionResult> {
   await admin("renew_membership", { membershipId, method });
   const { data: m } = await db().from("memberships").select("*, products!memberships_product_id_fkey(*)").eq("id", membershipId).single();
   if (!m) return { ok: false, error: "Membership not found." };
@@ -246,6 +246,61 @@ export async function cancelToday(_: ActionResult, form: FormData): Promise<Acti
   return { ok: true, message: `Cancelled ${list?.length ?? 0} classes. ${people} client${people === 1 ? "" : "s"} notified and credited.` };
 }
 
+// ── Students & holidays ────────────────────────────────────────────────
+/** Verified in person after seeing a student card. We never store card images. */
+export async function setStudent(profileId: string, _: ActionResult, form: FormData): Promise<ActionResult> {
+  await admin("student_verification", { profileId });
+  const until = String(form.get("student_verified_until") ?? "");
+  if (until && !/^\d{4}-\d{2}-\d{2}$/.test(until)) return { ok: false, error: "Pick a valid date." };
+  await db().from("profiles").update({ student_verified_until: until || null }).eq("id", profileId);
+  revalidatePath(`/admin/clients/${profileId}`);
+  return { ok: true, message: until ? `Student price active until ${until}.` : "Student price removed." };
+}
+
+/** "Reschedule missed class (holiday)": gives the class back with a reason. */
+export async function holidayReturn(profileId: string, _: ActionResult, form: FormData): Promise<ActionResult> {
+  const viewer = await admin("holiday_return", { profileId });
+  const kind = form.get("kind") === "mat" ? "mat" : "reformer";
+  const date = String(form.get("date") ?? "").trim();
+  const { error } = await db().rpc("admin_adjust_credits", {
+    p_profile: profileId, p_kind: kind, p_delta: 1, p_days: 30, p_reason: `Missed class: public holiday${date ? ` (${date})` : ""}`, p_actor: viewer.profile.id,
+  });
+  if (error) return { ok: false, error: "Couldn't return the class." };
+  revalidatePath(`/admin/clients/${profileId}`);
+  return { ok: true, message: "Class returned (valid 30 days). They can rebook any time." };
+}
+
+// ── Closures ───────────────────────────────────────────────────────────
+export async function createClosure(_: ActionResult, form: FormData): Promise<ActionResult> {
+  await admin("create_closure");
+  const name = String(form.get("name") ?? "").trim();
+  const from = String(form.get("starts_on")); const to = String(form.get("ends_on") || from);
+  if (!name || !/^\d{4}-\d{2}-\d{2}$/.test(from) || to < from) return { ok: false, error: "Add a name and a valid date range." };
+  const { data, error } = await db().from("closures").insert({ name, starts_on: from, ends_on: to }).select("id").single();
+  if (error) return { ok: false, error: "That closure already exists." };
+  return confirmClosure(data.id);
+}
+
+/** Confirm: cancel classes in the range (notify + return classes) and freeze packages. */
+export async function confirmClosure(closureId: string): Promise<ActionResult> {
+  await admin("confirm_closure", { closureId });
+  const { data: c } = await db().from("closures").select("*").eq("id", closureId).single();
+  if (!c) return { ok: false, error: "Not found." };
+  const { data: list } = await db().from("class_sessions").select("id").eq("status", "scheduled")
+    .gte("starts_at", localToUtc(c.starts_on, "00:00")).lt("starts_at", localToUtc(addDaysKey(c.ends_on, 1), "00:00"));
+  let people = 0;
+  for (const s of list ?? []) people += await cancelSession(s.id, `The studio is closed (${c.name}).`);
+  const { data: frozen } = await db().rpc("apply_closure", { p_closure: closureId });
+  revalidatePath("/admin/closures");
+  return { ok: true, message: `${c.name} confirmed: ${list?.length ?? 0} classes cancelled (${people} clients credited), ${frozen ?? 0} packages extended.` };
+}
+
+export async function dismissClosure(closureId: string) {
+  await admin("dismiss_closure", { closureId });
+  await db().from("closures").delete().eq("id", closureId).eq("confirmed", false);
+  revalidatePath("/admin/closures");
+}
+
 // ── Settings ───────────────────────────────────────────────────────────
 const PAYMENT_CHECKLIST = ["pay_registered_self_employed", "pay_vat_position_confirmed", "pay_bank_stripe_verified", "pay_legal_texts_reviewed", "pay_liability_insurance"];
 
@@ -260,6 +315,8 @@ export async function saveSettings(_: ActionResult, form: FormData): Promise<Act
   await admin("save_settings");
   const num = (k: string) => Number(form.get(k));
   const str = (k: string) => String(form.get(k) ?? "").trim();
+  const revolut = String(form.get("revolut_link") ?? "").trim();
+  if (revolut && !/^https:\/\/[^\s"'<>]+$/.test(revolut)) return { ok: false, error: "The Revolut link must start with https://" };
   const wantOnline = form.get("online_payments_enabled") === "on";
   if (wantOnline && !(await paymentsUnlocked())) {
     return { ok: false, error: "Online payments stay off until every item under “Before online payments” is ticked in Compliance." };
@@ -276,6 +333,10 @@ export async function saveSettings(_: ActionResult, form: FormData): Promise<Act
     membership_period_mode: str("membership_period_mode") === "calendar" ? "calendar" : "rolling",
     rollover_max: num("rollover_max"),
     status_banner: str("status_banner").slice(0, 200),
+    unpaid_request_expiry_hours: num("unpaid_request_expiry_hours"),
+    expiry_reminder_days: num("expiry_reminder_days"),
+    student_discount_pct: num("student_discount_pct"),
+    revolut_link: str("revolut_link"), bank_account_name: str("bank_account_name"), bank_iban: str("bank_iban").replace(/\s+/g, " "),
     legal_name: str("legal_name"), trader_name: str("trader_name"), address: str("address"),
     contact_email: str("contact_email"), contact_phone: str("contact_phone"), instagram_handle: str("instagram_handle").replace(/^@/, ""),
     intro_line: str("intro_line"), policy_version: str("policy_version"),

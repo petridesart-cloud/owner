@@ -46,6 +46,7 @@ export function hoursUntil(v: string | Date) {
 
 export function relativeHours(v: string | Date) {
   const mins = Math.round((d(v).getTime() - Date.now()) / 60_000);
+  if (mins >= 36 * 60) return `${Math.round(mins / 1440)} days`;
   if (mins < 60) return `${Math.max(mins, 1)} min`;
   const h = Math.floor(mins / 60);
   const m = mins % 60;

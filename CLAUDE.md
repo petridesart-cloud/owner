@@ -27,19 +27,42 @@ Booking web app for **Re·Form Pilates Studio**, Limassol, Cyprus (Instagram @re
   - No certifications unless real.
 - **Images:** only her own photos (with permission) or licensed ones. Placeholders are gradients labelled "photo coming soon".
 
-## Studio rules (all configurable in Admin → Settings)
-- **Timezone and money:** Europe/Nicosia, EUR. Money is stored in cents and prices are entered VAT-inclusive. The "VAT registered" toggle (rate default 19%) controls the "incl. VAT" wording.
+## Studio rules (her real policy; settings-driven in Admin → Settings)
+- **Timezone and money:**
+  - Europe/Nicosia, EUR, all money in cents.
+  - Not a registered business yet: no VAT shown anywhere (the VAT and registration fields are hidden and empty).
+  - Receipts are plain payment confirmations, never tax invoices.
 - **Classes:**
-  - Reformer: capacity 3, 50 minutes.
-  - Mat: capacity configurable.
-  - Events (SUP Pilates, brunch): one-off, with their own price, capacity and location.
-- **Cancellation cutoff:** 12h.
-  - Before the cutoff, the credit is returned (card-paid single class → credit of the same type).
-  - Inside the cutoff, the client can still "release" the spot to the waitlist, but there's no refund.
-  - Admin toggle (default off): refund the late-cancel credit if the spot gets re-booked.
-- **Waitlist:** the first in line is offered the spot and has 2h, or until the cutoff (if already inside the cutoff, until class start), to claim it. After that it goes to the next person. A live offer reserves the spot.
-- **Payment hold:** 10 minutes while paying. A booking is confirmed only after payment succeeds or a credit is deducted.
-- **Credits:** per class type (reformer credits / mat credits). Events are paid individually.
+  - Reformer: capacity 3, 50 minutes. Mat: configurable.
+  - Events (SUP Pilates, brunch) are paid individually.
+  - Each class type has a credit cost (a private session may cost 2–3).
+- **Cancellation:** **6h** cutoff.
+  - 6h or more before class: the credit goes back to the same package with its original expiry, and the client can rebook.
+  - Inside 6h, or a no-show: the credit is forfeited. The client can still release the spot to the waitlist.
+  - Admin toggle (default off): refund the credit if the spot gets re-booked.
+- **Packages:**
+  - Prepaid, 30 or 60 days of validity counted **from the first class**.
+  - "Not started yet" until the first booking. Provisional expiry follows the earliest booked class and is locked once that class has passed.
+  - Classes can't be booked beyond the expiry date. Unused classes expire (ledger `expiry`).
+  - Packages are non-transferable.
+  - No auto-renew for now: renewing means buying a new package. The monthly/subscription code is kept behind the online-payments flag and its products are hidden.
+- **Pay in advance:**
+  - Online payments are OFF and stay locked until the 5 "before online payments" compliance items are ticked (demo mode excepted).
+  - Package requests are "awaiting payment" and grant nothing until she taps **Mark as paid** (cash, Revolut, bank or card).
+  - Requests expire after 48h and the client is notified.
+  - Booking a class before paying is OFF (setting `allow_pay_later`).
+  - Payment instructions show cash, her Revolut link and IBAN, with reference `RF-XXXXXX`.
+- **Student discount:** 10% on group packages only.
+  - She verifies students in person and sets a "verified until" date.
+  - Student card images are never stored.
+- **Studio-cancelled classes** are always replaced: the credit comes back and the client is invited to rebook.
+- **Closures:**
+  - Confirmed closures cancel the classes in that range (clients notified and credited) and block booking those days.
+  - Started packages are frozen: their expiry extends by the closed days in their window (overlapping closures counted once), recorded as ledger `freeze_extension`.
+  - Cyprus public holidays for the next 12 months are preloaded as suggestions she confirms.
+  - "Missed class: public holiday" returns a class with a reason.
+- **Waitlist:** the first in line gets 2h (or until the cutoff) to claim. A live offer reserves the spot.
+- **Her texts** live in `src/lib/policy.ts` and are reused across the policy pages, the first-class welcome, reminders and "What to bring".
 
 ## Decisions (and why)
 | Decision | Why |
@@ -57,6 +80,11 @@ Booking web app for **Re·Form Pilates Studio**, Limassol, Cyprus (Instagram @re
 | Map is click-to-load; only essential cookies | ePrivacy: no cookie banner needed, and nothing third-party loads before consent. |
 | Demo data is a SQL function (`seed_demo`) relative to `now()`, with admin "Reset demo data" (demo mode only) | The demo always looks current and can be replayed. |
 | Login cookies httpOnly | Hardening; we don't use the Supabase browser client. |
+| Append-only credit ledger (typed entries: grant, booking_debit, cancel_refund, expiry, admin_adjustment, rollover, freeze_extension) with a trigger blocking UPDATE/DELETE; `credit_lots.remaining` is a cache kept in lock-step by SQL functions only (test checks the invariant) | Single source of truth for her accountant and disputes; never edit a balance. |
+| Package validity computed in SQL (`compute_expiry`, `recalc_lot_expiry`, `lot_usable_for`) | Provisional expiry must move when the first class is cancelled, and closures must extend it consistently. |
+| Pay in advance + Mark as paid (offline payments) using the same payments/ledger as Stripe | She isn't registered yet; switching online on later needs only the flag and live keys. |
+| Student price computed server-side (`src/lib/pricing.ts`) | Clients can't send their own price. |
+| `where true` on bulk deletes in `reset_demo_data` | Supabase's safeupdate rejects unqualified DELETE/UPDATE via the API. |
 
 ## Tech
 - **Stack:** Next.js 16 (App Router, `src/`, `proxy.ts` instead of middleware), TypeScript, Tailwind v4, Supabase (Postgres + Auth), Stripe, Resend, Twilio, Playwright.
@@ -93,10 +121,15 @@ npm run db:types              # after schema changes
 - Ask before anything hard to reverse. Flag v2 candidates instead of overbuilding.
 
 ## Current status / next up
-- **Done (v1):**
-  - Client app: home, schedule, booking, mock and Stripe checkout, confirmation with .ics, My classes (cancel, waitlist, credits), packs, account (export, delete, consents), info and legal placeholder pages.
-  - Admin: Today with check-in, classes, class detail (roster, manual add, edit, cancel class), timetable builder, clients, Outbox, stats, CSV/XLSX import, settings, compliance checklist, reset demo.
-  - Security review done (see decisions).
-  - 4 Playwright tests green.
-- **Waiting on the owner:** real logo, photos, prices, policy text, business details; Supabase EU project and Vercel setup (see README).
-- **Next (pending owner prioritisation):** benchmark (docs/benchmark.md) → PWA → polish/motion pass → reformer picker → retention automations → reports. Wallet passes, memberships, Greek, webshop and multiple instructors are proposed for v2.
+- **Done:**
+  - Client app with her real policy, pay-in-advance package requests, Membership/history/receipts and Packages with terms acceptance.
+  - Admin: Today (awaiting payment, renewals, unpaid flags, cancel today), classes, timetable, closures, clients (student verification, holiday return, ledger), Outbox, stats (MRR, methods by month, CSV export), import, settings, compliance.
+  - PWA manifest and icons, Open Graph previews.
+  - 27 engine tests + 6 Playwright flows green on a production build.
+- **Waiting on the owner:**
+  - Her Revolut link, IBAN, real prices and package names, logo and photos.
+  - Address, her full name, contact details.
+  - Supabase/Vercel accounts (see README).
+- **Proposed v2:**
+  - Wallet passes, auto-renewing memberships (code exists, flagged off), corporate accounts, referrals, gift vouchers.
+  - PAR-Q questionnaire, private feedback, demand insights, Greek/Russian, motion system with sheets/gestures, benchmark doc, the /design page.

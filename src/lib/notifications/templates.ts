@@ -47,7 +47,7 @@ export function render(t: TemplateName, raw: TemplateData): Rendered {
       return {
         subject: `You're in: ${d.className}, ${d.when}`,
         heading: "Your spot is secured",
-        lines: [`Hi ${first(d.name)}, see you at <strong>${d.className}</strong> on ${d.when}.`, d.location ? `Where: ${d.location}` : "", "Arrive 5 minutes early, grip socks on.", d.note ?? ""],
+        lines: [`Hi ${first(d.name)}, see you at <strong>${d.className}</strong> on ${d.when}.`, d.location ? `Where: ${d.location}` : "", "Arrive 5–10 minutes early, grip socks on.", d.note ?? ""],
         cta: { label: "View my bookings", href: `${link}/bookings` },
         sms: `Re·Form: you're booked for ${d.className}, ${d.when}. See you there!`,
       };
@@ -55,7 +55,7 @@ export function render(t: TemplateName, raw: TemplateData): Rendered {
       return {
         subject: `Tomorrow: ${d.className}, ${d.when}`,
         heading: "See you tomorrow",
-        lines: [`Hi ${first(d.name)}, a little reminder: <strong>${d.className}</strong>, ${d.when}.`, d.note ?? ""],
+        lines: [`Hi ${first(d.name)}, a little reminder: <strong>${d.className}</strong>, ${d.when}.`, d.note ?? "Remember your grip socks · arrive 5–10 minutes early."],
         cta: { label: "Manage booking", href: `${link}/bookings` },
         sms: `Re·Form reminder: ${d.className} tomorrow, ${d.when}.`,
       };
@@ -86,9 +86,9 @@ export function render(t: TemplateName, raw: TemplateData): Rendered {
       return {
         subject: `Class cancelled: ${d.className}, ${d.when}`,
         heading: "We're so sorry",
-        lines: [`We've had to cancel <strong>${d.className}</strong> on ${d.when}.`, d.note ?? "", "Your credit has been returned to your account."],
-        cta: { label: "Pick another class", href: `${link}/schedule` },
-        sms: `Re·Form: sorry, ${d.className} on ${d.when} is cancelled. Your credit is back in your account.`,
+        lines: [`I've had to cancel <strong>${d.className}</strong> on ${d.when}.`, d.note ?? "", "Any class I cancel is always replaced: your class is back in your account, so just pick another time that suits you."],
+        cta: { label: "Rebook a class", href: `${link}/schedule` },
+        sms: `Re·Form: sorry, ${d.className} on ${d.when} is cancelled. Your class is back in your account, so rebook any time.`,
       };
     case "credits_added":
       return {

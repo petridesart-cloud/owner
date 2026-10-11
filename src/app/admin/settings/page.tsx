@@ -51,7 +51,17 @@ export default async function SettingsPage() {
             Online payments (Stripe){process.env.DEMO_MODE === "true" ? ", test mode in this demo" : ""}
           </Checkbox>
           {!unlocked && <p className="-mt-2 pl-8 text-xs text-ink-soft">Locked until every item under “Before online payments” is ticked in <a href="/admin/compliance" className="underline">Compliance</a>. Until then clients pay at the studio.</p>}
-          <Checkbox id="allow_pay_later" name="allow_pay_later" defaultChecked={s.allow_pay_later}>Let clients reserve one class and pay at the studio before buying a package</Checkbox>
+          <Checkbox id="allow_pay_later" name="allow_pay_later" defaultChecked={s.allow_pay_later}>Allow booking one class before paying (your policy: off, everything is paid in advance)</Checkbox>
+          <div className="grid grid-cols-2 gap-3">
+            {n("unpaid_request_expiry_hours", "Unpaid requests expire after (hours)", s.unpaid_request_expiry_hours)}
+            {n("expiry_reminder_days", "Expiry reminder (days before)", s.expiry_reminder_days)}
+            {n("student_discount_pct", "Student discount (%)", s.student_discount_pct, "Group packages only")}
+          </div>
+          {t("revolut_link", "Revolut payment link", s.revolut_link, "e.g. https://revolut.me/yourname")}
+          <div className="grid grid-cols-2 gap-3">
+            {t("bank_account_name", "Bank account name", s.bank_account_name)}
+            {t("bank_iban", "IBAN", s.bank_iban, "Clients use their booking code as the reference")}
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <Field id="membership_period_mode" label="Monthly package period">
               <select id="membership_period_mode" name="membership_period_mode" defaultValue={s.membership_period_mode} className={inputClass}>

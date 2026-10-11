@@ -7,7 +7,7 @@ import { db } from "@/lib/supabase/admin";
 import { creditBalance } from "@/lib/data";
 import { dayMonth, longDate, time } from "@/lib/time";
 import { eur } from "@/lib/money";
-import { adjustCredits, changeMembershipProduct, updateClient } from "../../actions";
+import { adjustCredits, changeMembershipProduct, holidayReturn, setStudent, updateClient } from "../../actions";
 import { MarkPaid, MembershipControls, RenewButtons } from "../../PaymentButtons";
 import { AdminTitle, Stat } from "../../ui";
 
@@ -85,6 +85,26 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
             <MarkPaid paymentId={p.id} label={p.description} />
           </div>
         ))}
+      </section>
+
+      <section className="card grid gap-5 px-5 py-5 sm:grid-cols-2">
+        <div>
+          <h2 className="display mb-1 text-[0.95rem]">Student</h2>
+          <p className="mb-3 text-sm text-ink-soft">After seeing their student card in person. No photos are stored.{c.student_verified_until && c.student_verified_until >= new Date().toISOString().slice(0, 10) ? ` Student price active until ${c.student_verified_until}.` : ""}</p>
+          <ActionForm action={setStudent.bind(null, id)} submit="Save" variant="ghost">
+            <Field id="student_verified_until" label="Verified until" hint="Leave empty to remove"><input id="student_verified_until" name="student_verified_until" type="date" defaultValue={c.student_verified_until ?? ""} className={inputClass} /></Field>
+          </ActionForm>
+        </div>
+        <div>
+          <h2 className="display mb-1 text-[0.95rem]">Missed class: public holiday</h2>
+          <p className="mb-3 text-sm text-ink-soft">Gives one class back (valid 30 days) so they can reschedule.</p>
+          <ActionForm action={holidayReturn.bind(null, id)} submit="Return a class" variant="ghost">
+            <div className="grid grid-cols-2 gap-2">
+              <Field id="h-kind" label="Type"><select id="h-kind" name="kind" className={inputClass}><option value="reformer">Reformer</option><option value="mat">Mat</option></select></Field>
+              <Field id="h-date" label="Holiday"><input id="h-date" name="date" type="date" className={inputClass} /></Field>
+            </div>
+          </ActionForm>
+        </div>
       </section>
 
       <section className="card px-5 py-5">

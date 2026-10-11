@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const items = [
-  ["/admin", "Today"], ["/admin/classes", "Classes"], ["/admin/timetable", "Timetable"], ["/admin/clients", "Clients"],
+  ["/admin", "Today"], ["/admin/classes", "Classes"], ["/admin/timetable", "Timetable"], ["/admin/closures", "Closures"], ["/admin/clients", "Clients"],
   ["/admin/outbox", "Outbox"], ["/admin/stats", "Stats"], ["/admin/import", "Import"], ["/admin/settings", "Settings"], ["/admin/compliance", "Compliance"],
 ] as const;
 

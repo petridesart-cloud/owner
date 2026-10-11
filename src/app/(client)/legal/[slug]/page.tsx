@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { DraftNotice, Prose } from "@/components/Prose";
 import { PageTitle } from "@/components/ui";
 import { getSettings } from "@/lib/auth";
@@ -20,11 +20,11 @@ const PAGES: Record<string, { title: string; body: (s: Settings) => React.ReactN
         <h2>Packages, packs and classes (credits)</h2>
         <ul>
           <li>Each package gives a number of classes (credits) for a class type (reformer or mat). Some classes, such as private sessions, may use more than one credit; this is shown before you book.</li>
-          <li>Classes from a monthly package expire at the end of each period{s.rollover_max ? `, except up to ${s.rollover_max} unused classes, which roll over once` : ""}. Classes from a one-off pack expire after the validity stated at purchase.</li>
+          <li>Classes from a monthly package expire at the end of each period{s.rollover_max ? `, except up to ${s.rollover_max} unused classes, which roll over once` : ""}. Packages are valid for 30 or 60 days from the date of your first class, depending on the package; classes can&apos;t be booked beyond the expiry date.</li>
           <li>Classes have no cash value, are personal and can&apos;t be transferred, and aren&apos;t refundable once expired, unless required by law.</li>
           <li>{s.online_payments_enabled ? "Monthly packages renew automatically until cancelled. You can cancel renewal any time from your Membership page; it takes effect at the end of the current period. If a renewal payment fails, no new classes are added until it's paid." : "Monthly packages don't renew automatically; you renew at the studio. We'll remind you before the period ends."}</li>
           <li>Changing package applies from the next period.</li>
-          <li>We may pause a package (e.g. injury or holiday); the period and its classes are extended by the pause.</li>
+          <li>Packages active during studio closures (Christmas, Easter, Summer) are frozen for the closed days.</li>
         </ul>
         <h2>Late arrival &amp; no-shows</h2>
         <p>For safety we may refuse entry more than 10 minutes after the start. Late arrivals and no-shows are treated as attended classes.</p>
@@ -135,6 +135,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
 export default async function LegalPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
+  if (slug === "cancellation") redirect("/policy/payments"); // her own policy page replaces it
   const page = PAGES[slug];
   if (!page) notFound();
   const s = await getSettings();

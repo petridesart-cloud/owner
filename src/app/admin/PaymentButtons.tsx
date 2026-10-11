@@ -9,10 +9,12 @@ export function MarkPaid({ paymentId, label }: { paymentId: string; label: strin
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
   if (msg) return <span role="status" className="text-xs font-medium text-plum-700">{msg}</span>;
-  const go = (m: "cash" | "card_in_person") => start(async () => { const r = await markPaid(paymentId, m); setMsg(r.ok ? "Paid ✓" : r.error); });
+  const go = (m: "cash" | "card_in_person" | "revolut" | "bank_transfer") => start(async () => { const r = await markPaid(paymentId, m); setMsg(r.ok ? "Paid ✓" : r.error); });
   return (
-    <span className="flex shrink-0 gap-1.5" role="group" aria-label={`Mark ${label} as paid`}>
+    <span className="flex shrink-0 flex-wrap justify-end gap-1.5" role="group" aria-label={`Mark ${label} as paid`}>
       <button disabled={pending} onClick={() => go("cash")} className={`${btn} border-ink bg-ink text-paper`}>Cash</button>
+      <button disabled={pending} onClick={() => go("revolut")} className={`${btn} border-line bg-white text-ink`}>Revolut</button>
+      <button disabled={pending} onClick={() => go("bank_transfer")} className={`${btn} border-line bg-white text-ink`}>Bank</button>
       <button disabled={pending} onClick={() => go("card_in_person")} className={`${btn} border-line bg-white text-ink`}>Card</button>
     </span>
   );

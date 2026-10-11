@@ -8,6 +8,7 @@ import { db } from "@/lib/supabase/admin";
 import { eur } from "@/lib/money";
 import { dayMonth, longDate } from "@/lib/time";
 import { toggleRenewal } from "./actions";
+import { paymentReference } from "@/lib/pricing";
 
 export const metadata: Metadata = { title: "Membership" };
 export const dynamic = "force-dynamic";
@@ -21,6 +22,8 @@ export default async function MembershipPage({ searchParams }: { searchParams: P
   const viewer = await requireViewer("/membership");
   const p = viewer.profile;
   const settings = await getSettings();
+  const { data: lots } = await db().from("credit_lots").select("id, note, credit_kind, remaining, total, started_at, expires_at, validity_days")
+    .eq("profile_id", p.id).gt("remaining", 0).or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`).order("created_at");
   const [credits, { data: m }, { data: pending }, { data: ledger }, { data: payments }] = await Promise.all([
     creditBalance(p.id),
     db().from("memberships").select("*, products!memberships_product_id_fkey(name, credits, credit_kind, price_cents), next:products!memberships_next_product_id_fkey(name)")
@@ -37,7 +40,7 @@ export default async function MembershipPage({ searchParams }: { searchParams: P
     <div>
       <PageTitle eyebrow="Your package" title="Membership" />
       <div className="space-y-6">
-        {requested && <div className="px-5"><Notice tone="success">Request noted. Pay at the studio (cash or card) and your classes are added straight away.</Notice></div>}
+        {requested && <div className="px-5"><Notice tone="success">Request noted. Once your payment is received, your classes are added straight away.</Notice></div>}
         {started && <div className="px-5"><Notice tone="success">Welcome! Your classes are ready to book.</Notice></div>}
 
         <section className="px-5" aria-labelledby="current">
@@ -77,8 +80,22 @@ export default async function MembershipPage({ searchParams }: { searchParams: P
                 </>
               ) : (
                 <>
-                  <p className="text-sm text-ink-soft">No monthly package yet. A package is the easiest way to keep your rhythm.</p>
-                  <ButtonLink href="/packs" className="w-full">See packages</ButtonLink>
+                  {(lots ?? []).length > 0 ? (
+                    <ul className="divide-y divide-line text-sm">
+                      {lots!.map((l) => (
+                        <li key={l.id} className="flex justify-between gap-3 py-2">
+                          <span className="text-ink">{(l.note ?? l.credit_kind).replace(/ \(.*\)$/, "")}<span className="block text-xs text-ink-soft">{l.remaining} of {l.total} left</span></span>
+                          <span className="text-right text-xs text-ink-soft">
+                            {l.validity_days && !l.started_at ? <>Not started yet<br />{l.validity_days} days from your first class</>
+                              : l.expires_at ? <>{l.started_at && l.started_at > new Date().toISOString() ? "Provisional · " : ""}valid until<br />{longDate(new Date(new Date(l.expires_at).getTime() - 1))}</> : "No expiry"}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-ink-soft">No package yet. A package is the easiest way to keep your rhythm.</p>
+                  )}
+                  <ButtonLink href="/packs" variant={(lots ?? []).length ? "ghost" : "primary"} className="w-full">{(lots ?? []).length ? "Get another package" : "See packages"}</ButtonLink>
                 </>
               )}
             </div>
@@ -89,9 +106,19 @@ export default async function MembershipPage({ searchParams }: { searchParams: P
           <Section title="Awaiting payment">
             <ul className="card divide-y divide-line">
               {pending!.map((x) => (
-                <li key={x.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
-                  <span className="text-ink">{x.description}<span className="block text-ink-soft">Pay at the studio · requested {dayMonth(x.created_at)}</span></span>
-                  <span className="font-serif text-xl text-ink">{eur(x.amount_cents)}</span>
+                <li key={x.id} className="space-y-2 px-4 py-3 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-ink">{x.description}<span className="block text-ink-soft">Requested {dayMonth(x.created_at)} · held for {settings.unpaid_request_expiry_hours}h</span></span>
+                    <span className="font-serif text-xl text-ink">{eur(x.amount_cents)}</span>
+                  </div>
+                  {!x.booking_id && (
+                    <div className="rounded-2xl bg-lilac-50 px-3 py-2.5 leading-relaxed text-ink">
+                      <p>Pay in advance by <strong className="font-medium">cash at the studio</strong>{settings.revolut_link ? <>, <strong className="font-medium">Revolut</strong></> : null}{settings.bank_iban ? <> or <strong className="font-medium">bank transfer</strong></> : null}.</p>
+                      {settings.bank_iban && <p className="mt-1 text-xs">{settings.bank_account_name || "Re·Form Pilates Studio"} · IBAN <span className="font-mono">{settings.bank_iban}</span></p>}
+                      <p className="mt-1 text-xs">Reference: <strong className="font-mono font-medium">{paymentReference(x.id)}</strong></p>
+                      {settings.revolut_link && <a href={settings.revolut_link} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex min-h-11 items-center rounded-full bg-ink px-4 text-xs font-medium uppercase tracking-[0.14em] text-paper">Pay with Revolut</a>}
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>

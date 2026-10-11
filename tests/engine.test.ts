@@ -5,7 +5,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "../src/lib/supabase/types";
-import { localToUtc } from "../src/lib/time";
+import { addDaysKey, localToUtc, todayKey } from "../src/lib/time";
+import { productPrice } from "../src/lib/pricing";
 
 const env = Object.fromEntries(fs.readFileSync(".env.local", "utf8").split("\n").filter((l) => l.includes("=")).map((l) => [l.split("=")[0], l.slice(l.indexOf("=") + 1)]));
 const db = createClient<Database>(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
@@ -55,7 +56,7 @@ describe("credits & booking", () => {
     const p = await client("expbefore");
     await grant(p, 1, 24 * H);
     const { error } = await book(p, await session(72 * H));
-    assert.equal(error?.message, "no_credits");
+    assert.equal(error?.message, "beyond_expiry");
   });
 
   test("cancel before the cutoff returns the credit to the same lot (original expiry)", async () => {
@@ -108,10 +109,16 @@ describe("credits & booking", () => {
     assert.deepEqual(e?.map((r) => r.delta), [-2]);
   });
 
-  test("pay at the studio: one unpaid class at a time", async () => {
+  test("pay at the studio is off by default (pay in advance); when enabled, one unpaid class at a time", async () => {
     const p = await client("paylater");
-    assert.ifError((await book(p, await session(30 * H), "pay_at_studio")).error);
-    assert.equal((await book(p, await session(31 * H), "pay_at_studio")).error?.message, "unpaid_limit");
+    assert.equal((await book(p, await session(30 * H), "pay_at_studio")).error?.message, "pay_later_off");
+    await db.from("studio_settings").update({ allow_pay_later: true }).eq("id", 1);
+    try {
+      assert.ifError((await book(p, await session(31 * H), "pay_at_studio")).error);
+      assert.equal((await book(p, await session(32 * H), "pay_at_studio")).error?.message, "unpaid_limit");
+    } finally {
+      await db.from("studio_settings").update({ allow_pay_later: false }).eq("id", 1);
+    }
   });
 
   test("admin adjustment requires a reason", async () => {
@@ -128,8 +135,11 @@ describe("credits & booking", () => {
 
 describe("memberships", () => {
   let product: string;
+  let perPeriod: number;
   before(async () => {
-    product = (await db.from("products").select("id").eq("kind", "membership").order("sort_order").limit(1).single()).data!.id;
+    const row = (await db.from("products").select("id, credits").eq("kind", "membership").order("sort_order").limit(1).single()).data!;
+    product = row.id;
+    perPeriod = row.credits;
   });
 
   async function startMembership(p: string) {
@@ -141,10 +151,10 @@ describe("memberships", () => {
   test("paying for a package grants the period's credits once (double confirm is idempotent)", async () => {
     const p = await client("member");
     const { paymentId } = await startMembership(p);
-    assert.equal(await balance(p), 4);
+    assert.equal(await balance(p), perPeriod);
     const { data } = await db.rpc("confirm_payment", { p_payment: paymentId, p_method: "cash" });
     assert.equal((data as { status: string }).status, "already_paid");
-    assert.equal(await balance(p), 4);
+    assert.equal(await balance(p), perPeriod);
   });
 
   test("renewal grant is idempotent per period (double webhook)", async () => {
@@ -168,10 +178,10 @@ describe("memberships", () => {
     const p = await client("rollover");
     await db.from("studio_settings").update({ rollover_max: 2 }).eq("id", 1);
     try {
-      const { membershipId } = await startMembership(p); // 4 credits, none used
+      const { membershipId } = await startMembership(p); // none used
       const { data: m } = await db.from("memberships").select("current_period_end").eq("id", membershipId).single();
       const { data: newLot } = await db.rpc("grant_membership_period", { p_membership: membershipId, p_start: m!.current_period_end });
-      assert.equal(await lotRemaining(newLot as string), 4 + 2);
+      assert.equal(await lotRemaining(newLot as string), perPeriod + 2);
     } finally {
       await db.from("studio_settings").update({ rollover_max: 0 }).eq("id", 1);
     }
@@ -181,11 +191,11 @@ describe("memberships", () => {
     const p = await client("pastdue");
     const { membershipId } = await startMembership(p);
     await db.from("memberships").update({ status: "past_due" }).eq("id", membershipId);
-    assert.equal(await balance(p), 4); // nothing added by the failure itself
+    assert.equal(await balance(p), perPeriod); // nothing added by the failure itself
     const { data: pay } = await db.from("payments").insert({ profile_id: p, provider: "offline", amount_cents: 7500, purpose: "renewal", membership_id: membershipId, product_id: product, description: "renewal", status: "pending" }).select("id").single();
     await db.rpc("confirm_payment", { p_payment: pay!.id, p_method: "cash" });
     assert.equal((await db.from("memberships").select("status").eq("id", membershipId).single()).data!.status, "active");
-    assert.equal(await balance(p), 8);
+    assert.equal(await balance(p), perPeriod * 2);
   });
 
   test("pause then resume extends the period and its credits", async () => {
@@ -226,6 +236,138 @@ describe("time & DST (Cyprus clocks go back on 25 Oct 2026)", () => {
     const sums = new Map<string, number>();
     for (const e of ledger ?? []) if (e.lot_id) sums.set(e.lot_id, (sums.get(e.lot_id) ?? 0) + e.delta);
     for (const l of lots ?? []) assert.equal(sums.get(l.id) ?? 0, l.remaining, `lot ${l.id}`);
+  });
+});
+
+describe("studio policy", () => {
+  const D = 24 * H;
+  async function packLot(p: string, n: number, validity: number) {
+    const { data, error } = await db.rpc("grant_lot", { p_profile: p, p_kind: "reformer", p_credits: n, p_expires: null as unknown as string, p_note: "pack", p_validity_days: validity });
+    assert.ifError(error);
+    return data as string;
+  }
+  const lot = async (id: string) => (await db.from("credit_lots").select("started_at, expires_at, remaining").eq("id", id).single()).data!;
+  const localDate = (isoStr: string) => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Nicosia" }).format(new Date(isoStr));
+
+  test("cancellation cutoff is 6 hours", async () => {
+    const cfg = (await db.from("studio_settings").select("cancellation_cutoff_hours").single()).data!;
+    assert.equal(cfg.cancellation_cutoff_hours, 6);
+    const p = await client("six");
+    await grant(p, 2, 30 * D);
+    const early = (await book(p, await session(7 * H))).data as { booking_id: string };
+    const late = (await book(p, await session(5 * H))).data as { booking_id: string };
+    assert.equal(((await db.rpc("cancel_booking", { p_booking: early.booking_id, p_profile: p })).data as { status: string }).status, "cancelled");
+    assert.equal(((await db.rpc("cancel_booking", { p_booking: late.booking_id, p_profile: p })).data as { status: string }).status, "late_cancelled");
+  });
+
+  test("6h cutoff is real elapsed time across the clock change", () => {
+    // Class 25 Oct 2026 08:00 Cyprus (after clocks go back, UTC+2): 06:00Z. Cutoff 6h earlier = 00:00Z,
+    // which is 03:00 local *before* the change (UTC+3). Exactly 6 real hours, not 6 wall-clock hours.
+    const start = new Date(localToUtc("2026-10-25", "08:00"));
+    const cutoff = new Date(start.getTime() - 6 * H);
+    assert.equal(start.toISOString(), "2026-10-25T06:00:00.000Z");
+    assert.equal(cutoff.toISOString(), "2026-10-25T00:00:00.000Z");
+    assert.equal(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Nicosia", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(cutoff), "03:00");
+  });
+
+  test("validity starts at the first class and recalculates when it's cancelled", async () => {
+    const p = await client("validity");
+    const id = await packLot(p, 4, 30);
+    assert.equal((await lot(id)).started_at, null);                       // not yet started
+    const first = (await book(p, await session(10 * D))).data as { booking_id: string };
+    const second = (await book(p, await session(20 * D))).data as { booking_id: string };
+    const a = await lot(id);
+    assert.equal(localDate(a.expires_at!), addDaysKey(localDate(a.started_at!), 30));
+    assert.equal(localDate(a.started_at!), localDate(iso(10 * D)));
+    await db.rpc("cancel_booking", { p_booking: first.booking_id, p_profile: p });
+    const b = await lot(id);
+    assert.equal(localDate(b.started_at!), localDate(iso(20 * D)));        // moved to the next earliest class
+    await db.rpc("cancel_booking", { p_booking: second.booking_id, p_profile: p });
+    assert.equal((await lot(id)).started_at, null);                       // back to not started
+  });
+
+  test("classes beyond the package expiry can't be booked", async () => {
+    const p = await client("beyond");
+    await packLot(p, 4, 30);
+    assert.ifError((await book(p, await session(10 * D))).error);
+    assert.equal((await book(p, await session(45 * D))).error?.message, "beyond_expiry");
+    // An earlier class that would pull the expiry before an existing booking is refused too.
+    const q = await client("beyond2");
+    await packLot(q, 4, 30);
+    assert.ifError((await book(q, await session(20 * D))).error);
+    assert.ifError((await book(q, await session(45 * D))).error);          // start 20d → expiry 50d
+    assert.equal((await book(q, await session(12 * D))).error?.message, "beyond_expiry");
+  });
+
+  test("closures freeze packages, counting overlapping closures once", async () => {
+    const p = await client("freeze");
+    const id = await packLot(p, 4, 30);
+    await book(p, await session(200 * D));
+    const before = await lot(id);
+    const start = localDate(before.started_at!);
+    const ids: string[] = [];
+    try {
+      const c1 = (await db.from("closures").insert({ name: "Test break A", starts_on: addDaysKey(start, 5), ends_on: addDaysKey(start, 9) }).select("id").single()).data!.id;
+      ids.push(c1);
+      await db.rpc("apply_closure", { p_closure: c1 });
+      const afterA = await lot(id);
+      assert.equal(localDate(afterA.expires_at!), addDaysKey(start, 30 + 5));
+      // Second closure overlaps 2 days of the first and adds 2 new ones → +2 more.
+      const c2 = (await db.from("closures").insert({ name: "Test break B", starts_on: addDaysKey(start, 8), ends_on: addDaysKey(start, 11) }).select("id").single()).data!.id;
+      ids.push(c2);
+      await db.rpc("apply_closure", { p_closure: c2 });
+      const afterB = await lot(id);
+      assert.equal(localDate(afterB.expires_at!), addDaysKey(start, 30 + 7));
+      const { data: entries } = await db.from("credit_ledger").select("entry_type, delta").eq("lot_id", id).eq("entry_type", "freeze_extension");
+      assert.equal(entries?.length, 2);
+      // Booking on a closure day is refused.
+      const closedDay = await (async () => {
+        const { data } = await db.from("class_sessions").insert({ class_type_id: reformer, starts_at: localToUtc(addDaysKey(start, 6), "09:00"), ends_at: localToUtc(addDaysKey(start, 6), "09:50"), capacity: 3, title: "Engine test" }).select("id").single();
+        return data!.id;
+      })();
+      // The studio can still add someone manually.
+      assert.equal((await db.rpc("book_session", { p_profile: await client("closed"), p_session: closedDay, p_mode: "manual", p_source: "manual" })).error, null);
+      const someone = await client("closed2");
+      await grant(someone, 1, 400 * D);
+      assert.equal((await book(someone, closedDay)).error?.message, "studio_closed");
+    } finally {
+      await db.from("closures").delete().in("id", ids);
+    }
+  });
+
+  test("student discount: group packages only, and only while verified", () => {
+    const cfg = { student_discount_pct: 10 };
+    const group = { price_cents: 14000, is_group: true, kind: "pack" };
+    const priv = { price_cents: 14000, is_group: false, kind: "pack" };
+    const future = addDaysKey(todayKey(), 30), past = addDaysKey(todayKey(), -1);
+    assert.deepEqual(productPrice(group, { student_verified_until: future }, cfg), { cents: 12600, student: true });
+    assert.deepEqual(productPrice(group, { student_verified_until: past }, cfg), { cents: 14000, student: false });
+    assert.deepEqual(productPrice(group, { student_verified_until: null }, cfg), { cents: 14000, student: false });
+    assert.deepEqual(productPrice(priv, { student_verified_until: future }, cfg), { cents: 14000, student: false });
+  });
+
+  test("unpaid package requests expire after the configured hours", async () => {
+    const p = await client("unpaid");
+    const product = (await db.from("products").select("id").eq("kind", "pack").limit(1).single()).data!.id;
+    const old = (await db.from("payments").insert({ profile_id: p, provider: "offline", amount_cents: 7500, purpose: "pack", product_id: product, description: "old", status: "pending", created_at: iso(-49 * H) }).select("id").single()).data!.id;
+    const fresh = (await db.from("payments").insert({ profile_id: p, provider: "offline", amount_cents: 7500, purpose: "pack", product_id: product, description: "fresh", status: "pending", created_at: iso(-2 * H) }).select("id").single()).data!.id;
+    await db.rpc("expire_unpaid_requests");
+    assert.equal((await db.from("payments").select("status").eq("id", old).single()).data!.status, "cancelled");
+    assert.equal((await db.from("payments").select("status").eq("id", fresh).single()).data!.status, "pending");
+    // An expired request can't be marked paid by mistake.
+    assert.equal((await db.rpc("confirm_payment", { p_payment: old, p_method: "cash" })).error?.message, "payment_cancelled");
+  });
+
+  test("a paid package grants classes that start on the first class", async () => {
+    const p = await client("packpaid");
+    const product = (await db.from("products").select("id, credits, validity_days").eq("kind", "pack").not("validity_days", "is", null).limit(1).single()).data!;
+    const pay = (await db.from("payments").insert({ profile_id: p, provider: "offline", amount_cents: 7500, purpose: "pack", product_id: product.id, description: "pack", status: "pending" }).select("id").single()).data!.id;
+    await db.rpc("confirm_payment", { p_payment: pay, p_method: "revolut" });
+    const { data: l } = await db.from("credit_lots").select("validity_days, started_at, expires_at, remaining").eq("payment_id", pay).single();
+    assert.equal(l!.validity_days, product.validity_days);
+    assert.equal(l!.started_at, null);
+    assert.equal(l!.remaining, product.credits);
+    assert.equal((await db.from("payments").select("method").eq("id", pay).single()).data!.method, "revolut");
   });
 });
 

@@ -9,10 +9,18 @@ export function BuyButton({ productId, label, cta, terms }: { productId: string;
   const router = useRouter();
   const [pending, start] = useTransition();
   const [accepted, setAccepted] = useState(false);
+  const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const id = `terms-${productId}`;
+  if (!open) {
+    return (
+      <Button variant="soft" className="mt-4 w-full" aria-expanded={false} aria-label={`Choose ${label.replace(/^(Buy|Request) /, "")}`} onClick={() => setOpen(true)}>
+        Choose
+      </Button>
+    );
+  }
   return (
-    <div className="mt-4 space-y-3">
+    <div className="mt-4 animate-rise space-y-3">
       <div className="rounded-2xl bg-lilac-50 px-4 py-3 text-sm leading-relaxed text-ink">{terms}</div>
       <Checkbox id={id} checked={accepted} onChange={(e) => setAccepted(e.target.checked)}>
         I accept these package terms and the <a href="/legal/terms" target="_blank" className="font-medium underline underline-offset-4">Terms</a>.

@@ -5,11 +5,13 @@ import { CalendarDays, Clock, MapPin, Users, X } from "lucide-react";
 import { Badge, ButtonLink, Eyebrow, Notice } from "@/components/ui";
 import { spotsLabel } from "@/components/ClassRow";
 import { getSettings, getViewer } from "@/lib/auth";
-import { availability, creditBalance } from "@/lib/data";
+import { availability } from "@/lib/data";
 import { db } from "@/lib/supabase/admin";
 import { eur, vatLine } from "@/lib/money";
 import { longDate, relativeHours, time } from "@/lib/time";
 import { BookActions } from "./BookActions";
+import { WHAT_TO_BRING } from "@/lib/policy";
+import { Flower } from "@/components/Flower";
 
 export const metadata: Metadata = { title: "Book a class" };
 export const dynamic = "force-dynamic";
@@ -27,13 +29,12 @@ export default async function BookPage({ params, searchParams }: { params: Promi
 
   const [viewer, settings] = await Promise.all([getViewer(), getSettings()]);
   const profile = viewer?.profile;
-  const [booking, entry, credits] = profile
+  const [booking, entry] = profile
     ? await Promise.all([
         db().from("bookings").select("id, status").eq("session_id", id).eq("profile_id", profile.id).eq("status", "confirmed").maybeSingle().then((r) => r.data),
         db().from("waitlist_entries").select("id, status, offer_expires_at, created_at").eq("session_id", id).eq("profile_id", profile.id).in("status", ["waiting", "offered"]).maybeSingle().then((r) => r.data),
-        creditBalance(profile.id),
       ])
-    : [null, null, null];
+    : [null, null];
 
   let position = 0;
   if (entry?.status === "waiting") {
@@ -46,7 +47,12 @@ export default async function BookPage({ params, searchParams }: { params: Promi
   const offered = entry?.status === "offered" && new Date(entry.offer_expires_at!) > new Date();
   const full = c.spots_left === 0 && !offered;
   const mins = Math.round((new Date(c.ends_at).getTime() - start.getTime()) / 60000);
-  const creditCount = c.credit_kind && credits ? credits[c.credit_kind] : 0;
+  const usable = profile && c.credit_kind
+    ? (await db().rpc("usable_credits", { p_profile: profile.id, p_kind: c.credit_kind, p_class: c.starts_at })).data?.[0]
+    : null;
+  const creditCount = usable?.usable ?? 0;
+  const blockedByExpiry = !!usable && usable.total > 0 && usable.usable === 0;
+  const { data: closed } = await db().rpc("is_closed_on", { p_at: c.starts_at });
   const { data: ctype } = await db().from("class_types").select("credit_cost").eq("id", c.class_type_id).single();
   const next = `/book/${id}`;
 
@@ -96,10 +102,19 @@ export default async function BookPage({ params, searchParams }: { params: Promi
 
         {c.description && <p className="mt-5 text-[0.95rem] leading-relaxed text-ink-soft">{c.description}</p>}
 
+        <section aria-labelledby="bring" className="mt-5 rounded-2xl border border-line bg-paper/70 px-4 py-3.5">
+          <h2 id="bring" className="eyebrow">What to bring</h2>
+          <ul className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm text-ink">
+            {WHAT_TO_BRING.map((w) => <li key={w} className="flex items-start gap-1.5"><Flower className="mt-[3px] size-3.5 shrink-0 text-plum-700/70" />{w}</li>)}
+          </ul>
+        </section>
+
         <div className="mt-6 border-t border-line pt-5">
           {cancelled && <div className="mb-4"><Notice>Payment cancelled. Your spot was released; you can try again below.</Notice></div>}
 
-          {c.status === "cancelled" ? (
+          {closed ? (
+            <Notice>The studio is closed that day. Pick another class.</Notice>
+          ) : c.status === "cancelled" ? (
             <Notice tone="error">This class has been cancelled by the studio.</Notice>
           ) : past ? (
             <Notice>This class has already started.</Notice>
@@ -130,6 +145,9 @@ export default async function BookPage({ params, searchParams }: { params: Promi
           ) : (
             <div className="space-y-4">
               {offered && <Notice tone="success">A spot opened up for you. It&apos;s held until {time(entry!.offer_expires_at!)} ({relativeHours(entry!.offer_expires_at!)} left).</Notice>}
+              {blockedByExpiry && (
+                <Notice>Your package is valid until {longDate(new Date(new Date(usable!.latest_expiry!).getTime() - 1))}, so this class is after it. A new package will cover it.</Notice>
+              )}
               <PriceSummary price={c.price_cents} settings={settings} />
               <BookActions
                 mode="book" sessionId={id} priceLabel={eur(c.price_cents)} credits={creditCount}
@@ -137,7 +155,7 @@ export default async function BookPage({ params, searchParams }: { params: Promi
                 online={settings.online_payments_enabled} payLater={settings.allow_pay_later}
               />
               {c.credit_kind && creditCount === 0 && (
-                <p className="text-center text-sm"><Link href="/packs" className="inline-flex min-h-11 items-center font-medium text-ink underline underline-offset-4">Save with a monthly package or class pack</Link></p>
+                <ButtonLink href="/packs" variant={creditCount ? "ghost" : "primary"} className="w-full">{creditCount ? "Get another package" : "Get a package to book"}</ButtonLink>
               )}
             </div>
           )}
@@ -158,7 +176,7 @@ function PriceSummary({ price, settings }: { price: number; settings: { vat_rate
       {vat && <p className="mt-0.5 text-right text-xs text-ink-soft">{vat}</p>}
       <p className="mt-3 text-sm leading-relaxed text-ink-soft">
         Free cancellation up to {settings.cancellation_cutoff_hours} hours before class. Later cancellations aren&apos;t refunded.{" "}
-        <Link href="/legal/cancellation" className="underline underline-offset-4">Cancellation policy</Link>
+        <Link href="/policy/payments" className="underline underline-offset-4">Cancellation policy</Link>
       </p>
     </div>
   );

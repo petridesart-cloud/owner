@@ -46,14 +46,14 @@ begin
   event_type := (select id from public.class_types where slug = 'event');
 
   if not exists (select 1 from public.products) then
-    -- Placeholder prices until the studio confirms its packages.
-    insert into public.products (name, kind, credit_kind, credits, price_cents, validity_days, period_days, description, sort_order) values
-      ('Monthly · 4 reformer classes', 'membership', 'reformer', 4, 7500, null, 30, 'Once a week. Renews every 30 days.', 1),
-      ('Monthly · 8 reformer classes', 'membership', 'reformer', 8, 14000, null, 30, 'Twice a week. Our most popular.', 2),
-      ('Monthly · 12 reformer classes', 'membership', 'reformer', 12, 19500, null, 30, 'Three times a week, for the devoted.', 3),
-      ('Reformer · 5 classes', 'pack', 'reformer', 5, 9000, 60, null, 'One-off pack, valid 60 days.', 4),
-      ('Reformer · 10 classes', 'pack', 'reformer', 10, 17000, 90, null, 'One-off pack, valid 90 days.', 5),
-      ('Mat · 5 classes', 'pack', 'mat', 5, 6500, 60, null, 'One-off pack, valid 60 days.', 6);
+    -- Placeholder prices until the studio confirms its packages. Validity runs from the first class.
+    insert into public.products (name, kind, credit_kind, credits, price_cents, validity_days, period_days, description, is_group, active, sort_order) values
+      ('Reformer · 4 classes', 'pack', 'reformer', 4, 7500, 30, null, 'Once a week for a month.', true, true, 1),
+      ('Reformer · 8 classes', 'pack', 'reformer', 8, 14000, 30, null, 'Twice a week. Our most popular.', true, true, 2),
+      ('Reformer · 12 classes', 'pack', 'reformer', 12, 19500, 60, null, 'Your own pace over two months.', true, true, 3),
+      ('Mat · 5 classes', 'pack', 'mat', 5, 6500, 30, null, 'Mat Pilates for a month.', true, true, 4),
+      -- Auto-renewing monthly package: code kept behind the online-payments flag, hidden for now.
+      ('Monthly · 8 reformer classes', 'membership', 'reformer', 8, 14000, null, 30, 'Renews every 30 days.', true, false, 9);
   end if;
   monthly8 := (select id from public.products where name = 'Monthly · 8 reformer classes' limit 1);
 
@@ -112,19 +112,17 @@ begin
     (cl[9], '20 weeks pregnant. Cleared by her doctor; no supine work after the first trimester.', now() - interval '20 days');
   insert into public.consents (profile_id, type, granted, version) values (maria, 'health_data', true, '2026-10-v1'), (cl[9], 'health_data', true, '2026-10-v1');
 
-  -- Elena: monthly 8-class membership (offline, paid at the studio), period started 18 days ago.
+  -- Elena: 8-class pack paid in cash; validity started with her first class (18 days ago).
   insert into public.payments (profile_id, provider, amount_cents, purpose, description, status, method, product_id, paid_at, created_at)
-    values (elena, 'offline', 14000, 'membership', 'Monthly · 8 reformer classes', 'paid', 'cash', monthly8, now() - interval '18 days', now() - interval '18 days')
-    returning id into bid;
-  insert into public.memberships (profile_id, product_id, provider, current_period_start, current_period_end, created_at)
-    values (elena, monthly8, 'offline', now() - interval '18 days', now() + interval '12 days', now() - interval '18 days') returning id into memb;
-  update public.payments set membership_id = memb where id = bid;
-  lot_elena := public.grant_lot(elena, 'reformer', 8, now() + interval '12 days', 'Monthly · 8 reformer classes', bid, memb, now() - interval '18 days');
+    select elena, 'offline', price_cents, 'pack', name, 'paid', 'revolut', id, now() - interval '20 days', now() - interval '20 days'
+      from public.products where name = 'Reformer · 8 classes' returning id into bid;
+  lot_elena := public.grant_lot(elena, 'reformer', 8, null, 'Reformer · 8 classes', bid, null, null, 'grant', null, 30);
   -- One-off packs for others (granted through the ledger).
-  lot_maria := public.grant_lot(maria, 'reformer', 5, now() + interval '40 days', 'Reformer · 5 classes');
-  perform public.grant_lot(cl[3], 'reformer', 2, now() + interval '6 days', 'Reformer · 5 classes (2 left)');
-  perform public.grant_lot(cl[7], 'reformer', 6, now() + interval '50 days', 'Reformer · 10 classes (6 left)');
-  perform public.grant_lot(cl[12], 'mat', 1, now() + interval '30 days', 'Mat · 5 classes (1 left)');
+  lot_maria := public.grant_lot(maria, 'reformer', 4, null, 'Reformer · 4 classes (not started yet)', null, null, null, 'grant', null, 30);
+  perform public.grant_lot(cl[3], 'reformer', 2, now() + interval '4 days', 'Reformer · 8 classes (2 left)');
+  perform public.grant_lot(cl[7], 'reformer', 6, now() + interval '41 days', 'Reformer · 12 classes (6 left)');
+  perform public.grant_lot(cl[12], 'mat', 1, now() + interval '20 days', 'Mat · 5 classes (1 left)');
+  update public.profiles set student_verified_until = (now() + interval '8 months')::date where id in (cl[13], cl[15]);
 
   -- Elena's usual slot: Tuesday 18:00 (history + next week booked), so "Your next class"
   -- and "Rebook your usual" have something to show when signing in as elena@example.com.
@@ -138,12 +136,19 @@ begin
       insert into public.bookings (session_id, profile_id, status, paid_with, credit_lot_id, confirmed_at, checked_in_at, created_at)
         values (r.id, elena, 'confirmed', 'credit', lot_elena, r.starts_at - interval '3 days', case when is_past then r.starts_at end, r.starts_at - interval '3 days')
         returning id into bid;
-      perform public.spend_credits(elena, 'reformer', 1, bid, now() - interval '1 year');
+      perform public.spend_credits(elena, 'reformer', 1, bid, r.starts_at);
     elsif is_past then
       insert into public.bookings (session_id, profile_id, status, paid_with, confirmed_at, checked_in_at, created_at)
         values (r.id, elena, 'confirmed', 'manual', r.starts_at - interval '3 days', r.starts_at, r.starts_at - interval '3 days');
     end if;
   end loop;
+
+  -- Ledger rows were written "now"; date them like the real bookings so history reads naturally.
+  perform set_config('reform.ledger_maintenance', 'on', true);
+  update public.credit_ledger g set created_at = b.created_at from public.bookings b where g.booking_id = b.id;
+  update public.credit_ledger g set created_at = p.paid_at from public.credit_lots l join public.payments p on p.id = l.payment_id
+   where g.lot_id = l.id and g.entry_type = 'grant' and p.paid_at is not null;
+  perform set_config('reform.ledger_maintenance', 'off', true);
 
   -- Everyone else: a realistic mix of full, "1 left", quiet and empty classes, with waitlists.
   for r in select s.id, s.starts_at, s.capacity,
@@ -194,7 +199,7 @@ begin
   end loop;
   -- A pending pack request waiting for payment at the studio.
   insert into public.payments (profile_id, provider, amount_cents, purpose, description, status, product_id)
-    select cl[5], 'offline', price_cents, 'pack', name, 'pending', id from public.products where name = 'Reformer · 5 classes' limit 1;
+    select cl[5], 'offline', price_cents, 'pack', name, 'pending', id from public.products where name = 'Reformer · 8 classes' limit 1;
 
   -- Saturday: a mat class and a SUP Pilates event on the beach
   sup_day := today + ((6 - extract(isodow from today)::int + 7) % 7);
@@ -215,9 +220,9 @@ begin
 
   -- A few historical online payments so Stats has revenue
   insert into public.payments (profile_id, provider, amount_cents, purpose, description, status, method, paid_at, created_at)
-  values (maria, 'offline', 9000, 'pack', 'Reformer · 5 classes', 'paid', 'cash', now() - interval '6 days', now() - interval '6 days'),
-         (cl[7], 'offline', 17000, 'pack', 'Reformer · 10 classes', 'paid', 'card_in_person', now() - interval '3 days', now() - interval '3 days'),
-         (cl[3], 'offline', 9000, 'pack', 'Reformer · 5 classes', 'paid', 'cash', now() - interval '25 days', now() - interval '25 days');
+  values (maria, 'offline', 7500, 'pack', 'Reformer · 4 classes', 'paid', 'bank_transfer', now() - interval '2 days', now() - interval '2 days'),
+         (cl[7], 'offline', 19500, 'pack', 'Reformer · 12 classes', 'paid', 'revolut', now() - interval '19 days', now() - interval '19 days'),
+         (cl[3], 'offline', 14000, 'pack', 'Reformer · 8 classes', 'paid', 'cash', now() - interval '26 days', now() - interval '26 days');
 end $$;
 
 -- ("where true": PostgREST's safeupdate rejects unqualified DELETE/UPDATE.)

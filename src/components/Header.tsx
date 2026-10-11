@@ -8,7 +8,7 @@ export function Header({ signedIn, isAdmin, banner }: { signedIn: boolean; isAdm
     <>
       {env.demoMode && (
         <p className="bg-ink px-4 py-1.5 text-center text-[0.7rem] tracking-wide text-paper">
-          Demo preview: payments are simulated and messages aren&apos;t sent.
+          Demo preview · no real payments or messages
         </p>
       )}
       {banner && (

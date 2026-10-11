@@ -2,8 +2,8 @@ import Link from "next/link";
 import { getSettings } from "@/lib/auth";
 
 const legal = [
+  { href: "/policy/payments", label: "Payments & Cancellation" },
   { href: "/legal/terms", label: "Terms & Conditions" },
-  { href: "/legal/cancellation", label: "Cancellation & Refunds" },
   { href: "/legal/privacy", label: "Privacy Policy" },
   { href: "/legal/cookies", label: "Cookies" },
   { href: "/legal/health", label: "Health & Safety" },

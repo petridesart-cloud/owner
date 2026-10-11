@@ -40,9 +40,9 @@ export function WelcomeForm({ email, name, phone, next }: { email: string; name:
       <fieldset className="space-y-1">
         <legend className="sr-only">Agreements</legend>
         <Checkbox id="policy" name="policy" required aria-describedby={e.policy ? "policy-error" : undefined}>
-          I accept the <Link href="/policy" target="_blank" className="font-medium underline underline-offset-4">Studio Rules</Link> and{" "}
-          <Link href="/legal/terms" target="_blank" className="font-medium underline underline-offset-4">Terms</Link>, including the{" "}
-          <Link href="/legal/cancellation" target="_blank" className="font-medium underline underline-offset-4">cancellation policy</Link>.
+          I accept the <Link href="/policy" target="_blank" className="font-medium underline underline-offset-4">Studio Rules</Link> and the{" "}
+          <Link href="/policy/payments" target="_blank" className="font-medium underline underline-offset-4">Payments, Cancellation &amp; Membership Policy</Link>{" "}
+          (and the <Link href="/legal/terms" target="_blank" className="font-medium underline underline-offset-4">Terms</Link>).
         </Checkbox>
         {e.policy && <p id="policy-error" className="pl-8 text-xs font-medium text-burgundy">{e.policy}</p>}
         <Checkbox id="fitness" name="fitness" required aria-describedby={e.fitness ? "fitness-error" : undefined}>

@@ -40,6 +40,12 @@ async function profileById(id: string) {
 // ---------------------------------------------------------------------------
 export async function bookWithCredit(profile: Profile, sessionId: string): Promise<ActionResult<{ redirect: string }>> {
   const { data, error } = await db().rpc("book_session", { p_profile: profile.id, p_session: sessionId, p_mode: "credit" });
+  if (error?.message === "beyond_expiry") {
+    const s = await sessionInfo(sessionId);
+    const { data: u } = await db().rpc("usable_credits", { p_profile: profile.id, p_kind: s.type.credit_kind!, p_class: s.starts_at });
+    const until = u?.[0]?.latest_expiry;
+    return { ok: false, error: `Your package is valid until ${until ? spokenDateTime(new Date(new Date(until).getTime() - 1)).split(",")[0] : "before this class"}, so this class can't be booked with it. A new package will cover it.` };
+  }
   if (error) return { ok: false, error: friendlyError(error) };
   const bookingId = (data as { booking_id: string }).booking_id;
   const s = await sessionInfo(sessionId);
@@ -112,15 +118,17 @@ export async function buyProduct(profile: Profile, productId: string): Promise<A
     if (live) return { ok: false, error: "You already have a monthly package. You can change it from your Membership page." };
   }
 
+  const price = productPrice(product, profile, cfg);
   if (!cfg.online_payments_enabled) {
     const { data: existing } = await db().from("payments").select("id").eq("profile_id", profile.id).eq("product_id", product.id).eq("status", "pending").eq("provider", "offline").maybeSingle();
     if (!existing) {
-      await db().from("payments").insert({
-        profile_id: profile.id, provider: "offline", amount_cents: product.price_cents, purpose, product_id: product.id, description: product.name, status: "pending",
-      });
+      const { data: pay } = await db().from("payments").insert({
+        profile_id: profile.id, provider: "offline", amount_cents: price.cents, purpose, product_id: product.id,
+        description: product.name, status: "pending", discount_note: price.student ? `Student ${cfg.student_discount_pct}%` : null,
+      }).select("id").single();
       await notify({ profileId: profile.id, email: profile.email }, "payment_request",
-        { name: profile.full_name ?? undefined, className: product.name, note: `${eur(product.price_cents)}, payable at the studio (cash or card). Your classes are added as soon as it's paid.` },
-        { dedupeKey: `request:${profile.id}:${product.id}:${new Date().toISOString().slice(0, 10)}` });
+        { name: profile.full_name ?? undefined, className: product.name, note: paymentInstructions(cfg, price.cents, paymentReference(pay!.id)) },
+        { dedupeKey: `request:${pay!.id}` });
     }
     return { ok: true, data: { redirect: "/membership?requested=1" } };
   }
@@ -147,21 +155,25 @@ async function startSubscription(profile: Profile, product: { id: string; name: 
   return { ok: true, data: { redirect: checkout.url } };
 }
 
+export { paymentReference, productPrice, paymentInstructions } from "@/lib/pricing";
+import { paymentInstructions, paymentReference, productPrice } from "@/lib/pricing";
+
 export async function buyPack(profile: Profile, productId: string): Promise<ActionResult<{ redirect: string }>> {
   const { data: product } = await db().from("products").select("*").eq("id", productId).eq("active", true).single();
   if (!product) return { ok: false, error: "That pack isn't available." };
   const cfg = await getSettings();
+  const price = productPrice(product, profile, cfg);
   const { data: pay } = await db()
     .from("payments")
     .insert({
-      profile_id: profile.id, provider: paymentProvider().name, amount_cents: product.price_cents,
-      vat_cents: vatPortion(product.price_cents, Number(cfg.vat_rate), cfg.vat_registered),
-      purpose: "pack", product_id: product.id, description: product.name,
+      profile_id: profile.id, provider: paymentProvider().name, amount_cents: price.cents,
+      vat_cents: vatPortion(price.cents, Number(cfg.vat_rate), cfg.vat_registered),
+      purpose: "pack", product_id: product.id, description: product.name, discount_note: price.student ? `Student ${cfg.student_discount_pct}%` : null,
     })
     .select("id")
     .single();
   const checkout = await paymentProvider().createCheckout({
-    paymentId: pay!.id, amountCents: product.price_cents, description: product.name, customerEmail: profile.email,
+    paymentId: pay!.id, amountCents: price.cents, description: product.name, customerEmail: profile.email,
     successUrl: `${env.siteUrl}/bookings?purchased=${pay!.id}`,
     cancelUrl: `${env.siteUrl}/packs?cancelled=1`,
   });
@@ -170,7 +182,7 @@ export async function buyPack(profile: Profile, productId: string): Promise<Acti
 }
 
 /** Called by the Stripe webhook or the mock checkout once money has moved. */
-export async function onPaymentPaid(paymentId: string, providerRef?: string, method: "online" | "cash" | "card_in_person" | "bank_transfer" = "online") {
+export async function onPaymentPaid(paymentId: string, providerRef?: string, method: "online" | "cash" | "card_in_person" | "bank_transfer" | "revolut" = "online") {
   const { data, error } = await db().rpc("confirm_payment", { p_payment: paymentId, p_provider_ref: providerRef, p_method: method });
   if (error) throw error;
   const res = data as { status: string; booking_id?: string };
@@ -289,7 +301,7 @@ export async function runTick() {
       const template = offset <= 180 ? "reminder_2h" : "reminder_24h";
       await notify({ profileId: p.id, email: p.email, phone: p.phone }, template,
         { name: p.full_name ?? undefined, ...tmpl(s), when: offset <= 180 ? time(s.starts_at) : spokenDateTime(s.starts_at),
-          note: `Need to cancel? You can until ${cfg.cancellation_cutoff_hours}h before class.` },
+          note: `Remember your grip socks · arrive 5–10 minutes early. Need to cancel or reschedule? You can until ${cfg.cancellation_cutoff_hours}h before class.` },
         { sms: offset <= 180, bookingId: b.id, sessionId: s.id, dedupeKey: `reminder:${offset}:${b.id}` });
       sent++;
     }
@@ -301,9 +313,23 @@ export async function runTick() {
 /** Expire credits; warn about expiring credits (7 days), low credits (1 left) and renewals (3 days). */
 async function creditAndRenewalNotices() {
   await db().rpc("expire_credits");
+  const cfg = await getSettings();
   let n = 0;
   const now = Date.now();
-  const in7 = new Date(now + 7 * 86_400_000).toISOString();
+  const in7 = new Date(now + cfg.expiry_reminder_days * 86_400_000).toISOString();
+
+  // Unpaid package requests expire (default 48h) and the client is told.
+  const { data: expiredReqs } = await db().rpc("expire_unpaid_requests");
+  for (const row of (expiredReqs ?? []) as unknown as (string | { expire_unpaid_requests: string })[]) {
+    const id = typeof row === "string" ? row : row.expire_unpaid_requests;
+    const { data: pay } = await db().from("payments").select("profile_id, description").eq("id", id).single();
+    if (!pay?.profile_id) continue;
+    const p = await profileById(pay.profile_id);
+    await notify({ profileId: p.id, email: p.email }, "payment_request",
+      { name: p.full_name ?? undefined, className: pay.description, note: `We didn't receive payment within ${cfg.unpaid_request_expiry_hours} hours, so this request has expired. You're welcome to request it again any time.` },
+      { dedupeKey: `request-expired:${id}` });
+    n++;
+  }
 
   const { data: expiring } = await db().from("credit_lots").select("id, profile_id, credit_kind, remaining, expires_at, membership_id")
     .gt("remaining", 0).gt("expires_at", new Date(now).toISOString()).lte("expires_at", in7);
