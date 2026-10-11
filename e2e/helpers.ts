@@ -28,5 +28,5 @@ export async function openBookableClass(page: Page) {
   await days.nth(5).click();
   await page.getByRole("link", { name: /^Book .*reformers? left/ }).first().click();
   await page.waitForURL(/\/book\//);
-  await expect(page.getByText(/Reformer class|Mat class|Special event/)).toBeVisible();
+  await expect(page.getByText("What to bring")).toBeVisible();
 }
