@@ -7,6 +7,7 @@ import { db } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
 import { notify } from "@/lib/notifications";
+import { ensureProfile } from "@/lib/auth";
 
 const sha = (s: string) => createHash("sha256").update(s).digest("hex");
 const Email = z.string().trim().toLowerCase().email();
@@ -84,7 +85,7 @@ export async function verifyCode(_: VerifyState, form: FormData): Promise<Verify
   const { data, error } = await supabase.auth.verifyOtp({ email: email.data, token: otp, type: "email" });
   if (error || !data.user) return { ok: false, error: "That code didn't work or has expired. Check it, or request a new one." };
 
-  const { data: profile } = await db().from("profiles").select("id, role, onboarded_at").eq("user_id", data.user.id).maybeSingle();
+  const profile = await ensureProfile(data.user.id, data.user.email);
   if (profile && env.adminEmails.includes(email.data) && profile.role !== "admin") {
     await db().from("profiles").update({ role: "admin" }).eq("id", profile.id);
     profile.role = "admin";

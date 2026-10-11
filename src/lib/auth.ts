@@ -13,15 +13,26 @@ export const getViewer = cache(async (): Promise<{ userId: string; email: string
   const { data } = await supabase.auth.getUser();
   const user = data.user;
   if (!user) return null;
-  let { data: profile } = await db().from("profiles").select("*").eq("user_id", user.id).is("deleted_at", null).maybeSingle();
-  if (!profile) {
-    // Trigger normally creates it; recover if the account predates the trigger.
-    const { data: created } = await db().from("profiles").insert({ user_id: user.id, email: user.email?.toLowerCase() }).select("*").single();
-    profile = created;
-  }
+  const profile = await ensureProfile(user.id, user.email);
   if (!profile) return null;
   return { userId: user.id, email: user.email ?? "", profile };
 });
+
+/**
+ * The profile for a login account. Links an existing client record with the same
+ * email (DM/imported clients, or after a demo reset) before creating a new one.
+ */
+export async function ensureProfile(userId: string, email?: string | null): Promise<Profile | null> {
+  const { data: mine } = await db().from("profiles").select("*").eq("user_id", userId).is("deleted_at", null).maybeSingle();
+  if (mine) return mine;
+  if (email) {
+    const { data: linked } = await db().from("profiles").update({ user_id: userId })
+      .ilike("email", email).is("user_id", null).is("deleted_at", null).select("*").maybeSingle();
+    if (linked) return linked;
+  }
+  const { data: created } = await db().from("profiles").insert({ user_id: userId, email: email?.toLowerCase() }).select("*").single();
+  return created;
+}
 
 export async function requireViewer(next = "/") {
   const viewer = await getViewer();
