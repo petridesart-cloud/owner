@@ -8,7 +8,12 @@ export type TemplateName =
   | "cancellation_confirmed"
   | "waitlist_offer"
   | "class_cancelled"
-  | "credits_added";
+  | "credits_added"
+  | "payment_request"
+  | "renewal_upcoming"
+  | "payment_failed"
+  | "credits_expiring"
+  | "credits_low";
 
 export type TemplateData = {
   name?: string;
@@ -92,6 +97,46 @@ export function render(t: TemplateName, raw: TemplateData): Rendered {
         lines: [`Thank you ${first(d.name)}! ${d.note ?? ""}`],
         cta: { label: "Book a class", href: `${link}/schedule` },
         sms: `Re·Form: ${d.note ?? "credits added"}`,
+      };
+    case "payment_request":
+      return {
+        subject: `Your request: ${d.className}`,
+        heading: "See you at the studio",
+        lines: [`Hi ${first(d.name)}, we've noted your request for <strong>${d.className}</strong>.`, d.note ?? ""],
+        cta: { label: "View my classes", href: `${link}/membership` },
+        sms: `Re·Form: request noted for ${d.className}. ${d.note ?? ""}`.trim(),
+      };
+    case "renewal_upcoming":
+      return {
+        subject: `Your package renews soon`,
+        heading: "Renewal coming up",
+        lines: [`Hi ${first(d.name)}, your <strong>${d.className}</strong> renews on ${d.when}.`, d.note ?? ""],
+        cta: { label: "Manage membership", href: `${link}/membership` },
+        sms: `Re·Form: ${d.className} renews on ${d.when}. ${d.note ?? ""}`.trim(),
+      };
+    case "payment_failed":
+      return {
+        subject: "We couldn't renew your package",
+        heading: "A small hiccup",
+        lines: [`Hi ${first(d.name)}, the payment for <strong>${d.className}</strong> didn't go through. We'll try again automatically.`, "You can update your card any time from your Membership page. New classes are added once it's paid."],
+        cta: { label: "Update payment", href: `${link}/membership` },
+        sms: `Re·Form: your package payment didn't go through. Update your card: ${link}/membership`,
+      };
+    case "credits_expiring":
+      return {
+        subject: "Your classes expire soon",
+        heading: "Don't let them slip away",
+        lines: [`Hi ${first(d.name)}, ${d.note}`],
+        cta: { label: "Book a class", href: `${link}/schedule` },
+        sms: `Re·Form: ${d.note} Book: ${link}/schedule`,
+      };
+    case "credits_low":
+      return {
+        subject: "1 class left",
+        heading: "Almost through your package",
+        lines: [`Hi ${first(d.name)}, you have 1 ${d.className ?? ""} class left. Top up whenever you're ready.`],
+        cta: { label: "See packages", href: `${link}/packs` },
+        sms: `Re·Form: you have 1 class left. Top up: ${link}/packs`,
       };
   }
 }

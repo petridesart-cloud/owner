@@ -10,13 +10,14 @@ import { CheckInToggle } from "../../RosterControls";
 import { AdminTitle } from "../../ui";
 import { SessionFields } from "../SessionFields";
 import { RosterActions } from "./RosterActions";
+import { MarkPaid } from "../../PaymentButtons";
 
 export const dynamic = "force-dynamic";
 
 export default async function SessionAdmin({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { data: s } = await db().from("class_sessions")
-    .select("*, class_types(*), bookings(id, status, paid_with, source, checked_in_at, created_at, profiles(id, full_name, email, phone, health_notes(note))), waitlist_entries(id, status, created_at, offer_expires_at, profiles(id, full_name))")
+    .select("*, class_types(*), bookings!bookings_session_id_fkey(id, status, paid_with, source, checked_in_at, created_at, payment_id, profiles(id, full_name, email, phone, health_notes(note))), waitlist_entries(id, status, created_at, offer_expires_at, profiles(id, full_name))")
     .eq("id", id).maybeSingle();
   if (!s) notFound();
   const [{ data: types }, { data: clients }] = await Promise.all([
@@ -43,7 +44,11 @@ export default async function SessionAdmin({ params }: { params: Promise<{ id: s
               <CheckInToggle bookingId={b.id} checked={!!b.checked_in_at} name={b.profiles?.full_name ?? "Client"} />
               <div className="min-w-0 flex-1">
                 <Link href={`/admin/clients/${b.profiles?.id}`} className="block truncate font-medium text-ink hover:underline">{b.profiles?.full_name ?? "Client"}</Link>
-                <p className="text-xs text-ink-soft">{b.status === "no_show" ? "No-show · " : ""}{b.paid_with === "credit" ? "Credit" : b.paid_with === "payment" ? "Paid online" : "Manual"}{b.source === "manual" ? " · added by studio" : ""}</p>
+                <p className="text-xs text-ink-soft">
+                  {b.paid_with === "pay_at_studio" && <span className="mr-1 rounded-full bg-burgundy-soft px-2 py-0.5 font-medium text-burgundy">Unpaid</span>}
+                  {b.status === "no_show" ? "No-show · " : ""}{b.paid_with === "credit" ? "Class credit" : b.paid_with === "payment" ? "Paid" : b.paid_with === "pay_at_studio" ? "Pay at studio" : "Manual"}{b.source === "manual" ? " · added by studio" : ""}
+                </p>
+                {b.paid_with === "pay_at_studio" && b.payment_id && <div className="mt-1.5"><MarkPaid paymentId={b.payment_id} label={b.profiles?.full_name ?? "booking"} /></div>}
                 {b.profiles?.health_notes?.note && (
                   <details className="mt-1 text-xs text-burgundy">
                     <summary className="inline-flex min-h-8 cursor-pointer items-center gap-1.5 font-medium"><HeartPulse aria-hidden size={13} /> Health note</summary>

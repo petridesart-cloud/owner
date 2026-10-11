@@ -12,7 +12,7 @@ export async function completeMockPayment(paymentId: string) {
   const { data: pay } = await db().from("payments").select("*").eq("id", paymentId).single();
   if (!viewer || !pay || pay.profile_id !== viewer.profile.id || pay.provider !== "mock") redirect("/");
   await onPaymentPaid(paymentId, `mock_${paymentId}`);
-  redirect(pay.purpose === "pack" ? `/bookings?purchased=${paymentId}` : `/bookings/${pay.booking_id}/confirmed`);
+  redirect(pay.purpose === "booking" ? `/bookings/${pay.booking_id}/confirmed` : `/membership?started=${paymentId}`);
 }
 
 export async function abandonMockPayment(paymentId: string) {

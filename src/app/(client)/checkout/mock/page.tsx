@@ -25,7 +25,7 @@ export default async function MockCheckout({ searchParams }: { searchParams: Pro
         <div className="mt-5 rounded-2xl bg-lilac-50 p-4">
           <p className="text-sm text-ink">{pay.description}</p>
           <p className="mt-3 flex items-baseline justify-between"><span className="text-sm text-ink-soft">Total</span><span className="font-serif text-3xl text-ink">{eur(pay.amount_cents)}</span></p>
-          <p className="text-right text-xs text-ink-soft">{vatLine(pay.amount_cents, Number(settings.vat_rate), settings.vat_registered)}</p>
+          {vatLine(pay.amount_cents, Number(settings.vat_rate), settings.vat_registered) && <p className="text-right text-xs text-ink-soft">{vatLine(pay.amount_cents, Number(settings.vat_rate), settings.vat_registered)}</p>}
         </div>
         <p className="mt-4 text-xs leading-relaxed text-ink-soft">
           In the live app this step is Stripe&apos;s secure checkout with card, Apple Pay and Google Pay. Card details never reach Re·Form.

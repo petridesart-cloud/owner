@@ -8,7 +8,8 @@ export function vatPortion(grossCents: number, ratePct: number, registered: bool
   return Math.round(grossCents - grossCents / (1 + ratePct / 100));
 }
 
-export function vatLine(grossCents: number, ratePct: number, registered: boolean) {
-  if (!registered) return "VAT not applicable";
+/** Only shown once the studio is VAT-registered; otherwise prices are simply final prices. */
+export function vatLine(grossCents: number, ratePct: number, registered: boolean): string | null {
+  if (!registered) return null;
   return `incl. ${Number(ratePct)}% VAT (${eur(vatPortion(grossCents, ratePct, registered))})`;
 }

@@ -2,17 +2,18 @@ import { ActionForm } from "@/components/ActionForm";
 import { Checkbox, Field, inputClass } from "@/components/ui";
 import { getSettings } from "@/lib/auth";
 import { db } from "@/lib/supabase/admin";
-import { resetDemoData, saveClassType, saveProduct, saveSettings } from "../actions";
+import { paymentsUnlocked, resetDemoData, saveClassType, saveProduct, saveSettings } from "../actions";
 import { env } from "@/lib/env";
 import { AdminTitle } from "../ui";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
-  const [s, { data: types }, { data: products }] = await Promise.all([
+  const [s, { data: types }, { data: products }, unlocked] = await Promise.all([
     getSettings(),
     db().from("class_types").select("*").order("sort_order"),
     db().from("products").select("*").order("sort_order"),
+    paymentsUnlocked(),
   ]);
   const n = (id: string, label: string, value: number, hint?: string, step = 1) => (
     <Field id={id} label={label} hint={hint}><input id={id} name={id} type="number" step={step} min={0} defaultValue={value} className={inputClass} /></Field>
@@ -45,16 +46,27 @@ export default async function SettingsPage() {
           <Checkbox id="refund_late_cancel_if_filled" name="refund_late_cancel_if_filled" defaultChecked={s.refund_late_cancel_if_filled}>
             Return the credit for a late cancellation if the spot gets re-booked
           </Checkbox>
-          <h3 className="display pt-3 text-[0.85rem]">VAT</h3>
-          <Checkbox id="vat_registered" name="vat_registered" defaultChecked={s.vat_registered}>The studio is VAT-registered (prices shown incl. VAT)</Checkbox>
-          {n("vat_rate", "VAT rate (%)", Number(s.vat_rate), undefined, 0.01)}
-          <h3 className="display pt-3 text-[0.85rem]">Studio &amp; legal details</h3>
-          {t("intro_line", "Home page intro", s.intro_line)}
-          {t("legal_name", "Legal business name", s.legal_name)}
-          {t("address", "Address", s.address)}
+          <h3 className="display pt-3 text-[0.85rem]">Payments</h3>
+          <Checkbox id="online_payments_enabled" name="online_payments_enabled" defaultChecked={s.online_payments_enabled} disabled={!unlocked}>
+            Online payments (Stripe){process.env.DEMO_MODE === "true" ? ", test mode in this demo" : ""}
+          </Checkbox>
+          {!unlocked && <p className="-mt-2 pl-8 text-xs text-ink-soft">Locked until every item under “Before online payments” is ticked in <a href="/admin/compliance" className="underline">Compliance</a>. Until then clients pay at the studio.</p>}
+          <Checkbox id="allow_pay_later" name="allow_pay_later" defaultChecked={s.allow_pay_later}>Let clients reserve one class and pay at the studio before buying a package</Checkbox>
           <div className="grid grid-cols-2 gap-3">
-            {t("registration_number", "Registration no.", s.registration_number)}
-            {t("vat_number", "VAT no.", s.vat_number)}
+            <Field id="membership_period_mode" label="Monthly package period">
+              <select id="membership_period_mode" name="membership_period_mode" defaultValue={s.membership_period_mode} className={inputClass}>
+                <option value="rolling">Rolling 30 days from purchase</option><option value="calendar">Calendar month</option>
+              </select>
+            </Field>
+            {n("rollover_max", "Max classes rolling over", s.rollover_max, "0 = none")}
+          </div>
+          <h3 className="display pt-3 text-[0.85rem]">Studio details</h3>
+          {t("status_banner", "Status banner (optional)", s.status_banner, "Shown on every page, e.g. “DM us on Instagram to book while we fix an issue”. Leave empty to hide.")}
+          {t("intro_line", "Home page intro", s.intro_line)}
+          {t("legal_name", "Trading name", s.legal_name)}
+          {t("trader_name", "Your full name (the trader)", s.trader_name, "EU law requires identifying the seller, even for individuals.")}
+          {t("address", "Studio address", s.address)}
+          <div className="grid grid-cols-2 gap-3">
             {t("contact_email", "Email", s.contact_email)}
             {t("contact_phone", "Phone", s.contact_phone)}
             {t("instagram_handle", "Instagram", s.instagram_handle)}
@@ -83,6 +95,7 @@ export default async function SettingsPage() {
                     <Field id={`dur-${ct?.id}`} label="Minutes"><input id={`dur-${ct?.id}`} name="default_duration_minutes" type="number" min={10} defaultValue={ct?.default_duration_minutes ?? 50} className={inputClass} /></Field>
                     <Field id={`price-${ct?.id}`} label="Price €"><input id={`price-${ct?.id}`} name="price" inputMode="decimal" defaultValue={ct ? (ct.price_cents / 100).toFixed(2) : "20.00"} className={inputClass} /></Field>
                   </div>
+                  <Field id={`cost-${ct?.id}`} label="Classes (credits) used per booking" hint="e.g. 2 for a private session"><input id={`cost-${ct?.id}`} name="credit_cost" type="number" min={1} max={10} defaultValue={ct?.credit_cost ?? 1} className={inputClass} /></Field>
                   <Field id={`loc-${ct?.id}`} label="Default location"><input id={`loc-${ct?.id}`} name="default_location" defaultValue={ct?.default_location ?? ""} className={inputClass} /></Field>
                   <Field id={`desc-${ct?.id}`} label="Description"><textarea id={`desc-${ct?.id}`} name="description" rows={2} defaultValue={ct?.description ?? ""} className={`${inputClass} py-3`} /></Field>
                   <Checkbox id={`active-${ct?.id}`} name="active" defaultChecked={ct?.active ?? true}>Active</Checkbox>
@@ -94,7 +107,7 @@ export default async function SettingsPage() {
       </section>
 
       <section>
-        <h2 className="display mb-3 text-[0.95rem]">Class packs</h2>
+        <h2 className="display mb-3 text-[0.95rem]">Packages &amp; packs</h2>
         <div className="space-y-3">
           {(products ?? []).map((p) => (
             <details key={p.id} className="card px-5 py-3">
@@ -105,8 +118,11 @@ export default async function SettingsPage() {
                   <div className="grid grid-cols-3 gap-3">
                     <Field id={`pc-${p.id}`} label="Credits"><input id={`pc-${p.id}`} name="credits" type="number" min={1} defaultValue={p.credits} className={inputClass} /></Field>
                     <Field id={`pp-${p.id}`} label="Price €"><input id={`pp-${p.id}`} name="price" inputMode="decimal" defaultValue={(p.price_cents / 100).toFixed(2)} className={inputClass} /></Field>
-                    <Field id={`pv-${p.id}`} label="Valid days"><input id={`pv-${p.id}`} name="validity_days" type="number" min={1} defaultValue={p.validity_days ?? ""} className={inputClass} /></Field>
+                    {p.kind === "membership"
+                      ? <Field id={`pd-${p.id}`} label="Period days"><input id={`pd-${p.id}`} name="period_days" type="number" min={7} defaultValue={p.period_days ?? 30} className={inputClass} /></Field>
+                      : <Field id={`pv-${p.id}`} label="Valid days"><input id={`pv-${p.id}`} name="validity_days" type="number" min={1} defaultValue={p.validity_days ?? ""} className={inputClass} /></Field>}
                   </div>
+                  <Field id={`pdesc-${p.id}`} label="Short description"><input id={`pdesc-${p.id}`} name="description" defaultValue={p.description ?? ""} className={inputClass} /></Field>
                   <Checkbox id={`pa-${p.id}`} name="active" defaultChecked={p.active}>On sale</Checkbox>
                 </ActionForm>
               </div>

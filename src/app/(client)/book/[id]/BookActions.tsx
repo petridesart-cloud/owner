@@ -5,7 +5,7 @@ import { Button, Notice } from "@/components/ui";
 import { bookAction, joinWaitlistAction, leaveWaitlistAction } from "./actions";
 
 type Props =
-  | { mode: "book"; sessionId: string; priceLabel: string; credits: number; creditKind: string | null; offered?: boolean }
+  | { mode: "book"; sessionId: string; priceLabel: string; credits: number; creditKind: string | null; creditCost: number; online: boolean; payLater: boolean; offered?: boolean }
   | { mode: "waitlist"; sessionId: string }
   | { mode: "leave"; sessionId: string; entryId: string };
 
@@ -17,7 +17,7 @@ export function BookActions(props: Props) {
 
   const go = (url: string) => (url.startsWith("http") ? window.location.assign(url) : router.push(url));
 
-  const book = (method: "credit" | "pay") =>
+  const book = (method: "credit" | "pay" | "studio") =>
     start(async () => {
       setError(null);
       const res = await bookAction(props.sessionId, method);
@@ -54,20 +54,27 @@ export function BookActions(props: Props) {
     );
   }
 
-  const canUseCredit = props.credits > 0 && props.creditKind;
+  const canUseCredit = !!props.creditKind && props.credits >= props.creditCost;
+  const classes = (n: number) => `${n} ${props.creditKind} class${n === 1 ? "" : "es"}`;
   return (
     <div className="space-y-3">
       {error && <Notice tone="error">{error}</Notice>}
       {canUseCredit && (
         <Button className="w-full" disabled={pending} onClick={() => book("credit")}>
-          {pending ? "Securing…" : `Use 1 ${props.creditKind} credit`}
+          {pending ? "Securing…" : props.creditCost > 1 ? `Use ${props.creditCost} classes` : "Secure your spot · 1 class"}
         </Button>
       )}
-      <Button variant={canUseCredit ? "ghost" : "primary"} className="w-full" disabled={pending} onClick={() => book("pay")}>
-        {pending && !canUseCredit ? "Opening checkout…" : `Pay ${props.priceLabel}`}
-      </Button>
-      <p className="text-center text-xs text-ink-soft">
-        {canUseCredit ? `You have ${props.credits} ${props.creditKind} credit${props.credits === 1 ? "" : "s"}.` : "Card, Apple Pay or Google Pay via secure checkout."}
+      {props.online ? (
+        <Button variant={canUseCredit ? "ghost" : "primary"} className="w-full" disabled={pending} onClick={() => book("pay")}>
+          {pending && !canUseCredit ? "Opening checkout…" : `Pay ${props.priceLabel}`}
+        </Button>
+      ) : props.payLater ? (
+        <Button variant={canUseCredit ? "ghost" : "primary"} className="w-full" disabled={pending} onClick={() => book("studio")}>
+          {pending && !canUseCredit ? "Reserving…" : `Reserve · pay ${props.priceLabel} at the studio`}
+        </Button>
+      ) : null}
+      <p className="text-center text-sm text-ink-soft">
+        {canUseCredit ? `You have ${classes(props.credits)} left.` : props.online ? "Card, Apple Pay or Google Pay via secure checkout." : "Cash or card at the studio, before class."}
       </p>
     </div>
   );

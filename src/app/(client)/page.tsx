@@ -5,8 +5,10 @@ import { Bubbles } from "@/components/Bubbles";
 import { ClassRow } from "@/components/ClassRow";
 import { ButtonLink, Eyebrow, Section } from "@/components/ui";
 import { getSettings, getViewer } from "@/lib/auth";
-import { availability, viewerSessionState } from "@/lib/data";
-import { longDate, time } from "@/lib/time";
+import { availability, creditBalance, nextBooking, usualSlot, viewerSessionState } from "@/lib/data";
+import { RebookButton } from "./RebookButton";
+import { dayMonth, longDate, relativeHours, time, weekdayLong, weekdayShort } from "@/lib/time";
+import { CalendarPlus, Repeat } from "lucide-react";
 import { eur } from "@/lib/money";
 import { scheduleTick } from "@/lib/tick";
 
@@ -25,6 +27,11 @@ export default async function Home() {
   const next = open.filter((c) => c.kind !== "event" && c.spots_left > 0).slice(0, 3);
   const event = open.find((c) => c.kind === "event");
   const firstName = viewer?.profile.full_name?.split(" ")[0];
+  const pid = viewer?.profile.id;
+  const [mine, usual, credits] = pid
+    ? await Promise.all([nextBooking(pid), usualSlot(pid, open, state.booked), creditBalance(pid)])
+    : [null, null, null];
+  const usualCredits = usual?.session.credit_kind && credits ? credits[usual.session.credit_kind] : 0;
 
   return (
     <div className="pb-4">
@@ -41,6 +48,48 @@ export default async function Home() {
           Secure your spot
         </ButtonLink>
       </section>
+
+      {(mine || usual) && (
+        <div className="-mt-5 space-y-3 px-5">
+          {mine && (
+            <section aria-labelledby="next-class" className="card animate-rise flex items-center gap-4 px-4 py-4 [animation-delay:220ms]">
+              <div className="grid w-14 shrink-0 place-items-center rounded-2xl bg-gradient-to-b from-lilac-200 to-lilac-100 py-2 text-center">
+                <span className="text-[0.66rem] font-medium uppercase tracking-[0.14em] text-ink-soft">{weekdayShort(mine.class_sessions.starts_at)}</span>
+                <span className="font-serif text-[1.6rem] leading-none text-ink">{dayMonth(mine.class_sessions.starts_at).split(" ")[0]}</span>
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="eyebrow" id="next-class">Your next class · in {relativeHours(mine.class_sessions.starts_at)}</p>
+                <p className="mt-1 truncate font-medium text-ink">{mine.class_sessions.title ?? mine.class_sessions.class_types?.name}</p>
+                <p className="text-sm text-ink-soft">{time(mine.class_sessions.starts_at)} · {mine.class_sessions.location ?? mine.class_sessions.class_types?.default_location ?? "Re·Form Studio"}</p>
+              </div>
+              <a href={`/api/ics/${mine.id}`} aria-label="Add your next class to your calendar" className="grid size-11 shrink-0 place-items-center rounded-full bg-lilac-50 text-ink hover:bg-lilac-100">
+                <CalendarPlus aria-hidden size={19} />
+              </a>
+            </section>
+          )}
+          {usual && (
+            <section aria-labelledby="usual" className="card animate-rise px-4 py-4 [animation-delay:280ms]">
+              <div className="flex items-start gap-3">
+                <span className="grid size-10 shrink-0 place-items-center rounded-full bg-mauve-soft text-ink"><Repeat aria-hidden size={18} /></span>
+                <div className="min-w-0 flex-1">
+                  <p className="eyebrow" id="usual">Your usual</p>
+                  <p className="mt-1 font-medium text-ink">{weekdayLong(usual.session.starts_at)}s at {time(usual.session.starts_at)}</p>
+                  <p className="text-sm text-ink-soft">
+                    {longDate(usual.session.starts_at)} · {usual.session.spots_left ? `${usual.session.spots_left} of ${usual.session.capacity} left` : "full, join the waitlist"}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-3">
+                {usual.session.spots_left > 0 && usualCredits > 0 ? (
+                  <RebookButton sessionId={usual.session.id} label="Book again · 1 credit" />
+                ) : (
+                  <ButtonLink href={`/book/${usual.session.id}`} variant="soft" className="w-full">{usual.session.spots_left ? "Book again" : "Join waitlist"}</ButtonLink>
+                )}
+              </div>
+            </section>
+          )}
+        </div>
+      )}
 
       <div className="mt-6">
         <Bubbles />

@@ -25,8 +25,9 @@ export async function Footer() {
       </nav>
       <address className="mt-4 not-italic">
         <strong className="font-medium text-ink">{s.legal_name}</strong>
+        <br />Run by {s.trader_name}
         <br />{s.address}
-        <br />Reg. {s.registration_number}{s.vat_registered ? ` · VAT ${s.vat_number}` : ""}
+        {s.vat_registered && s.vat_number && <><br />VAT {s.vat_number}</>}
         <br /><a className="underline underline-offset-4" href={`mailto:${s.contact_email}`}>{s.contact_email}</a> · <a className="underline underline-offset-4" href={`tel:${s.contact_phone.replace(/\s/g, "")}`}>{s.contact_phone}</a>
       </address>
       <p className="mt-4">© {new Date().getFullYear()} Re·Form Pilates Studio. This site uses essential cookies only.</p>

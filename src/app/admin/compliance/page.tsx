@@ -5,13 +5,20 @@ import { ComplianceToggle } from "./Toggle";
 export const dynamic = "force-dynamic";
 
 const GROUPS: { title: string; items: [string, string][] }[] = [
+  { title: "Before online payments (unlocks the switch in Settings)", items: [
+    ["pay_registered_self_employed", "Registered as self-employed / with the Tax Department"],
+    ["pay_vat_position_confirmed", "Accountant confirmed the VAT position"],
+    ["pay_bank_stripe_verified", "Bank account and Stripe account verified in her name"],
+    ["pay_legal_texts_reviewed", "Terms, refund policy and privacy policy reviewed"],
+    ["pay_liability_insurance", "Liability insurance confirmed"],
+  ]},
   { title: "Legal pages", items: [
     ["privacy_policy_reviewed", "Privacy Policy reviewed by a lawyer (processors, retention, rights, contact)"],
     ["terms_reviewed", "Terms & Conditions reviewed (booking, payment, packs & expiry, late/no-show, cancellations, liability)"],
     ["cancellation_policy_reviewed", "Cancellation & Refund Policy reviewed"],
     ["withdrawal_right_confirmed", "Lawyer confirmed the 14-day withdrawal exemption for dated leisure services"],
     ["health_disclaimer_reviewed", "Health & Safety disclaimer reviewed"],
-    ["business_details_filled", "Real legal name, address, registration/VAT number, email and phone entered in Settings"],
+    ["business_details_filled", "Trading name, her full name, studio address, email and phone entered in Settings"],
     ["cookie_policy_reviewed", "Cookies policy lists every cookie"],
   ]},
   { title: "Privacy & GDPR", items: [

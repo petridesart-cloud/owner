@@ -4,10 +4,10 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/supabase/admin";
-import { cancelBooking, cancelSession, notifyOffers, runTick, sessionInfo } from "@/lib/booking";
+import { cancelBooking, cancelSession, notifyOffers, onPaymentPaid, runTick, sessionInfo } from "@/lib/booking";
 import { notify } from "@/lib/notifications";
 import { friendlyError, type ActionResult } from "@/lib/errors";
-import { localToUtc, spokenDateTime } from "@/lib/time";
+import { addDaysKey, localToUtc, spokenDateTime, todayKey } from "@/lib/time";
 import type { Json } from "@/lib/supabase/types";
 
 async function admin(action: string, details?: Record<string, unknown>) {
@@ -167,34 +167,103 @@ export async function updateClient(profileId: string, _: ActionResult, form: For
 }
 
 export async function adjustCredits(profileId: string, _: ActionResult, form: FormData): Promise<ActionResult> {
-  await admin("adjust_credits", { profileId });
+  const viewer = await admin("adjust_credits", { profileId });
   const kind = form.get("kind") === "mat" ? "mat" : "reformer";
   const amount = Number(form.get("amount"));
   const days = Number(form.get("days") || 0);
-  if (!Number.isInteger(amount) || amount < 1 || amount > 50) return { ok: false, error: "Enter between 1 and 50 credits." };
-  const { data: lot } = await db().from("credit_lots").insert({
-    profile_id: profileId, credit_kind: kind, total: amount, remaining: amount,
-    expires_at: days > 0 ? new Date(Date.now() + days * 86_400_000).toISOString() : null, note: String(form.get("note") || "Added by studio"),
-  }).select("id").single();
-  await db().from("credit_ledger").insert({ profile_id: profileId, lot_id: lot!.id, credit_kind: kind, delta: amount, reason: "admin_adjust" });
+  const reason = String(form.get("reason") ?? "").trim();
+  if (!Number.isInteger(amount) || amount === 0 || Math.abs(amount) > 50) return { ok: false, error: "Enter between -50 and 50 classes (not 0)." };
+  if (!reason) return { ok: false, error: "Please add a reason (it's kept in the client's history)." };
+  const { error } = await db().rpc("admin_adjust_credits", { p_profile: profileId, p_kind: kind, p_delta: amount, p_days: days, p_reason: reason, p_actor: viewer.profile.id });
+  if (error) return { ok: false, error: error.message === "not_enough_credits" ? "They don't have that many classes to remove." : "Couldn't adjust classes." };
   revalidatePath(`/admin/clients/${profileId}`);
-  return { ok: true, message: `${amount} ${kind} credit${amount === 1 ? "" : "s"} added.` };
+  return { ok: true, message: `${amount > 0 ? "Added" : "Removed"} ${Math.abs(amount)} ${kind} class${Math.abs(amount) === 1 ? "" : "es"}.` };
 }
 
-export async function removeCredit(profileId: string, lotId: string) {
-  await admin("remove_credit", { profileId, lotId });
-  const { data: lot } = await db().from("credit_lots").select("*").eq("id", lotId).eq("profile_id", profileId).single();
-  if (!lot || lot.remaining < 1) return;
-  await db().from("credit_lots").update({ remaining: lot.remaining - 1 }).eq("id", lotId);
-  await db().from("credit_ledger").insert({ profile_id: profileId, lot_id: lotId, credit_kind: lot.credit_kind, delta: -1, reason: "admin_adjust" });
-  revalidatePath(`/admin/clients/${profileId}`);
+// ── Payments (offline "Mark as paid" and memberships) ──────────────────
+export async function markPaid(paymentId: string, method: "cash" | "card_in_person" | "bank_transfer"): Promise<ActionResult> {
+  await admin("mark_paid", { paymentId, method });
+  try {
+    await onPaymentPaid(paymentId, undefined, method);
+  } catch (e) {
+    return { ok: false, error: friendlyError(e) };
+  }
+  revalidatePath("/admin", "layout");
+  return { ok: true, message: "Marked as paid." };
+}
+
+export async function cancelPaymentRequest(paymentId: string): Promise<ActionResult> {
+  await admin("cancel_payment_request", { paymentId });
+  await db().from("payments").update({ status: "cancelled" }).eq("id", paymentId).eq("status", "pending").is("booking_id", null);
+  revalidatePath("/admin", "layout");
+  return { ok: true };
+}
+
+/** Record an in-person renewal for an offline monthly package and grant the next period. */
+export async function renewMembership(membershipId: string, method: "cash" | "card_in_person" | "bank_transfer"): Promise<ActionResult> {
+  await admin("renew_membership", { membershipId, method });
+  const { data: m } = await db().from("memberships").select("*, products!memberships_product_id_fkey(*)").eq("id", membershipId).single();
+  if (!m) return { ok: false, error: "Membership not found." };
+  const productId = m.next_product_id ?? m.product_id;
+  const { data: prod } = await db().from("products").select("*").eq("id", productId).single();
+  const { data: pay } = await db().from("payments").insert({
+    profile_id: m.profile_id, provider: "offline", amount_cents: prod!.price_cents, purpose: "renewal", membership_id: m.id,
+    product_id: productId, description: `${prod!.name} (renewal)`, status: "pending",
+  }).select("id").single();
+  await onPaymentPaid(pay!.id, undefined, method);
+  revalidatePath(`/admin/clients/${m.profile_id}`);
+  return { ok: true, message: "Renewed. Next period's classes added." };
+}
+
+export async function setMembershipState(membershipId: string, action: "pause" | "resume" | "cancel" | "reactivate"): Promise<ActionResult> {
+  await admin("membership_" + action, { membershipId });
+  if (action === "pause") await db().rpc("pause_membership", { p_membership: membershipId });
+  if (action === "resume") await db().rpc("resume_membership", { p_membership: membershipId });
+  if (action === "cancel") await db().from("memberships").update({ cancel_at_period_end: true }).eq("id", membershipId);
+  if (action === "reactivate") await db().from("memberships").update({ cancel_at_period_end: false }).eq("id", membershipId);
+  revalidatePath("/admin", "layout");
+  return { ok: true };
+}
+
+export async function changeMembershipProduct(membershipId: string, _: ActionResult, form: FormData): Promise<ActionResult> {
+  await admin("membership_change", { membershipId });
+  const productId = String(form.get("product_id"));
+  await db().from("memberships").update({ next_product_id: productId }).eq("id", membershipId);
+  revalidatePath("/admin", "layout");
+  return { ok: true, message: "Changes from the next period." };
+}
+
+/** One tap: cancel every remaining class today, notify and refund everyone. */
+export async function cancelToday(_: ActionResult, form: FormData): Promise<ActionResult> {
+  await admin("cancel_today");
+  const reason = String(form.get("reason") ?? "").trim().slice(0, 300) || "The studio is closed today.";
+  const today = todayKey();
+  const { data: list } = await db().from("class_sessions").select("id").eq("status", "scheduled")
+    .gt("starts_at", new Date().toISOString()).lt("starts_at", localToUtc(addDaysKey(today, 1), "00:00"));
+  let people = 0;
+  for (const s of list ?? []) people += await cancelSession(s.id, reason);
+  revalidatePath("/admin", "layout");
+  return { ok: true, message: `Cancelled ${list?.length ?? 0} classes. ${people} client${people === 1 ? "" : "s"} notified and credited.` };
 }
 
 // ── Settings ───────────────────────────────────────────────────────────
+const PAYMENT_CHECKLIST = ["pay_registered_self_employed", "pay_vat_position_confirmed", "pay_bank_stripe_verified", "pay_legal_texts_reviewed", "pay_liability_insurance"];
+
+/** Online payments can only be switched on once the studio is set up to take them (or in demo mode, test checkout only). */
+export async function paymentsUnlocked() {
+  if (process.env.DEMO_MODE === "true") return true;
+  const { data } = await db().from("compliance_items").select("key, done").in("key", PAYMENT_CHECKLIST);
+  return PAYMENT_CHECKLIST.every((k) => data?.find((r) => r.key === k)?.done);
+}
+
 export async function saveSettings(_: ActionResult, form: FormData): Promise<ActionResult> {
   await admin("save_settings");
   const num = (k: string) => Number(form.get(k));
   const str = (k: string) => String(form.get(k) ?? "").trim();
+  const wantOnline = form.get("online_payments_enabled") === "on";
+  if (wantOnline && !(await paymentsUnlocked())) {
+    return { ok: false, error: "Online payments stay off until every item under “Before online payments” is ticked in Compliance." };
+  }
   const offsets = str("reminder_offsets").split(",").map((s) => Math.round(Number(s.trim()) * 60)).filter((n) => n > 0 && n <= 10080);
   const { error } = await db().from("studio_settings").update({
     cancellation_cutoff_hours: num("cancellation_cutoff_hours"),
@@ -202,9 +271,12 @@ export async function saveSettings(_: ActionResult, form: FormData): Promise<Act
     hold_minutes: num("hold_minutes"),
     reminder_offsets_minutes: offsets.length ? offsets : [1440, 120],
     refund_late_cancel_if_filled: form.get("refund_late_cancel_if_filled") === "on",
-    vat_registered: form.get("vat_registered") === "on",
-    vat_rate: num("vat_rate"),
-    legal_name: str("legal_name"), address: str("address"), registration_number: str("registration_number"), vat_number: str("vat_number"),
+    online_payments_enabled: wantOnline,
+    allow_pay_later: form.get("allow_pay_later") === "on",
+    membership_period_mode: str("membership_period_mode") === "calendar" ? "calendar" : "rolling",
+    rollover_max: num("rollover_max"),
+    status_banner: str("status_banner").slice(0, 200),
+    legal_name: str("legal_name"), trader_name: str("trader_name"), address: str("address"),
     contact_email: str("contact_email"), contact_phone: str("contact_phone"), instagram_handle: str("instagram_handle").replace(/^@/, ""),
     intro_line: str("intro_line"), policy_version: str("policy_version"),
     updated_at: new Date().toISOString(),
@@ -226,6 +298,7 @@ export async function saveClassType(id: string | null, _: ActionResult, form: Fo
     default_capacity: Number(form.get("default_capacity")),
     default_duration_minutes: Number(form.get("default_duration_minutes")),
     price_cents: Math.round(Number(String(form.get("price")).replace(",", ".")) * 100),
+    credit_cost: Math.max(1, Math.min(10, Number(form.get("credit_cost")) || 1)),
     description: String(form.get("description") ?? "").trim() || null,
     default_location: String(form.get("default_location") ?? "").trim() || null,
     active: form.get("active") === "on",
@@ -243,6 +316,8 @@ export async function saveProduct(id: string, _: ActionResult, form: FormData): 
     credits: Number(form.get("credits")),
     price_cents: Math.round(Number(String(form.get("price")).replace(",", ".")) * 100),
     validity_days: Number(form.get("validity_days")) || null,
+    period_days: Number(form.get("period_days")) || null,
+    description: String(form.get("description") ?? "").trim() || null,
     active: form.get("active") === "on",
   }).eq("id", id);
   if (error) return { ok: false, error: "Couldn't save." };
@@ -292,8 +367,7 @@ export async function importClients(rows: Record<string, unknown>[]): Promise<Ac
     const expires = c.credits_expire && !Number.isNaN(Date.parse(c.credits_expire)) ? new Date(c.credits_expire).toISOString() : null;
     for (const [kind, n] of [["reformer", c.reformer_credits], ["mat", c.mat_credits]] as const) {
       if (!n) continue;
-      const { data: lot } = await db().from("credit_lots").insert({ profile_id: id, credit_kind: kind, total: n, remaining: n, expires_at: expires, note: "Imported balance" }).select("id").single();
-      await db().from("credit_ledger").insert({ profile_id: id, lot_id: lot!.id, credit_kind: kind, delta: n, reason: "import" });
+      await db().rpc("grant_lot", { p_profile: id, p_kind: kind, p_credits: n, p_expires: expires as string /* null = never expires */, p_note: "Imported balance" });
     }
   }
   revalidatePath("/admin/clients");

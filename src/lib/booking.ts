@@ -49,6 +49,7 @@ export async function bookWithCredit(profile: Profile, sessionId: string): Promi
 }
 
 export async function bookWithPayment(profile: Profile, sessionId: string): Promise<ActionResult<{ redirect: string }>> {
+  if (!(await getSettings()).online_payments_enabled) return { ok: false, error: "Online payment isn't available yet. Reserve and pay at the studio." };
   const { data, error } = await db().rpc("book_session", { p_profile: profile.id, p_session: sessionId, p_mode: "payment" });
   if (error) return { ok: false, error: friendlyError(error) };
   const bookingId = (data as { booking_id: string }).booking_id;
@@ -80,6 +81,72 @@ export async function bookWithPayment(profile: Profile, sessionId: string): Prom
   }
 }
 
+/** Reserve now, pay at the studio (cash or card in person). */
+export async function bookAtStudio(profile: Profile, sessionId: string): Promise<ActionResult<{ redirect: string }>> {
+  const { data, error } = await db().rpc("book_session", { p_profile: profile.id, p_session: sessionId, p_mode: "pay_at_studio" });
+  if (error) {
+    if (error.message === "unpaid_limit") return { ok: false, error: "You already have a class to pay for at the studio. Once it's settled you can reserve another, or get a package." };
+    if (error.message === "pay_later_off") return { ok: false, error: "Please get a package or class credits at the studio first." };
+    return { ok: false, error: friendlyError(error) };
+  }
+  const bookingId = (data as { booking_id: string }).booking_id;
+  const s = await sessionInfo(sessionId);
+  await notify({ profileId: profile.id, email: profile.email, phone: profile.phone }, "booking_confirmed",
+    { name: profile.full_name ?? undefined, ...tmpl(s), note: `Please pay ${eur(s.price)} at the studio (cash or card).` }, { bookingId, sessionId });
+  return { ok: true, data: { redirect: `/bookings/${bookingId}/confirmed` } };
+}
+
+/**
+ * Buy a class pack or monthly package. With online payments off (default while the
+ * studio isn't registered) this records a request to pay at the studio; the admin's
+ * "Mark as paid" then grants the credits through the same ledger.
+ */
+export async function buyProduct(profile: Profile, productId: string): Promise<ActionResult<{ redirect: string }>> {
+  const { data: product } = await db().from("products").select("*").eq("id", productId).eq("active", true).single();
+  if (!product) return { ok: false, error: "That package isn't available." };
+  const cfg = await getSettings();
+  const purpose = product.kind === "membership" ? "membership" : "pack";
+
+  if (product.kind === "membership") {
+    const { data: live } = await db().from("memberships").select("id").eq("profile_id", profile.id).in("status", ["active", "paused", "past_due"]).maybeSingle();
+    if (live) return { ok: false, error: "You already have a monthly package. You can change it from your Membership page." };
+  }
+
+  if (!cfg.online_payments_enabled) {
+    const { data: existing } = await db().from("payments").select("id").eq("profile_id", profile.id).eq("product_id", product.id).eq("status", "pending").eq("provider", "offline").maybeSingle();
+    if (!existing) {
+      await db().from("payments").insert({
+        profile_id: profile.id, provider: "offline", amount_cents: product.price_cents, purpose, product_id: product.id, description: product.name, status: "pending",
+      });
+      await notify({ profileId: profile.id, email: profile.email }, "payment_request",
+        { name: profile.full_name ?? undefined, className: product.name, note: `${eur(product.price_cents)}, payable at the studio (cash or card). Your classes are added as soon as it's paid.` },
+        { dedupeKey: `request:${profile.id}:${product.id}:${new Date().toISOString().slice(0, 10)}` });
+    }
+    return { ok: true, data: { redirect: "/membership?requested=1" } };
+  }
+
+  return product.kind === "membership" ? startSubscription(profile, product) : buyPack(profile, productId);
+}
+
+async function startSubscription(profile: Profile, product: { id: string; name: string; price_cents: number; period_days: number | null }): Promise<ActionResult<{ redirect: string }>> {
+  const cfg = await getSettings();
+  const provider = paymentProvider();
+  const { data: pay } = await db().from("payments").insert({
+    profile_id: profile.id, provider: provider.name, amount_cents: product.price_cents,
+    vat_cents: vatPortion(product.price_cents, Number(cfg.vat_rate), cfg.vat_registered),
+    purpose: "membership", product_id: product.id, description: product.name,
+  }).select("id").single();
+  const req = {
+    paymentId: pay!.id, amountCents: product.price_cents, description: product.name, customerEmail: profile.email,
+    successUrl: `${env.siteUrl}/membership?started=${pay!.id}`, cancelUrl: `${env.siteUrl}/packs?cancelled=1`,
+  };
+  const checkout = provider.createSubscriptionCheckout
+    ? await provider.createSubscriptionCheckout({ ...req, periodDays: product.period_days ?? 30, calendarMonth: cfg.membership_period_mode === "calendar", customerId: profile.stripe_customer_id, profileId: profile.id, productId: product.id })
+    : await provider.createCheckout(req);
+  await db().from("payments").update({ provider_ref: checkout.providerRef }).eq("id", pay!.id);
+  return { ok: true, data: { redirect: checkout.url } };
+}
+
 export async function buyPack(profile: Profile, productId: string): Promise<ActionResult<{ redirect: string }>> {
   const { data: product } = await db().from("products").select("*").eq("id", productId).eq("active", true).single();
   if (!product) return { ok: false, error: "That pack isn't available." };
@@ -103,8 +170,8 @@ export async function buyPack(profile: Profile, productId: string): Promise<Acti
 }
 
 /** Called by the Stripe webhook or the mock checkout once money has moved. */
-export async function onPaymentPaid(paymentId: string, providerRef?: string) {
-  const { data, error } = await db().rpc("confirm_payment", { p_payment: paymentId, p_provider_ref: providerRef });
+export async function onPaymentPaid(paymentId: string, providerRef?: string, method: "online" | "cash" | "card_in_person" | "bank_transfer" = "online") {
+  const { data, error } = await db().rpc("confirm_payment", { p_payment: paymentId, p_provider_ref: providerRef, p_method: method });
   if (error) throw error;
   const res = data as { status: string; booking_id?: string };
   const { data: pay } = await db().from("payments").select("*, products(*)").eq("id", paymentId).single();
@@ -116,8 +183,12 @@ export async function onPaymentPaid(paymentId: string, providerRef?: string) {
     const s = await sessionInfo(b!.session_id);
     await notify(to, "booking_confirmed", { name: profile.full_name ?? undefined, ...tmpl(s), note: `Paid ${eur(pay.amount_cents)}.` },
       { bookingId: res.booking_id, sessionId: s.id, dedupeKey: `confirmed:${res.booking_id}` });
+  } else if (res.status === "membership_active" && pay.products) {
+    const { data: m } = await db().from("memberships").select("current_period_end").eq("profile_id", profile.id).in("status", ["active", "paused", "past_due"]).maybeSingle();
+    await notify(to, "credits_added", { name: profile.full_name ?? undefined, note: `${pay.products.credits} ${pay.products.credit_kind} classes are in your account${m ? `, valid until ${spokenDateTime(m.current_period_end).split(",")[0]}` : ""}.` },
+      { dedupeKey: `credits:${paymentId}` });
   } else if (res.status === "credits_added" && pay.products) {
-    await notify(to, "credits_added", { name: profile.full_name ?? undefined, note: `${pay.products.credits} ${pay.products.credit_kind} credits are in your account.` },
+    await notify(to, "credits_added", { name: profile.full_name ?? undefined, note: `${pay.products.credits} ${pay.products.credit_kind} classes are in your account.` },
       { dedupeKey: `credits:${paymentId}` });
   }
   return res;
@@ -223,5 +294,56 @@ export async function runTick() {
       sent++;
     }
   }
+  sent += await creditAndRenewalNotices();
   return { offers: (offers ?? []).length, reminders: sent };
+}
+
+/** Expire credits; warn about expiring credits (7 days), low credits (1 left) and renewals (3 days). */
+async function creditAndRenewalNotices() {
+  await db().rpc("expire_credits");
+  let n = 0;
+  const now = Date.now();
+  const in7 = new Date(now + 7 * 86_400_000).toISOString();
+
+  const { data: expiring } = await db().from("credit_lots").select("id, profile_id, credit_kind, remaining, expires_at, membership_id")
+    .gt("remaining", 0).gt("expires_at", new Date(now).toISOString()).lte("expires_at", in7);
+  for (const lot of expiring ?? []) {
+    if (lot.membership_id) continue; // membership credits renew; the renewal notice covers them
+    const p = await profileById(lot.profile_id);
+    await notify({ profileId: p.id, email: p.email }, "credits_expiring",
+      { name: p.full_name ?? undefined, note: `${lot.remaining} ${lot.credit_kind} class${lot.remaining === 1 ? "" : "es"} expire on ${spokenDateTime(lot.expires_at!).split(",")[0]}.` },
+      { dedupeKey: `expiring:${lot.id}` });
+    n++;
+  }
+
+  // Low credits: exactly 1 usable credit left of a kind (once per lot set).
+  const { data: lots } = await db().from("credit_lots").select("id, profile_id, credit_kind, remaining").gt("remaining", 0)
+    .or(`expires_at.is.null,expires_at.gt.${new Date(now).toISOString()}`);
+  const totals = new Map<string, { sum: number; ids: string[] }>();
+  for (const l of lots ?? []) {
+    const k = `${l.profile_id}|${l.credit_kind}`;
+    const t = totals.get(k) ?? { sum: 0, ids: [] };
+    t.sum += l.remaining; t.ids.push(l.id); totals.set(k, t);
+  }
+  for (const [k, t] of totals) {
+    if (t.sum !== 1) continue;
+    const [profileId, kind] = k.split("|");
+    const p = await profileById(profileId);
+    await notify({ profileId: p.id, email: p.email }, "credits_low", { name: p.full_name ?? undefined, className: kind }, { dedupeKey: `low:${t.ids.sort().join(",")}` });
+    n++;
+  }
+
+  // Renewal reminders 3 days ahead.
+  const { data: due } = await db().from("memberships").select("id, profile_id, provider, current_period_end, cancel_at_period_end, products!memberships_product_id_fkey(name, price_cents)")
+    .eq("status", "active").eq("cancel_at_period_end", false)
+    .gt("current_period_end", new Date(now).toISOString()).lte("current_period_end", new Date(now + 3 * 86_400_000).toISOString());
+  for (const m of due ?? []) {
+    const p = await profileById(m.profile_id);
+    await notify({ profileId: p.id, email: p.email }, "renewal_upcoming",
+      { name: p.full_name ?? undefined, className: m.products?.name, when: spokenDateTime(m.current_period_end).split(",")[0],
+        note: m.provider === "stripe" ? "It renews automatically; manage or cancel any time from your Membership page." : `Renew at the studio (${eur(m.products?.price_cents ?? 0)}, cash or card) to keep your classes coming.` },
+      { dedupeKey: `renewal:${m.id}:${m.current_period_end}` });
+    n++;
+  }
+  return n;
 }

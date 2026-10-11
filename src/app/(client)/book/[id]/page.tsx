@@ -47,6 +47,7 @@ export default async function BookPage({ params, searchParams }: { params: Promi
   const full = c.spots_left === 0 && !offered;
   const mins = Math.round((new Date(c.ends_at).getTime() - start.getTime()) / 60000);
   const creditCount = c.credit_kind && credits ? credits[c.credit_kind] : 0;
+  const { data: ctype } = await db().from("class_types").select("credit_cost").eq("id", c.class_type_id).single();
   const next = `/book/${id}`;
 
   return (
@@ -132,10 +133,11 @@ export default async function BookPage({ params, searchParams }: { params: Promi
               <PriceSummary price={c.price_cents} settings={settings} />
               <BookActions
                 mode="book" sessionId={id} priceLabel={eur(c.price_cents)} credits={creditCount}
-                creditKind={c.credit_kind} offered={offered}
+                creditKind={c.credit_kind} creditCost={ctype?.credit_cost ?? 1} offered={offered}
+                online={settings.online_payments_enabled} payLater={settings.allow_pay_later}
               />
               {c.credit_kind && creditCount === 0 && (
-                <p className="text-center text-sm"><Link href="/packs" className="font-medium text-ink underline underline-offset-4">Save with a {c.credit_kind} class pack</Link></p>
+                <p className="text-center text-sm"><Link href="/packs" className="inline-flex min-h-11 items-center font-medium text-ink underline underline-offset-4">Save with a monthly package or class pack</Link></p>
               )}
             </div>
           )}
@@ -145,16 +147,17 @@ export default async function BookPage({ params, searchParams }: { params: Promi
   );
 }
 
-function PriceSummary({ price, settings }: { price: number; settings: { vat_rate: number; vat_registered: boolean; cancellation_cutoff_hours: number } }) {
+function PriceSummary({ price, settings }: { price: number; settings: { vat_rate: number; vat_registered: boolean; cancellation_cutoff_hours: number; online_payments_enabled: boolean } }) {
+  const vat = vatLine(price, Number(settings.vat_rate), settings.vat_registered);
   return (
     <div className="rounded-2xl border border-line bg-paper p-4 text-sm">
       <div className="flex items-baseline justify-between">
-        <span className="text-ink">Total</span>
+        <span className="text-ink">Single class</span>
         <span className="font-serif text-2xl text-ink">{eur(price)}</span>
       </div>
-      <p className="mt-0.5 text-right text-xs text-ink-soft">{vatLine(price, Number(settings.vat_rate), settings.vat_registered)}</p>
-      <p className="mt-3 text-xs leading-relaxed text-ink-soft">
-        Free cancellation up to {settings.cancellation_cutoff_hours} hours before class (your credit is returned). Later cancellations aren&apos;t refunded.{" "}
+      {vat && <p className="mt-0.5 text-right text-xs text-ink-soft">{vat}</p>}
+      <p className="mt-3 text-sm leading-relaxed text-ink-soft">
+        Free cancellation up to {settings.cancellation_cutoff_hours} hours before class. Later cancellations aren&apos;t refunded.{" "}
         <Link href="/legal/cancellation" className="underline underline-offset-4">Cancellation policy</Link>
       </p>
     </div>

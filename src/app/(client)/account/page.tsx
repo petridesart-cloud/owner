@@ -31,6 +31,9 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
     <div>
       <PageTitle eyebrow={p.email ?? ""} title="Account" />
       <div className="space-y-8">
+        <div className="px-5">
+          <Link href="/membership" className="card flex min-h-14 items-center justify-between px-5 py-3 font-medium text-ink">Membership, classes &amp; receipts <span aria-hidden>→</span></Link>
+        </div>
         <Section title="Your details"><Card className="px-5 py-5"><ProfileForm name={p.full_name ?? ""} phone={p.phone ?? ""} email={viewer.email} me={p.marketing_email} ms={p.marketing_sms} /></Card></Section>
         <Section title="Health"><Card className="px-5 py-5"><HealthForm note={health?.note ?? ""} /></Card></Section>
         <Section title="Consents">

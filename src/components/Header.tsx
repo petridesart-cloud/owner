@@ -3,13 +3,16 @@ import { UserRound } from "lucide-react";
 import { Wordmark } from "./Logo";
 import { env } from "@/lib/env";
 
-export function Header({ signedIn, isAdmin }: { signedIn: boolean; isAdmin: boolean }) {
+export function Header({ signedIn, isAdmin, banner }: { signedIn: boolean; isAdmin: boolean; banner?: string }) {
   return (
     <>
       {env.demoMode && (
         <p className="bg-ink px-4 py-1.5 text-center text-[0.7rem] tracking-wide text-paper">
           Demo preview: payments are simulated and messages aren&apos;t sent.
         </p>
+      )}
+      {banner && (
+        <p role="status" className="bg-mauve-soft px-4 py-2 text-center text-sm text-ink">{banner}</p>
       )}
       <header className="glass sticky top-0 z-30 border-b border-line/60">
         <div className="mx-auto flex h-14 max-w-xl items-center justify-between px-4">

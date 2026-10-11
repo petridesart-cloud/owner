@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { CalendarPlus, Check } from "lucide-react";
+import { CalendarPlus } from "lucide-react";
+import { Celebrate } from "@/components/Celebrate";
+import { ShareButton } from "@/components/ShareButton";
 import { ButtonLink, Notice } from "@/components/ui";
 import { requireViewer } from "@/lib/auth";
 import { sessionInfo } from "@/lib/booking";
@@ -22,22 +24,24 @@ export default async function Confirmed({ params }: { params: Promise<{ id: stri
     <div className="px-5 pt-10 text-center">
       {confirmed ? (
         <>
-          <div className="animate-rise mx-auto grid size-20 place-items-center rounded-full bg-gradient-to-br from-lilac-300 to-mauve shadow-[var(--shadow-lift)]">
-            <Check aria-hidden size={36} strokeWidth={1.6} className="text-ink" />
-          </div>
-          <p className="eyebrow mt-6">Booking confirmed</p>
-          <h1 className="mt-2 font-script text-[3rem] leading-none text-plum-700">See you soon</h1>
+          <Celebrate />
+          <p className="eyebrow mt-6 animate-rise [animation-delay:500ms]" role="status">Booking confirmed</p>
+          <h1 className="mt-2 animate-rise font-script text-[3rem] leading-none text-plum-700 [animation-delay:560ms]">See you soon</h1>
           <p className="display mt-4 text-[1.1rem] text-ink">{s.name}</p>
           <p className="mt-1 text-ink-soft">{longDate(s.starts_at)} · {time(s.starts_at)}</p>
           {s.where && <p className="text-sm text-ink-soft">{s.where}</p>}
           <p className="mx-auto mt-6 max-w-xs text-sm leading-relaxed text-ink-soft">
             A confirmation is on its way to {viewer.profile.email}. Arrive 5 minutes early, grip socks on.
           </p>
-          <div className="mx-auto mt-7 flex max-w-xs flex-col gap-2.5">
+          <div className="mx-auto mt-7 flex max-w-xs animate-rise flex-col gap-2.5 [animation-delay:700ms]">
             <a href={`/api/ics/${b.id}`} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-ink px-6 text-[0.8rem] font-medium uppercase tracking-[0.18em] text-paper">
               <CalendarPlus aria-hidden size={18} /> Add to calendar
             </a>
-            <ButtonLink href="/bookings" variant="ghost">My classes</ButtonLink>
+            <div className="grid grid-cols-2 gap-2.5">
+              <ShareButton url={`/book/${s.id}`} title={`${s.name} at Re·Form`} text={`I'm booked for ${s.name} at Re·Form Pilates. Join me?`}
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full border border-ink/15 bg-white/70 px-4 text-[0.8rem] font-medium uppercase tracking-[0.16em] text-ink" />
+              <ButtonLink href="/bookings" variant="ghost">My classes</ButtonLink>
+            </div>
           </div>
         </>
       ) : b.status === "held" ? (

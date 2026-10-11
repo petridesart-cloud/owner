@@ -12,13 +12,20 @@ const PAGES: Record<string, { title: string; body: (s: Settings) => React.ReactN
     body: (s) => (
       <>
         <h2>Who we are</h2>
-        <p>{s.legal_name}, {s.address}. Registration no. {s.registration_number}{s.vat_registered ? `, VAT no. ${s.vat_number}` : ""}. Contact: {s.contact_email}, {s.contact_phone}.</p>
+        <p>{s.legal_name} is run by {s.trader_name}, an individual trader, at {s.address}. Contact: {s.contact_email}, {s.contact_phone}.</p>
         <h2>Bookings</h2>
         <p>A booking is confirmed only after successful payment or after a class credit is deducted. Each booking is for one person, for the class, date and time shown.</p>
         <h2>Prices &amp; payment</h2>
-        <p>Prices are in euro and {s.vat_registered ? `include VAT at ${Number(s.vat_rate)}%` : "VAT is not charged"}. Card payments are processed by Stripe; we never see or store your card details.</p>
-        <h2>Class packs</h2>
-        <p>Credits are tied to a class type (reformer or mat), are personal and non-transferable, and expire after the validity period stated at purchase. Expired or unused credits are not refundable unless required by law.</p>
+        <p>Prices are in euro and are the final price you pay{s.vat_registered ? `, including VAT at ${Number(s.vat_rate)}%` : ""}. {s.online_payments_enabled ? "Online payments are processed by Stripe; we never see or store your card details." : "Payment is made at the studio by cash or card. You receive a payment confirmation (receipt)."}</p>
+        <h2>Packages, packs and classes (credits)</h2>
+        <ul>
+          <li>Each package gives a number of classes (credits) for a class type (reformer or mat). Some classes, such as private sessions, may use more than one credit; this is shown before you book.</li>
+          <li>Classes from a monthly package expire at the end of each period{s.rollover_max ? `, except up to ${s.rollover_max} unused classes, which roll over once` : ""}. Classes from a one-off pack expire after the validity stated at purchase.</li>
+          <li>Classes have no cash value, are personal and can&apos;t be transferred, and aren&apos;t refundable once expired, unless required by law.</li>
+          <li>{s.online_payments_enabled ? "Monthly packages renew automatically until cancelled. You can cancel renewal any time from your Membership page; it takes effect at the end of the current period. If a renewal payment fails, no new classes are added until it's paid." : "Monthly packages don't renew automatically; you renew at the studio. We'll remind you before the period ends."}</li>
+          <li>Changing package applies from the next period.</li>
+          <li>We may pause a package (e.g. injury or holiday); the period and its classes are extended by the pause.</li>
+        </ul>
         <h2>Late arrival &amp; no-shows</h2>
         <p>For safety we may refuse entry more than 10 minutes after the start. Late arrivals and no-shows are treated as attended classes.</p>
         <h2>Changes by the studio</h2>
@@ -35,9 +42,9 @@ const PAGES: Record<string, { title: string; body: (s: Settings) => React.ReactN
     body: (s) => (
       <>
         <h2>Cancelling a class</h2>
-        <p>You can cancel free of charge until {s.cancellation_cutoff_hours} hours before the class starts. Your credit is returned straight away. If you paid by card for a single class, you receive a class credit of the same type.</p>
+        <p>You can cancel free of charge until {s.cancellation_cutoff_hours} hours before the class starts. The class (credit) goes back to your account with its original expiry date. If you paid for a single class, you receive a class credit of the same type. Unpaid pay-at-the-studio bookings are simply released.</p>
         <h2>Inside {s.cancellation_cutoff_hours} hours</h2>
-        <p>Cancellations within {s.cancellation_cutoff_hours} hours of class are not refunded. Please still cancel: your spot is offered to the waitlist.{s.refund_late_cancel_if_filled ? " If someone takes your spot, we return your credit." : ""}</p>
+        <p>Cancellations within {s.cancellation_cutoff_hours} hours of class are not refunded: the class is used. Please still cancel: your spot is offered to the waitlist.{s.refund_late_cancel_if_filled ? " If someone takes your spot, we return your credit." : ""}</p>
         <h2>Waitlist</h2>
         <p>When a spot opens, the first person on the waitlist is notified and has {Math.round(s.waitlist_window_minutes / 60)} hours (or until the cancellation cutoff) to claim it. After that, it goes to the next person.</p>
         <h2>If we cancel</h2>
@@ -52,13 +59,13 @@ const PAGES: Record<string, { title: string; body: (s: Settings) => React.ReactN
     body: (s) => (
       <>
         <h2>Controller</h2>
-        <p>{s.legal_name}, {s.address}. For any data request, email {s.contact_email}.</p>
+        <p>{s.trader_name}, trading as {s.legal_name}, {s.address}. For any data request, email {s.contact_email}.</p>
         <h2>What we collect and why</h2>
         <table>
           <thead><tr><th>Data</th><th>Purpose</th><th>Legal basis</th></tr></thead>
           <tbody>
             <tr><td>Name, email, phone</td><td>Account, bookings, reminders, contacting you about a class</td><td>Contract (art. 6(1)(b))</td></tr>
-            <tr><td>Bookings, credits, payments</td><td>Providing classes, accounting</td><td>Contract; legal obligation (art. 6(1)(c))</td></tr>
+            <tr><td>Bookings, classes (credits), payments</td><td>Providing classes, payment records</td><td>Contract; legal obligation (art. 6(1)(c))</td></tr>
             <tr><td>Health note (optional)</td><td>Adapting exercises safely</td><td>Explicit consent (art. 9(2)(a)), withdrawable any time</td></tr>
             <tr><td>Consent records</td><td>Proving consent</td><td>Legal obligation</td></tr>
             <tr><td>Marketing preferences</td><td>News about schedules and events</td><td>Consent (art. 6(1)(a)), opt-in only</td></tr>
@@ -69,7 +76,7 @@ const PAGES: Record<string, { title: string; body: (s: Settings) => React.ReactN
         <ul>
           <li>Supabase (database &amp; sign-in, EU region, Frankfurt)</li>
           <li>Vercel (hosting)</li>
-          <li>Stripe (payments; card data is handled only by Stripe)</li>
+          <li>Stripe (online payments, only once enabled; card data is handled only by Stripe)</li>
           <li>Resend (email delivery)</li>
           <li>Twilio (SMS, only if enabled)</li>
         </ul>
@@ -78,7 +85,7 @@ const PAGES: Record<string, { title: string; body: (s: Settings) => React.ReactN
         <ul>
           <li>Account data: while your account is active, then deleted or anonymised after 24 months of inactivity.</li>
           <li>Health note: until you delete it or withdraw consent, and at most while your account is active.</li>
-          <li>Payment and invoice records: 6 years (Cypriot tax law).</li>
+          <li>Payment records: 6 years (bookkeeping obligations; to be confirmed with an accountant).</li>
           <li>Message logs: 12 months.</li>
         </ul>
         <h2>Your rights</h2>

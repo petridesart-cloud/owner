@@ -6,6 +6,12 @@ import { db } from "@/lib/supabase/admin";
 import { addDaysKey, localToUtc, longDate, time, todayKey } from "@/lib/time";
 import { scheduleTick } from "@/lib/tick";
 import { CheckInToggle } from "./RosterControls";
+import { MarkPaid, RenewButtons } from "./PaymentButtons";
+import { ActionForm } from "@/components/ActionForm";
+import { Field, inputClass } from "@/components/ui";
+import { cancelToday } from "./actions";
+import { eur } from "@/lib/money";
+import { dayMonth, nowMs } from "@/lib/time";
 import { AdminTitle, Stat } from "./ui";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +24,14 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const live = sessions.filter((s) => s.status === "scheduled");
   const booked = live.reduce((n, s) => n + s.roster.length, 0);
   const cap = live.reduce((n, s) => n + s.capacity, 0);
-  const { count: pendingRefunds } = await db().from("payments").select("id", { count: "exact", head: true }).eq("status", "needs_refund");
+  const isToday = key === todayKey();
+  const [{ count: pendingRefunds }, { data: awaiting }, { data: renewals }] = await Promise.all([
+    db().from("payments").select("id", { count: "exact", head: true }).eq("status", "needs_refund"),
+    db().from("payments").select("id, description, amount_cents, created_at, purpose, profiles(id, full_name)").eq("status", "pending").eq("provider", "offline").order("created_at"),
+    db().from("memberships").select("id, current_period_end, status, profiles(id, full_name), products!memberships_product_id_fkey(name, price_cents)")
+      .eq("provider", "offline").eq("cancel_at_period_end", false).in("status", ["active", "past_due"])
+      .lte("current_period_end", new Date(nowMs() + 7 * 86_400_000).toISOString()).order("current_period_end"),
+  ]);
 
   return (
     <div>
@@ -43,6 +56,39 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
         </p>
       )}
 
+      {isToday && (awaiting ?? []).length > 0 && (
+        <section className="card mb-5 overflow-hidden" aria-labelledby="awaiting">
+          <h2 id="awaiting" className="display border-b border-line px-4 py-3 text-[0.95rem]">Awaiting payment</h2>
+          <ul className="divide-y divide-line">
+            {awaiting!.map((p) => (
+              <li key={p.id} className="flex items-center gap-3 px-4 py-2.5">
+                <div className="min-w-0 flex-1">
+                  <Link href={`/admin/clients/${p.profiles?.id}`} className="block truncate text-sm font-medium text-ink hover:underline">{p.profiles?.full_name}</Link>
+                  <p className="truncate text-xs text-ink-soft">{p.description} · {eur(p.amount_cents)}</p>
+                </div>
+                <MarkPaid paymentId={p.id} label={`${p.profiles?.full_name}: ${p.description}`} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {isToday && (renewals ?? []).length > 0 && (
+        <section className="card mb-5 overflow-hidden" aria-labelledby="renewals">
+          <h2 id="renewals" className="display border-b border-line px-4 py-3 text-[0.95rem]">Renewals due</h2>
+          <ul className="divide-y divide-line">
+            {renewals!.map((m) => (
+              <li key={m.id} className="flex items-center gap-3 px-4 py-2.5">
+                <div className="min-w-0 flex-1">
+                  <Link href={`/admin/clients/${m.profiles?.id}`} className="block truncate text-sm font-medium text-ink hover:underline">{m.profiles?.full_name}</Link>
+                  <p className="truncate text-xs text-ink-soft">{m.products?.name} · {eur(m.products?.price_cents ?? 0)} · {new Date(m.current_period_end) < new Date() ? "lapsed" : "ends"} {dayMonth(m.current_period_end)}</p>
+                </div>
+                <RenewButtons membershipId={m.id} name={m.profiles?.full_name ?? "client"} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {sessions.length === 0 && (
         <div className="card px-5 py-8 text-center">
           <p className="font-serif text-xl text-ink">No classes on this day</p>
@@ -65,7 +111,10 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
                   <CheckInToggle bookingId={b.id} checked={!!b.checked_in_at} name={b.profiles?.full_name ?? "Client"} />
                   <div className="min-w-0 flex-1">
                     <Link href={`/admin/clients/${b.profiles?.id}`} className="block truncate font-medium text-ink hover:underline">{b.profiles?.full_name ?? "Client"}</Link>
-                    <p className="text-xs text-ink-soft">{b.status === "no_show" ? "No-show" : b.paid_with === "credit" ? "Credit" : b.paid_with === "payment" ? "Paid online" : "Manual / DM"}{b.profiles?.phone ? ` · ${b.profiles.phone}` : ""}</p>
+                    <p className="text-xs text-ink-soft">
+                      {b.paid_with === "pay_at_studio" && <span className="mr-1 rounded-full bg-burgundy-soft px-2 py-0.5 font-medium text-burgundy">Unpaid</span>}
+                      {b.status === "no_show" ? "No-show" : b.paid_with === "credit" ? "Class credit" : b.paid_with === "payment" ? "Paid" : b.paid_with === "pay_at_studio" ? "Pay at studio" : "Manual / DM"}{b.profiles?.phone ? ` · ${b.profiles.phone}` : ""}
+                    </p>
                     {b.profiles?.health_notes?.note && (
                       <details className="mt-1 text-xs text-burgundy">
                         <summary className="inline-flex min-h-8 cursor-pointer items-center gap-1.5 font-medium"><HeartPulse aria-hidden size={13} /> Health note</summary>
@@ -83,6 +132,18 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
           </li>
         ))}
       </ul>
+
+      {isToday && live.some((x) => new Date(x.starts_at) > new Date()) && (
+        <details className="card mt-6 px-5 py-3">
+          <summary className="min-h-11 cursor-pointer content-center text-sm font-medium text-burgundy">Cancel the rest of today</summary>
+          <p className="mt-1 text-sm text-ink-soft">Unwell or need a break? Cancels every remaining class today, tells everyone booked (email + SMS) and returns their classes. The waitlist isn&apos;t offered anything.</p>
+          <div className="mt-3 pb-2">
+            <ActionForm action={cancelToday} submit="Cancel today's remaining classes" variant="danger" confirm="Cancel all remaining classes today and notify everyone?">
+              <Field id="reason" label="Message to clients"><input id="reason" name="reason" placeholder="So sorry, I'm unwell today. Your class is back in your account." className={inputClass} /></Field>
+            </ActionForm>
+          </div>
+        </details>
+      )}
     </div>
   );
 }

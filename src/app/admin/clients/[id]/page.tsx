@@ -7,7 +7,8 @@ import { db } from "@/lib/supabase/admin";
 import { creditBalance } from "@/lib/data";
 import { dayMonth, longDate, time } from "@/lib/time";
 import { eur } from "@/lib/money";
-import { adjustCredits, updateClient } from "../../actions";
+import { adjustCredits, changeMembershipProduct, updateClient } from "../../actions";
+import { MarkPaid, MembershipControls, RenewButtons } from "../../PaymentButtons";
 import { AdminTitle, Stat } from "../../ui";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +17,11 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
   const { id } = await params;
   const { data: c } = await db().from("profiles").select("*, health_notes(note, consent_at)").eq("id", id).maybeSingle();
   if (!c) notFound();
+  const [{ data: membership }, { data: monthly }, { data: ledger }] = await Promise.all([
+    db().from("memberships").select("*, products!memberships_product_id_fkey(name, credits, price_cents), next:products!memberships_next_product_id_fkey(name)").eq("profile_id", id).in("status", ["active", "paused", "past_due"]).maybeSingle(),
+    db().from("products").select("id, name").eq("kind", "membership").eq("active", true).order("sort_order"),
+    db().from("credit_ledger").select("id, delta, entry_type, credit_kind, note, created_at").eq("profile_id", id).order("created_at", { ascending: false }).limit(30),
+  ]);
   const [credits, { data: bookings }, { data: lots }, { data: payments }, { data: consents }] = await Promise.all([
     creditBalance(id),
     db().from("bookings").select("id, status, paid_with, checked_in_at, class_sessions(id, starts_at, title, class_types(name))").eq("profile_id", id).neq("status", "expired").order("created_at", { ascending: false }).limit(50),
@@ -59,12 +65,35 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
       </section>
 
       <section className="card px-5 py-5">
-        <h2 className="display mb-4 text-[0.95rem]">Add credits</h2>
-        <ActionForm action={adjustCredits.bind(null, id)} submit="Add credits" variant="soft" className="grid grid-cols-2 gap-3">
+        <h2 className="display mb-3 text-[0.95rem]">Membership</h2>
+        {membership ? (
+          <div className="space-y-3 text-sm">
+            <p className="text-ink"><strong className="font-medium">{membership.products?.name}</strong> · {membership.status} · {membership.provider === "stripe" ? "auto-renews" : "pays at studio"}</p>
+            <p className="text-ink-soft">Period {dayMonth(membership.current_period_start)}–{dayMonth(membership.current_period_end)}{membership.cancel_at_period_end ? " · stops at period end" : ""}{membership.next ? ` · changes to ${membership.next.name}` : ""}</p>
+            <MembershipControls id={membership.id} status={membership.status} cancelAtEnd={membership.cancel_at_period_end} />
+            {membership.provider === "offline" && <div className="flex items-center justify-between gap-2 rounded-2xl bg-lilac-50 px-3 py-2"><span className="text-ink">Record renewal payment</span><RenewButtons membershipId={membership.id} name={c.full_name ?? "client"} /></div>}
+            <ActionForm action={changeMembershipProduct.bind(null, membership.id)} submit="Change from next period" variant="ghost" className="flex items-end gap-2 [&>button]:w-auto">
+              <Field id="product_id" label="Change package"><select id="product_id" name="product_id" className={inputClass} defaultValue={membership.next_product_id ?? membership.product_id}>{(monthly ?? []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></Field>
+            </ActionForm>
+          </div>
+        ) : (
+          <p className="text-sm text-ink-soft">No monthly package. When they pay at the studio for one, mark their request as paid on Today.</p>
+        )}
+        {(payments ?? []).filter((p) => p.status === "pending").map((p) => (
+          <div key={p.id} className="mt-3 flex items-center justify-between gap-2 rounded-2xl border border-line px-3 py-2 text-sm">
+            <span className="text-ink">{p.description} · {eur(p.amount_cents)}<span className="block text-xs text-ink-soft">awaiting payment</span></span>
+            <MarkPaid paymentId={p.id} label={p.description} />
+          </div>
+        ))}
+      </section>
+
+      <section className="card px-5 py-5">
+        <h2 className="display mb-4 text-[0.95rem]">Adjust classes</h2>
+        <ActionForm action={adjustCredits.bind(null, id)} submit="Save adjustment" variant="soft" className="grid grid-cols-2 gap-3">
           <Field id="kind" label="Type"><select id="kind" name="kind" className={inputClass}><option value="reformer">Reformer</option><option value="mat">Mat</option></select></Field>
-          <Field id="amount" label="Credits"><input id="amount" name="amount" type="number" min={1} max={50} defaultValue={1} className={inputClass} /></Field>
-          <Field id="days" label="Valid (days)"><input id="days" name="days" type="number" min={0} defaultValue={60} className={inputClass} /></Field>
-          <Field id="note" label="Note"><input id="note" name="note" placeholder="Paid cash" className={inputClass} /></Field>
+          <Field id="amount" label="Classes (+/−)" hint="e.g. 2 or -1"><input id="amount" name="amount" type="number" min={-50} max={50} defaultValue={1} className={inputClass} /></Field>
+          <Field id="days" label="Valid (days, if adding)"><input id="days" name="days" type="number" min={0} defaultValue={60} className={inputClass} /></Field>
+          <Field id="reason" label="Reason (required)"><input id="reason" name="reason" required placeholder="Goodwill after cancelled class" className={inputClass} /></Field>
         </ActionForm>
         {(lots ?? []).length > 0 && (
           <ul className="mt-4 divide-y divide-line text-sm">
@@ -76,6 +105,19 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
             ))}
           </ul>
         )}
+      </section>
+
+      <section className="card overflow-hidden">
+        <h2 className="display border-b border-line px-4 py-3 text-[0.95rem]">Class ledger</h2>
+        <ul className="divide-y divide-line text-sm">
+          {(ledger ?? []).map((e) => (
+            <li key={e.id} className="flex justify-between gap-3 px-4 py-2">
+              <span className="text-ink">{e.entry_type.replace("_", " ")} · {e.credit_kind}{e.note ? <span className="text-ink-soft"> · {e.note}</span> : null}<span className="block text-xs text-ink-soft">{dayMonth(e.created_at)}</span></span>
+              <span className={e.delta > 0 ? "font-medium text-plum-700" : "text-ink-soft"}>{e.delta > 0 ? `+${e.delta}` : e.delta}</span>
+            </li>
+          ))}
+          {(ledger ?? []).length === 0 && <li className="px-4 py-3 text-ink-soft">No entries.</li>}
+        </ul>
       </section>
 
       <section className="card overflow-hidden">

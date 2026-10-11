@@ -40,7 +40,7 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
     <div>
       <PageTitle eyebrow="Your practice" title="My classes" />
 
-      {purchased && <div className="mb-4 px-5"><Notice tone="success">Thank you! Your credits are ready to use.</Notice></div>}
+      {purchased && <div className="mb-4 px-5"><Notice tone="success">Thank you! Your classes are ready to book.</Notice></div>}
 
       <section aria-label="Credits" className="px-5">
         <div className="grid grid-cols-2 gap-2.5">
@@ -48,14 +48,14 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
             const expiry = k === "reformer" ? credits.reformerExpiry : credits.matExpiry;
             return (
               <Card key={k} className="px-4 py-4">
-                <p className="eyebrow">{k} credits</p>
+                <p className="eyebrow">{k} classes left</p>
                 <p className="mt-1 font-serif text-4xl leading-none text-ink">{credits[k]}</p>
-                <p className="mt-2 text-xs text-ink-soft">{credits[k] && expiry ? `Next expiry ${dayMonth(expiry)}` : "No active pack"}</p>
+                <p className="mt-2 text-xs text-ink-soft">{credits[k] && expiry ? `Use by ${dayMonth(expiry)}` : "None right now"}</p>
               </Card>
             );
           })}
         </div>
-        <Link href="/packs" className="mt-2 inline-flex min-h-11 items-center text-sm font-medium text-ink underline underline-offset-4">Buy a class pack</Link>
+        <div className="mt-1 flex gap-4"><Link href="/membership" className="inline-flex min-h-11 items-center text-sm font-medium text-ink underline underline-offset-4">Membership &amp; history</Link><Link href="/packs" className="inline-flex min-h-11 items-center text-sm font-medium text-ink underline underline-offset-4">Packages</Link></div>
       </section>
 
       {(waits ?? []).length > 0 && (

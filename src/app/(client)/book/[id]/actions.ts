@@ -1,7 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { getViewer } from "@/lib/auth";
-import { bookWithCredit, bookWithPayment, joinWaitlist, leaveWaitlist } from "@/lib/booking";
+import { bookAtStudio, bookWithCredit, bookWithPayment, joinWaitlist, leaveWaitlist } from "@/lib/booking";
 import type { ActionResult } from "@/lib/errors";
 
 async function onboardedProfile() {
@@ -11,10 +11,12 @@ async function onboardedProfile() {
   return { profile: viewer.profile } as const;
 }
 
-export async function bookAction(sessionId: string, method: "credit" | "pay"): Promise<ActionResult<{ redirect: string }>> {
+export async function bookAction(sessionId: string, method: "credit" | "pay" | "studio"): Promise<ActionResult<{ redirect: string }>> {
   const v = await onboardedProfile();
   if ("error" in v) return { ok: false, error: v.error! };
-  const res = method === "credit" ? await bookWithCredit(v.profile, sessionId) : await bookWithPayment(v.profile, sessionId);
+  const res = method === "credit" ? await bookWithCredit(v.profile, sessionId)
+    : method === "studio" ? await bookAtStudio(v.profile, sessionId)
+    : await bookWithPayment(v.profile, sessionId);
   revalidatePath("/schedule");
   return res;
 }

@@ -22,7 +22,7 @@ export function ClassRow({ c, state, showDate = false }: { c: Availability; stat
     <Link
       href={`/book/${c.id}`}
       aria-label={label}
-      className={`card group flex min-h-[76px] items-center gap-4 px-4 py-3.5 transition duration-200 hover:-translate-y-0.5 hover:shadow-[var(--shadow-lift)] ${cancelled || past ? "opacity-60" : ""}`}
+      className={`card pressable group flex min-h-[76px] items-center gap-4 px-4 py-3.5 hover:-translate-y-0.5 hover:shadow-[var(--shadow-lift)] ${cancelled || past ? "opacity-60" : ""}`}
     >
       <div className="w-[4.3rem] shrink-0">
         <p className="font-serif text-[1.65rem] leading-none text-ink">{time(c.starts_at)}</p>

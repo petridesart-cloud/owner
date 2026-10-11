@@ -16,6 +16,9 @@ declare
   pid uuid;
   elena uuid; maria uuid;
   lot_elena uuid; lot_maria uuid;
+  memb uuid;
+  monthly8 uuid;
+  bid uuid;
   r record;
   idx int := 0;
   k int;
@@ -43,12 +46,16 @@ begin
   event_type := (select id from public.class_types where slug = 'event');
 
   if not exists (select 1 from public.products) then
-    insert into public.products (name, kind, credit_kind, credits, price_cents, validity_days, sort_order) values
-      ('Reformer · 5 classes', 'pack', 'reformer', 5, 9000, 60, 1),
-      ('Reformer · 10 classes', 'pack', 'reformer', 10, 17000, 90, 2),
-      ('Mat · 5 classes', 'pack', 'mat', 5, 6500, 60, 3),
-      ('Mat · 10 classes', 'pack', 'mat', 10, 12000, 90, 4);
+    -- Placeholder prices until the studio confirms its packages.
+    insert into public.products (name, kind, credit_kind, credits, price_cents, validity_days, period_days, description, sort_order) values
+      ('Monthly · 4 reformer classes', 'membership', 'reformer', 4, 7500, null, 30, 'Once a week. Renews every 30 days.', 1),
+      ('Monthly · 8 reformer classes', 'membership', 'reformer', 8, 14000, null, 30, 'Twice a week. Our most popular.', 2),
+      ('Monthly · 12 reformer classes', 'membership', 'reformer', 12, 19500, null, 30, 'Three times a week, for the devoted.', 3),
+      ('Reformer · 5 classes', 'pack', 'reformer', 5, 9000, 60, null, 'One-off pack, valid 60 days.', 4),
+      ('Reformer · 10 classes', 'pack', 'reformer', 10, 17000, 90, null, 'One-off pack, valid 90 days.', 5),
+      ('Mat · 5 classes', 'pack', 'mat', 5, 6500, 60, null, 'One-off pack, valid 60 days.', 6);
   end if;
+  monthly8 := (select id from public.products where name = 'Monthly · 8 reformer classes' limit 1);
 
   insert into public.compliance_items (key) values
     ('privacy_policy_reviewed'), ('terms_reviewed'), ('cancellation_policy_reviewed'), ('withdrawal_right_confirmed'),
@@ -58,7 +65,9 @@ begin
     ('supabase_eu_region'), ('supabase_backups_enabled'), ('rls_verified'), ('admin_roles_verified'), ('otp_rate_limit_verified'),
     ('https_only'), ('demo_mode_off'), ('stripe_live_keys'), ('apple_pay_domain_verified'), ('contrast_checked'),
     ('keyboard_screenreader_tested'), ('reduced_motion_tested'), ('alt_text_reviewed'), ('photos_permission'),
-    ('no_unsupported_claims'), ('fonts_licensed'), ('retention_job_scheduled')
+    ('no_unsupported_claims'), ('fonts_licensed'), ('retention_job_scheduled'),
+    ('pay_registered_self_employed'), ('pay_vat_position_confirmed'), ('pay_bank_stripe_verified'),
+    ('pay_legal_texts_reviewed'), ('pay_liability_insurance')
   on conflict do nothing;
 
   -- The posted weekly reformer timetable: two weeks of history + three weeks ahead.
@@ -103,16 +112,19 @@ begin
     (cl[9], '20 weeks pregnant. Cleared by her doctor; no supine work after the first trimester.', now() - interval '20 days');
   insert into public.consents (profile_id, type, granted, version) values (maria, 'health_data', true, '2026-10-v1'), (cl[9], 'health_data', true, '2026-10-v1');
 
-  -- Credit packs
-  insert into public.credit_lots (profile_id, credit_kind, total, remaining, expires_at, note, created_at)
-    values (elena, 'reformer', 10, 10, now() + interval '75 days', 'Reformer · 10 classes', now() - interval '15 days') returning id into lot_elena;
-  insert into public.credit_ledger (profile_id, lot_id, credit_kind, delta, reason) values (elena, lot_elena, 'reformer', 10, 'purchase');
-  insert into public.credit_lots (profile_id, credit_kind, total, remaining, expires_at, note)
-    values (maria, 'reformer', 5, 5, now() + interval '40 days', 'Reformer · 5 classes') returning id into lot_maria;
-  insert into public.credit_lots (profile_id, credit_kind, total, remaining, expires_at, note) values
-    (cl[3], 'reformer', 5, 2, now() + interval '9 days', 'Reformer · 5 classes'),
-    (cl[7], 'reformer', 10, 6, now() + interval '50 days', 'Reformer · 10 classes'),
-    (cl[12], 'mat', 5, 4, now() + interval '30 days', 'Mat · 5 classes');
+  -- Elena: monthly 8-class membership (offline, paid at the studio), period started 18 days ago.
+  insert into public.payments (profile_id, provider, amount_cents, purpose, description, status, method, product_id, paid_at, created_at)
+    values (elena, 'offline', 14000, 'membership', 'Monthly · 8 reformer classes', 'paid', 'cash', monthly8, now() - interval '18 days', now() - interval '18 days')
+    returning id into bid;
+  insert into public.memberships (profile_id, product_id, provider, current_period_start, current_period_end, created_at)
+    values (elena, monthly8, 'offline', now() - interval '18 days', now() + interval '12 days', now() - interval '18 days') returning id into memb;
+  update public.payments set membership_id = memb where id = bid;
+  lot_elena := public.grant_lot(elena, 'reformer', 8, now() + interval '12 days', 'Monthly · 8 reformer classes', bid, memb, now() - interval '18 days');
+  -- One-off packs for others (granted through the ledger).
+  lot_maria := public.grant_lot(maria, 'reformer', 5, now() + interval '40 days', 'Reformer · 5 classes');
+  perform public.grant_lot(cl[3], 'reformer', 2, now() + interval '6 days', 'Reformer · 5 classes (2 left)');
+  perform public.grant_lot(cl[7], 'reformer', 6, now() + interval '50 days', 'Reformer · 10 classes (6 left)');
+  perform public.grant_lot(cl[12], 'mat', 1, now() + interval '30 days', 'Mat · 5 classes (1 left)');
 
   -- Elena's usual slot: Tuesday 18:00 (history + next week booked), so "Your next class"
   -- and "Rebook your usual" have something to show when signing in as elena@example.com.
@@ -122,11 +134,14 @@ begin
             order by s.starts_at
   loop
     is_past := r.starts_at < now();
-    if is_past or r.starts_at < now() + interval '8 days' then
-      update public.credit_lots set remaining = remaining - 1 where id = lot_elena;
+    if (is_past and r.starts_at > now() - interval '18 days') or (not is_past and r.starts_at < now() + interval '8 days') then
       insert into public.bookings (session_id, profile_id, status, paid_with, credit_lot_id, confirmed_at, checked_in_at, created_at)
-        values (r.id, elena, 'confirmed', 'credit', lot_elena, r.starts_at - interval '3 days', case when is_past then r.starts_at end, r.starts_at - interval '3 days');
-      insert into public.credit_ledger (profile_id, lot_id, credit_kind, delta, reason, created_at) values (elena, lot_elena, 'reformer', -1, 'booking', r.starts_at - interval '3 days');
+        values (r.id, elena, 'confirmed', 'credit', lot_elena, r.starts_at - interval '3 days', case when is_past then r.starts_at end, r.starts_at - interval '3 days')
+        returning id into bid;
+      perform public.spend_credits(elena, 'reformer', 1, bid, now() - interval '1 year');
+    elsif is_past then
+      insert into public.bookings (session_id, profile_id, status, paid_with, confirmed_at, checked_in_at, created_at)
+        values (r.id, elena, 'confirmed', 'manual', r.starts_at - interval '3 days', r.starts_at, r.starts_at - interval '3 days');
     end if;
   end loop;
 
@@ -168,6 +183,19 @@ begin
     end if;
   end loop;
 
+  -- Two upcoming "pay at the studio" bookings (unpaid) so the roster shows the flag.
+  for r in select b.id, b.profile_id, b.session_id from public.bookings b join public.class_sessions x on x.id = b.session_id
+            where b.status = 'confirmed' and b.paid_with = 'manual' and b.profile_id in (cl[4], cl[11]) and x.starts_at > now()
+            order by x.starts_at limit 2
+  loop
+    insert into public.payments (profile_id, provider, amount_cents, purpose, description, booking_id, status)
+      values (r.profile_id, 'offline', 2000, 'booking', 'Reformer Pilates (pay at studio)', r.id, 'pending') returning id into bid;
+    update public.bookings set paid_with = 'pay_at_studio', payment_id = bid where id = r.id;
+  end loop;
+  -- A pending pack request waiting for payment at the studio.
+  insert into public.payments (profile_id, provider, amount_cents, purpose, description, status, product_id)
+    select cl[5], 'offline', price_cents, 'pack', name, 'pending', id from public.products where name = 'Reformer · 5 classes' limit 1;
+
   -- Saturday: a mat class and a SUP Pilates event on the beach
   sup_day := today + ((6 - extract(isodow from today)::int + 7) % 7);
   if sup_day < today + 2 then sup_day := sup_day + 7; end if;
@@ -186,27 +214,28 @@ begin
     select sid, unnest(array[cl[3], cl[6], cl[8], cl[10], cl[13]]), 'confirmed', 'manual', now() - interval '2 days';
 
   -- A few historical online payments so Stats has revenue
-  insert into public.payments (profile_id, provider, amount_cents, purpose, description, status, paid_at, created_at)
-  values (elena, 'mock', 17000, 'pack', 'Reformer · 10 classes', 'paid', now() - interval '15 days', now() - interval '15 days'),
-         (maria, 'mock', 9000, 'pack', 'Reformer · 5 classes', 'paid', now() - interval '6 days', now() - interval '6 days'),
-         (cl[7], 'mock', 17000, 'pack', 'Reformer · 10 classes', 'paid', now() - interval '3 days', now() - interval '3 days');
+  insert into public.payments (profile_id, provider, amount_cents, purpose, description, status, method, paid_at, created_at)
+  values (maria, 'offline', 9000, 'pack', 'Reformer · 5 classes', 'paid', 'cash', now() - interval '6 days', now() - interval '6 days'),
+         (cl[7], 'offline', 17000, 'pack', 'Reformer · 10 classes', 'paid', 'card_in_person', now() - interval '3 days', now() - interval '3 days'),
+         (cl[3], 'offline', 9000, 'pack', 'Reformer · 5 classes', 'paid', 'cash', now() - interval '25 days', now() - interval '25 days');
 end $$;
 
+-- ("where true": PostgREST's safeupdate rejects unqualified DELETE/UPDATE.)
 -- Wipes bookings/clients and rebuilds the demo. Keeps admins, settings, class types and products.
 create or replace function public.reset_demo_data() returns void
 language plpgsql security definer set search_path = public as $$
 begin
-  delete from public.notifications;
-  delete from public.waitlist_entries;
-  delete from public.credit_ledger;
-  update public.bookings set credit_lot_id = null, payment_id = null;
-  update public.payments set booking_id = null;
-  delete from public.bookings;
-  delete from public.credit_lots;
-  delete from public.payments;
-  delete from public.class_sessions;
-  delete from public.timetable_templates;
-  delete from public.otp_requests;
+  delete from public.notifications where true;
+  delete from public.waitlist_entries where true;
+  delete from public.credit_ledger where true;
+  update public.bookings set credit_lot_id = null, payment_id = null where true;
+  update public.payments set booking_id = null where true;
+  delete from public.bookings where true;
+  delete from public.credit_lots where true;
+  delete from public.payments where true;
+  delete from public.class_sessions where true;
+  delete from public.timetable_templates where true;
+  delete from public.otp_requests where true;
   delete from public.consents where profile_id in (select id from public.profiles where role = 'client');
   delete from public.profiles where role = 'client';
   perform public.seed_demo();

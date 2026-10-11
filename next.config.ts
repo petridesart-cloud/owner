@@ -9,6 +9,8 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Fonts read at runtime by the icon / Open Graph image routes.
+  outputFileTracingIncludes: { "/*": ["./src/assets/fonts/**"] },
   turbopack: {
     rules: {
       "*.css": { loaders: ["@tailwindcss/turbopack"], as: "*.css" },

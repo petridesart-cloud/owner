@@ -109,14 +109,14 @@ isOneToOne: false
                   ]
                 },"class_types": {
                   Row: {
-                    "active": boolean,"created_at": string,"credit_kind": Database["public"]['Enums']["credit_kind"] | null,"default_capacity": number,"default_duration_minutes": number,"default_location": string | null,"description": string | null,"id": string,"kind": Database["public"]['Enums']["class_kind"],"name": string,"price_cents": number,"slug": string,"sort_order": number
+                    "active": boolean,"created_at": string,"credit_cost": number,"credit_kind": Database["public"]['Enums']["credit_kind"] | null,"default_capacity": number,"default_duration_minutes": number,"default_location": string | null,"description": string | null,"id": string,"kind": Database["public"]['Enums']["class_kind"],"name": string,"price_cents": number,"slug": string,"sort_order": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "active"?: boolean,"created_at"?: string,"credit_kind"?: Database["public"]['Enums']["credit_kind"] | null,"default_capacity": number,"default_duration_minutes"?: number,"default_location"?: string | null,"description"?: string | null,"id"?: string,"kind": Database["public"]['Enums']["class_kind"],"name": string,"price_cents": number,"slug": string,"sort_order"?: number
+                    "active"?: boolean,"created_at"?: string,"credit_cost"?: number,"credit_kind"?: Database["public"]['Enums']["credit_kind"] | null,"default_capacity": number,"default_duration_minutes"?: number,"default_location"?: string | null,"description"?: string | null,"id"?: string,"kind": Database["public"]['Enums']["class_kind"],"name": string,"price_cents": number,"slug": string,"sort_order"?: number
                   }
                   Update: {
-                    "active"?: boolean,"created_at"?: string,"credit_kind"?: Database["public"]['Enums']["credit_kind"] | null,"default_capacity"?: number,"default_duration_minutes"?: number,"default_location"?: string | null,"description"?: string | null,"id"?: string,"kind"?: Database["public"]['Enums']["class_kind"],"name"?: string,"price_cents"?: number,"slug"?: string,"sort_order"?: number
+                    "active"?: boolean,"created_at"?: string,"credit_cost"?: number,"credit_kind"?: Database["public"]['Enums']["credit_kind"] | null,"default_capacity"?: number,"default_duration_minutes"?: number,"default_location"?: string | null,"description"?: string | null,"id"?: string,"kind"?: Database["public"]['Enums']["class_kind"],"name"?: string,"price_cents"?: number,"slug"?: string,"sort_order"?: number
                   }
                   Relationships: [
                     
@@ -157,17 +157,23 @@ isOneToOne: false
                   ]
                 },"credit_ledger": {
                   Row: {
-                    "booking_id": string | null,"created_at": string,"credit_kind": Database["public"]['Enums']["credit_kind"],"delta": number,"id": number,"lot_id": string | null,"profile_id": string,"reason": string
+                    "actor_profile_id": string | null,"booking_id": string | null,"created_at": string,"credit_kind": Database["public"]['Enums']["credit_kind"],"delta": number,"entry_type": Database["public"]['Enums']["ledger_entry"],"id": number,"lot_id": string | null,"note": string | null,"profile_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "booking_id"?: string | null,"created_at"?: string,"credit_kind": Database["public"]['Enums']["credit_kind"],"delta": number,"id"?: never,"lot_id"?: string | null,"profile_id": string,"reason": string
+                    "actor_profile_id"?: string | null,"booking_id"?: string | null,"created_at"?: string,"credit_kind": Database["public"]['Enums']["credit_kind"],"delta": number,"entry_type": Database["public"]['Enums']["ledger_entry"],"id"?: never,"lot_id"?: string | null,"note"?: string | null,"profile_id": string
                   }
                   Update: {
-                    "booking_id"?: string | null,"created_at"?: string,"credit_kind"?: Database["public"]['Enums']["credit_kind"],"delta"?: number,"id"?: never,"lot_id"?: string | null,"profile_id"?: string,"reason"?: string
+                    "actor_profile_id"?: string | null,"booking_id"?: string | null,"created_at"?: string,"credit_kind"?: Database["public"]['Enums']["credit_kind"],"delta"?: number,"entry_type"?: Database["public"]['Enums']["ledger_entry"],"id"?: never,"lot_id"?: string | null,"note"?: string | null,"profile_id"?: string
                   }
                   Relationships: [
                     {
+      foreignKeyName: "credit_ledger_actor_profile_id_fkey"
+      columns: ["actor_profile_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    },{
       foreignKeyName: "credit_ledger_booking_id_fkey"
       columns: ["booking_id"]
 isOneToOne: false
@@ -189,17 +195,23 @@ isOneToOne: false
                   ]
                 },"credit_lots": {
                   Row: {
-                    "created_at": string,"credit_kind": Database["public"]['Enums']["credit_kind"],"expires_at": string | null,"id": string,"note": string | null,"payment_id": string | null,"profile_id": string,"remaining": number,"total": number
+                    "created_at": string,"credit_kind": Database["public"]['Enums']["credit_kind"],"expires_at": string | null,"id": string,"membership_id": string | null,"note": string | null,"payment_id": string | null,"period_start": string | null,"profile_id": string,"remaining": number,"total": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"credit_kind": Database["public"]['Enums']["credit_kind"],"expires_at"?: string | null,"id"?: string,"note"?: string | null,"payment_id"?: string | null,"profile_id": string,"remaining": number,"total": number
+                    "created_at"?: string,"credit_kind": Database["public"]['Enums']["credit_kind"],"expires_at"?: string | null,"id"?: string,"membership_id"?: string | null,"note"?: string | null,"payment_id"?: string | null,"period_start"?: string | null,"profile_id": string,"remaining": number,"total": number
                   }
                   Update: {
-                    "created_at"?: string,"credit_kind"?: Database["public"]['Enums']["credit_kind"],"expires_at"?: string | null,"id"?: string,"note"?: string | null,"payment_id"?: string | null,"profile_id"?: string,"remaining"?: number,"total"?: number
+                    "created_at"?: string,"credit_kind"?: Database["public"]['Enums']["credit_kind"],"expires_at"?: string | null,"id"?: string,"membership_id"?: string | null,"note"?: string | null,"payment_id"?: string | null,"period_start"?: string | null,"profile_id"?: string,"remaining"?: number,"total"?: number
                   }
                   Relationships: [
                     {
+      foreignKeyName: "credit_lots_membership_id_fkey"
+      columns: ["membership_id"]
+isOneToOne: false
+      referencedRelation: "memberships"
+      referencedColumns: ["id"]
+    },{
       foreignKeyName: "credit_lots_payment_id_fkey"
       columns: ["payment_id"]
 isOneToOne: false
@@ -229,6 +241,38 @@ isOneToOne: false
       foreignKeyName: "health_notes_profile_id_fkey"
       columns: ["profile_id"]
 isOneToOne: true
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"memberships": {
+                  Row: {
+                    "cancel_at_period_end": boolean,"created_at": string,"current_period_end": string,"current_period_start": string,"id": string,"next_product_id": string | null,"paused_at": string | null,"product_id": string,"profile_id": string,"provider": string,"provider_subscription_id": string | null,"status": Database["public"]['Enums']["membership_status"]
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "cancel_at_period_end"?: boolean,"created_at"?: string,"current_period_end": string,"current_period_start": string,"id"?: string,"next_product_id"?: string | null,"paused_at"?: string | null,"product_id": string,"profile_id": string,"provider"?: string,"provider_subscription_id"?: string | null,"status"?: Database["public"]['Enums']["membership_status"]
+                  }
+                  Update: {
+                    "cancel_at_period_end"?: boolean,"created_at"?: string,"current_period_end"?: string,"current_period_start"?: string,"id"?: string,"next_product_id"?: string | null,"paused_at"?: string | null,"product_id"?: string,"profile_id"?: string,"provider"?: string,"provider_subscription_id"?: string | null,"status"?: Database["public"]['Enums']["membership_status"]
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "memberships_next_product_id_fkey"
+      columns: ["next_product_id"]
+isOneToOne: false
+      referencedRelation: "products"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "memberships_product_id_fkey"
+      columns: ["product_id"]
+isOneToOne: false
+      referencedRelation: "products"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "memberships_profile_id_fkey"
+      columns: ["profile_id"]
+isOneToOne: false
       referencedRelation: "profiles"
       referencedColumns: ["id"]
     }
@@ -281,14 +325,14 @@ isOneToOne: false
                   ]
                 },"payments": {
                   Row: {
-                    "amount_cents": number,"booking_id": string | null,"created_at": string,"currency": string,"description": string,"id": string,"paid_at": string | null,"product_id": string | null,"profile_id": string | null,"provider": string,"provider_ref": string | null,"purpose": string,"status": Database["public"]['Enums']["payment_status"],"vat_cents": number
+                    "amount_cents": number,"booking_id": string | null,"created_at": string,"currency": string,"description": string,"id": string,"membership_id": string | null,"method": string | null,"paid_at": string | null,"product_id": string | null,"profile_id": string | null,"provider": string,"provider_ref": string | null,"purpose": string,"status": Database["public"]['Enums']["payment_status"],"vat_cents": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "amount_cents": number,"booking_id"?: string | null,"created_at"?: string,"currency"?: string,"description": string,"id"?: string,"paid_at"?: string | null,"product_id"?: string | null,"profile_id"?: string | null,"provider": string,"provider_ref"?: string | null,"purpose": string,"status"?: Database["public"]['Enums']["payment_status"],"vat_cents"?: number
+                    "amount_cents": number,"booking_id"?: string | null,"created_at"?: string,"currency"?: string,"description": string,"id"?: string,"membership_id"?: string | null,"method"?: string | null,"paid_at"?: string | null,"product_id"?: string | null,"profile_id"?: string | null,"provider": string,"provider_ref"?: string | null,"purpose": string,"status"?: Database["public"]['Enums']["payment_status"],"vat_cents"?: number
                   }
                   Update: {
-                    "amount_cents"?: number,"booking_id"?: string | null,"created_at"?: string,"currency"?: string,"description"?: string,"id"?: string,"paid_at"?: string | null,"product_id"?: string | null,"profile_id"?: string | null,"provider"?: string,"provider_ref"?: string | null,"purpose"?: string,"status"?: Database["public"]['Enums']["payment_status"],"vat_cents"?: number
+                    "amount_cents"?: number,"booking_id"?: string | null,"created_at"?: string,"currency"?: string,"description"?: string,"id"?: string,"membership_id"?: string | null,"method"?: string | null,"paid_at"?: string | null,"product_id"?: string | null,"profile_id"?: string | null,"provider"?: string,"provider_ref"?: string | null,"purpose"?: string,"status"?: Database["public"]['Enums']["payment_status"],"vat_cents"?: number
                   }
                   Relationships: [
                     {
@@ -296,6 +340,12 @@ isOneToOne: false
       columns: ["booking_id"]
 isOneToOne: false
       referencedRelation: "bookings"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "payments_membership_id_fkey"
+      columns: ["membership_id"]
+isOneToOne: false
+      referencedRelation: "memberships"
       referencedColumns: ["id"]
     },{
       foreignKeyName: "payments_product_id_fkey"
@@ -311,44 +361,58 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
-                },"products": {
+                },"processed_webhooks": {
                   Row: {
-                    "active": boolean,"credit_kind": Database["public"]['Enums']["credit_kind"] | null,"credits": number,"id": string,"kind": Database["public"]['Enums']["product_kind"],"name": string,"price_cents": number,"sort_order": number,"validity_days": number | null
+                    "created_at": string,"id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "active"?: boolean,"credit_kind"?: Database["public"]['Enums']["credit_kind"] | null,"credits"?: number,"id"?: string,"kind": Database["public"]['Enums']["product_kind"],"name": string,"price_cents": number,"sort_order"?: number,"validity_days"?: number | null
+                    "created_at"?: string,"id": string
                   }
                   Update: {
-                    "active"?: boolean,"credit_kind"?: Database["public"]['Enums']["credit_kind"] | null,"credits"?: number,"id"?: string,"kind"?: Database["public"]['Enums']["product_kind"],"name"?: string,"price_cents"?: number,"sort_order"?: number,"validity_days"?: number | null
+                    "created_at"?: string,"id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"products": {
+                  Row: {
+                    "active": boolean,"credit_kind": Database["public"]['Enums']["credit_kind"] | null,"credits": number,"description": string | null,"id": string,"kind": Database["public"]['Enums']["product_kind"],"name": string,"period_days": number | null,"price_cents": number,"sort_order": number,"validity_days": number | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "active"?: boolean,"credit_kind"?: Database["public"]['Enums']["credit_kind"] | null,"credits"?: number,"description"?: string | null,"id"?: string,"kind": Database["public"]['Enums']["product_kind"],"name": string,"period_days"?: number | null,"price_cents": number,"sort_order"?: number,"validity_days"?: number | null
+                  }
+                  Update: {
+                    "active"?: boolean,"credit_kind"?: Database["public"]['Enums']["credit_kind"] | null,"credits"?: number,"description"?: string | null,"id"?: string,"kind"?: Database["public"]['Enums']["product_kind"],"name"?: string,"period_days"?: number | null,"price_cents"?: number,"sort_order"?: number,"validity_days"?: number | null
                   }
                   Relationships: [
                     
                   ]
                 },"profiles": {
                   Row: {
-                    "admin_notes": string | null,"created_at": string,"deleted_at": string | null,"email": string | null,"full_name": string | null,"id": string,"marketing_email": boolean,"marketing_sms": boolean,"onboarded_at": string | null,"phone": string | null,"role": Database["public"]['Enums']["user_role"],"user_id": string | null
+                    "admin_notes": string | null,"created_at": string,"deleted_at": string | null,"email": string | null,"full_name": string | null,"id": string,"marketing_email": boolean,"marketing_sms": boolean,"onboarded_at": string | null,"phone": string | null,"role": Database["public"]['Enums']["user_role"],"stripe_customer_id": string | null,"user_id": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "admin_notes"?: string | null,"created_at"?: string,"deleted_at"?: string | null,"email"?: string | null,"full_name"?: string | null,"id"?: string,"marketing_email"?: boolean,"marketing_sms"?: boolean,"onboarded_at"?: string | null,"phone"?: string | null,"role"?: Database["public"]['Enums']["user_role"],"user_id"?: string | null
+                    "admin_notes"?: string | null,"created_at"?: string,"deleted_at"?: string | null,"email"?: string | null,"full_name"?: string | null,"id"?: string,"marketing_email"?: boolean,"marketing_sms"?: boolean,"onboarded_at"?: string | null,"phone"?: string | null,"role"?: Database["public"]['Enums']["user_role"],"stripe_customer_id"?: string | null,"user_id"?: string | null
                   }
                   Update: {
-                    "admin_notes"?: string | null,"created_at"?: string,"deleted_at"?: string | null,"email"?: string | null,"full_name"?: string | null,"id"?: string,"marketing_email"?: boolean,"marketing_sms"?: boolean,"onboarded_at"?: string | null,"phone"?: string | null,"role"?: Database["public"]['Enums']["user_role"],"user_id"?: string | null
+                    "admin_notes"?: string | null,"created_at"?: string,"deleted_at"?: string | null,"email"?: string | null,"full_name"?: string | null,"id"?: string,"marketing_email"?: boolean,"marketing_sms"?: boolean,"onboarded_at"?: string | null,"phone"?: string | null,"role"?: Database["public"]['Enums']["user_role"],"stripe_customer_id"?: string | null,"user_id"?: string | null
                   }
                   Relationships: [
                     
                   ]
                 },"studio_settings": {
                   Row: {
-                    "address": string,"cancellation_cutoff_hours": number,"contact_email": string,"contact_phone": string,"currency": string,"hold_minutes": number,"id": number,"instagram_handle": string,"intro_line": string,"legal_name": string,"map_url": string,"policy_version": string,"refund_late_cancel_if_filled": boolean,"registration_number": string,"reminder_offsets_minutes": (number)[],"studio_name": string,"timezone": string,"updated_at": string,"vat_number": string,"vat_rate": number,"vat_registered": boolean,"waitlist_window_minutes": number
+                    "address": string,"allow_pay_later": boolean,"cancellation_cutoff_hours": number,"contact_email": string,"contact_phone": string,"currency": string,"hold_minutes": number,"id": number,"instagram_handle": string,"intro_line": string,"legal_name": string,"map_url": string,"membership_period_mode": string,"online_payments_enabled": boolean,"policy_version": string,"refund_late_cancel_if_filled": boolean,"registration_number": string,"reminder_offsets_minutes": (number)[],"rollover_max": number,"status_banner": string,"studio_name": string,"timezone": string,"trader_name": string,"updated_at": string,"vat_number": string,"vat_rate": number,"vat_registered": boolean,"waitlist_window_minutes": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "address"?: string,"cancellation_cutoff_hours"?: number,"contact_email"?: string,"contact_phone"?: string,"currency"?: string,"hold_minutes"?: number,"id"?: number,"instagram_handle"?: string,"intro_line"?: string,"legal_name"?: string,"map_url"?: string,"policy_version"?: string,"refund_late_cancel_if_filled"?: boolean,"registration_number"?: string,"reminder_offsets_minutes"?: (number)[],"studio_name"?: string,"timezone"?: string,"updated_at"?: string,"vat_number"?: string,"vat_rate"?: number,"vat_registered"?: boolean,"waitlist_window_minutes"?: number
+                    "address"?: string,"allow_pay_later"?: boolean,"cancellation_cutoff_hours"?: number,"contact_email"?: string,"contact_phone"?: string,"currency"?: string,"hold_minutes"?: number,"id"?: number,"instagram_handle"?: string,"intro_line"?: string,"legal_name"?: string,"map_url"?: string,"membership_period_mode"?: string,"online_payments_enabled"?: boolean,"policy_version"?: string,"refund_late_cancel_if_filled"?: boolean,"registration_number"?: string,"reminder_offsets_minutes"?: (number)[],"rollover_max"?: number,"status_banner"?: string,"studio_name"?: string,"timezone"?: string,"trader_name"?: string,"updated_at"?: string,"vat_number"?: string,"vat_rate"?: number,"vat_registered"?: boolean,"waitlist_window_minutes"?: number
                   }
                   Update: {
-                    "address"?: string,"cancellation_cutoff_hours"?: number,"contact_email"?: string,"contact_phone"?: string,"currency"?: string,"hold_minutes"?: number,"id"?: number,"instagram_handle"?: string,"intro_line"?: string,"legal_name"?: string,"map_url"?: string,"policy_version"?: string,"refund_late_cancel_if_filled"?: boolean,"registration_number"?: string,"reminder_offsets_minutes"?: (number)[],"studio_name"?: string,"timezone"?: string,"updated_at"?: string,"vat_number"?: string,"vat_rate"?: number,"vat_registered"?: boolean,"waitlist_window_minutes"?: number
+                    "address"?: string,"allow_pay_later"?: boolean,"cancellation_cutoff_hours"?: number,"contact_email"?: string,"contact_phone"?: string,"currency"?: string,"hold_minutes"?: number,"id"?: number,"instagram_handle"?: string,"intro_line"?: string,"legal_name"?: string,"map_url"?: string,"membership_period_mode"?: string,"online_payments_enabled"?: boolean,"policy_version"?: string,"refund_late_cancel_if_filled"?: boolean,"registration_number"?: string,"reminder_offsets_minutes"?: (number)[],"rollover_max"?: number,"status_banner"?: string,"studio_name"?: string,"timezone"?: string,"trader_name"?: string,"updated_at"?: string,"vat_number"?: string,"vat_rate"?: number,"vat_registered"?: boolean,"waitlist_window_minutes"?: number
                   }
                   Relationships: [
                     
@@ -425,7 +489,10 @@ isOneToOne: false
             [_ in never]: never
           }
           Functions: {
-            "apply_late_fill_refund":
+            "admin_adjust_credits":
+{ Args: { "p_actor": string,"p_days": number,"p_delta": number,"p_kind": Database["public"]['Enums']["credit_kind"],"p_profile": string,"p_reason": string }; Returns: undefined
+                           },
+"apply_late_fill_refund":
 { Args: { "p_session": string }; Returns: string
                            },
 "book_session":
@@ -440,7 +507,7 @@ isOneToOne: false
             }[]
                            },
 "confirm_payment":
-{ Args: { "p_payment": string,"p_provider_ref"?: string }; Returns: Json
+{ Args: { "p_method"?: string,"p_payment": string,"p_provider_ref"?: string }; Returns: Json
                            },
 "credit_balance":
 { Args: { "p_profile": string }; Returns: {
@@ -450,8 +517,17 @@ isOneToOne: false
 "erase_profile":
 { Args: { "p_profile": string }; Returns: string
                            },
+"expire_credits":
+{ Args: Record<PropertyKey, never>; Returns: number
+                           },
 "generate_sessions":
 { Args: { "p_template": string }; Returns: number
+                           },
+"grant_lot":
+{ Args: { "p_actor"?: string,"p_credits": number,"p_entry"?: Database["public"]['Enums']["ledger_entry"],"p_expires": string,"p_kind": Database["public"]['Enums']["credit_kind"],"p_membership"?: string,"p_note": string,"p_payment"?: string,"p_period_start"?: string,"p_profile": string }; Returns: string
+                           },
+"grant_membership_period":
+{ Args: { "p_membership": string,"p_payment"?: string,"p_start": string }; Returns: string
                            },
 "is_admin":
 { Args: Record<PropertyKey, never>; Returns: boolean
@@ -467,6 +543,12 @@ isOneToOne: false
 "my_profile_id":
 { Args: Record<PropertyKey, never>; Returns: string
                            },
+"pause_membership":
+{ Args: { "p_membership": string }; Returns: undefined
+                           },
+"period_end":
+{ Args: { "p_days": number,"p_start": string }; Returns: string
+                           },
 "process_waitlist":
 { Args: { "p_session": string }; Returns: {
               "entry_id": string,"offer_expires_at": string,"profile_id": string
@@ -474,6 +556,9 @@ isOneToOne: false
                            },
 "reset_demo_data":
 { Args: Record<PropertyKey, never>; Returns: undefined
+                           },
+"resume_membership":
+{ Args: { "p_membership": string }; Returns: string
                            },
 "return_credit":
 { Args: { "p_booking": string,"p_reason": string }; Returns: undefined
@@ -489,6 +574,7 @@ isOneToOne: false
 "settings":
 { Args: Record<PropertyKey, never>; Returns: {
               "address": string,
+"allow_pay_later": boolean,
 "cancellation_cutoff_hours": number,
 "contact_email": string,
 "contact_phone": string,
@@ -499,12 +585,17 @@ isOneToOne: false
 "intro_line": string,
 "legal_name": string,
 "map_url": string,
+"membership_period_mode": string,
+"online_payments_enabled": boolean,
 "policy_version": string,
 "refund_late_cancel_if_filled": boolean,
 "registration_number": string,
 "reminder_offsets_minutes": (number)[],
+"rollover_max": number,
+"status_banner": string,
 "studio_name": string,
 "timezone": string,
+"trader_name": string,
 "updated_at": string,
 "vat_number": string,
 "vat_rate": number,
@@ -517,6 +608,9 @@ isOneToOne: false
         isOneToOne: true
         isSetofReturn: false
       } },
+"spend_credits":
+{ Args: { "p_booking": string,"p_cost": number,"p_kind": Database["public"]['Enums']["credit_kind"],"p_profile": string,"p_valid_at": string }; Returns: string
+                           },
 "spots_taken":
 { Args: { "p_exclude_profile"?: string,"p_session": string }; Returns: number
                            },
@@ -527,7 +621,7 @@ isOneToOne: false
                            }
           }
           Enums: {
-            "booking_source": "online"|"manual","booking_status": "held"|"confirmed"|"cancelled"|"late_cancelled"|"studio_cancelled"|"expired"|"no_show","class_kind": "reformer"|"mat"|"event","consent_type": "policy"|"terms"|"health_data"|"fitness_declaration"|"marketing_email"|"marketing_sms","credit_kind": "reformer"|"mat","notification_channel": "email"|"sms","notification_status": "logged"|"sent"|"failed","paid_with": "payment"|"credit"|"manual"|"free","payment_status": "pending"|"paid"|"failed"|"refunded"|"needs_refund"|"cancelled","product_kind": "single"|"pack","session_status": "scheduled"|"cancelled","user_role": "client"|"admin","waitlist_status": "waiting"|"offered"|"claimed"|"expired"|"left"|"cancelled"
+            "booking_source": "online"|"manual","booking_status": "held"|"confirmed"|"cancelled"|"late_cancelled"|"studio_cancelled"|"expired"|"no_show","class_kind": "reformer"|"mat"|"event","consent_type": "policy"|"terms"|"health_data"|"fitness_declaration"|"marketing_email"|"marketing_sms","credit_kind": "reformer"|"mat","ledger_entry": "grant"|"booking_debit"|"cancel_refund"|"expiry"|"admin_adjustment"|"rollover","membership_status": "active"|"paused"|"past_due"|"cancelled"|"expired","notification_channel": "email"|"sms","notification_status": "logged"|"sent"|"failed","paid_with": "payment"|"credit"|"manual"|"free"|"pay_at_studio","payment_status": "pending"|"paid"|"failed"|"refunded"|"needs_refund"|"cancelled","product_kind": "single"|"pack"|"membership","session_status": "scheduled"|"cancelled","user_role": "client"|"admin","waitlist_status": "waiting"|"offered"|"claimed"|"expired"|"left"|"cancelled"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -647,7 +741,7 @@ export const Constants = {
           }
         },"public": {
           Enums: {
-            "booking_source": ["online", "manual"],"booking_status": ["held", "confirmed", "cancelled", "late_cancelled", "studio_cancelled", "expired", "no_show"],"class_kind": ["reformer", "mat", "event"],"consent_type": ["policy", "terms", "health_data", "fitness_declaration", "marketing_email", "marketing_sms"],"credit_kind": ["reformer", "mat"],"notification_channel": ["email", "sms"],"notification_status": ["logged", "sent", "failed"],"paid_with": ["payment", "credit", "manual", "free"],"payment_status": ["pending", "paid", "failed", "refunded", "needs_refund", "cancelled"],"product_kind": ["single", "pack"],"session_status": ["scheduled", "cancelled"],"user_role": ["client", "admin"],"waitlist_status": ["waiting", "offered", "claimed", "expired", "left", "cancelled"]
+            "booking_source": ["online", "manual"],"booking_status": ["held", "confirmed", "cancelled", "late_cancelled", "studio_cancelled", "expired", "no_show"],"class_kind": ["reformer", "mat", "event"],"consent_type": ["policy", "terms", "health_data", "fitness_declaration", "marketing_email", "marketing_sms"],"credit_kind": ["reformer", "mat"],"ledger_entry": ["grant", "booking_debit", "cancel_refund", "expiry", "admin_adjustment", "rollover"],"membership_status": ["active", "paused", "past_due", "cancelled", "expired"],"notification_channel": ["email", "sms"],"notification_status": ["logged", "sent", "failed"],"paid_with": ["payment", "credit", "manual", "free", "pay_at_studio"],"payment_status": ["pending", "paid", "failed", "refunded", "needs_refund", "cancelled"],"product_kind": ["single", "pack", "membership"],"session_status": ["scheduled", "cancelled"],"user_role": ["client", "admin"],"waitlist_status": ["waiting", "offered", "claimed", "expired", "left", "cancelled"]
           }
         }
 } as const

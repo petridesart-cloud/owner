@@ -11,8 +11,10 @@ export const metadata: Metadata = {
   title: { default: "Re·Form Pilates Studio · Limassol", template: "%s · Re·Form Pilates" },
   description: "Book Reformer and Mat Pilates classes at Re·Form Pilates Studio in Limassol, Cyprus.",
   applicationName: "Re·Form",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000")),
   appleWebApp: { capable: true, title: "Re·Form", statusBarStyle: "default" },
-  icons: { icon: "/icon.svg", apple: "/icon.svg" },
+  icons: { icon: [{ url: "/icon.svg", type: "image/svg+xml" }, { url: "/pwa-icon/192", sizes: "192x192" }], apple: "/pwa-icon/apple" },
+  openGraph: { siteName: "Re·Form Pilates Studio", locale: "en_GB", type: "website" },
 };
 
 export const viewport: Viewport = {
