@@ -17,7 +17,7 @@ Tip: in your browser menu choose **Add to Home Screen** to use it like an app.
 **Want to see a regular client?** Sign in as `elena@example.com`. She already has classes, bookings and a "book your usual" button.
 
 ## 2. Run your studio (3 minutes)
-1. On the same link, sign in with **your admin email** and the **studio password** we gave you.
+1. On the same link, sign in with **elysia.stephani@gmail.com** and the **studio password** we sent you separately.
 2. **Today:**
    - **Awaiting payment:** tap how they paid (Cash, Revolut, Bank or Card). Their classes appear instantly.
    - Today's classes. Tap the circle to check people in.

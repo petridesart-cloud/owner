@@ -120,6 +120,7 @@ npm run typecheck && npm run lint
 PW_CHROMIUM=/opt/pw-browsers/chromium npm run test:e2e   # booking, cancel, waitlist, admin access
 npm run db:types              # after schema changes
 ```
+- **Live admins:** petridesart@gmail.com and elysia.stephani@gmail.com (`ADMIN_EMAILS` in Vercel); more can be added in Admin → Settings → Studio team.
 - **Admin login (local):** `studio@example.com` with admin code `DEMO_ADMIN_CODE`. Demo clients such as `elena@example.com` show their code on screen.
 - **Cloud session note:** start Docker with the proxy env (`HTTPS_PROXY`, `SSL_CERT_FILE=/root/.ccr/ca-bundle.crt`) before `supabase start`.
 
