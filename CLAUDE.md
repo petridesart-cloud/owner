@@ -97,6 +97,15 @@ Booking web app for **Re·Form Pilates Studio**, Limassol, Cyprus (Instagram @re
   - `src/app/(client)/*`: client app.
   - `src/app/admin/*`: admin. Every server action calls `requireAdmin()` through `admin()` and writes `audit_log`.
 
+## Deployment (live demo)
+- **URL:** https://reform-pilates-seven.vercel.app (Vercel project `reform-pilates`, account petridesart-cloud).
+- **Database:** Supabase **reform-db**, free plan, Frankfurt, created through the Vercel Marketplace. Its env vars are injected automatically.
+- **App env vars set in Vercel:** `DEMO_MODE=true`, `ADMIN_EMAILS`, `DEMO_ADMIN_CODE`, `CRON_SECRET`, `NEXT_PUBLIC_SITE_URL`.
+- **Deploys:** `vercel deploy --prod` from this repo (GitHub auto-deploy isn't connected yet; it needs the Vercel GitHub app approved on the repo).
+- **Migrations run on deploy:** the `vercel-build` script runs `scripts/migrate.mjs` (tracked in `_app_migrations`), and a fresh demo database is seeded. The dev sandbox can't reach the database directly; Vercel can.
+- **Login codes:** hosted Supabase sends 8-digit codes, so the app accepts 6–10 digits.
+- **Cloud session:** Node CLIs need `NODE_USE_ENV_PROXY=1 NODE_EXTRA_CA_CERTS=/root/.ccr/ca-bundle.crt`.
+
 ## Run & test
 ```bash
 npm install
@@ -129,7 +138,6 @@ npm run db:types              # after schema changes
 - **Waiting on the owner:**
   - Her Revolut link, IBAN, real prices and package names, logo and photos.
   - Address, her full name, contact details.
-  - Supabase/Vercel accounts (see README).
 - **Proposed v2:**
   - Wallet passes, auto-renewing memberships (code exists, flagged off), corporate accounts, referrals, gift vouchers.
   - PAR-Q questionnaire, private feedback, demand insights, Greek/Russian, motion system with sheets/gestures, benchmark doc, the /design page.

@@ -6,6 +6,8 @@ Built with Next.js 16, Supabase (Postgres + Auth, EU), Stripe Checkout, Resend a
 
 ---
 
+**Live demo:** https://reform-pilates-seven.vercel.app. Database migrations run automatically on every Vercel deploy (`vercel-build` → `scripts/migrate.mjs`).
+
 ## Deploy a preview (about 15 minutes, no coding)
 
 You'll create two free accounts: **Supabase** (database and login) and **Vercel** (hosting). Keys go into Vercel's encrypted settings, never into chat or the code.
