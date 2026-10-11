@@ -63,7 +63,7 @@ export async function verifyCode(_: VerifyState, form: FormData): Promise<Verify
   const email = Email.safeParse(form.get("email"));
   const token = String(form.get("code") ?? "").replace(/\D/g, "");
   const next = safeNext(String(form.get("next") ?? "/"));
-  if (!email.success || token.length < 6) return { ok: false, error: "Enter the 6-digit code from your email." };
+  if (!email.success || token.length < 6 || token.length > 12) return { ok: false, error: "Enter the code from your email." };
 
   let otp = token;
   if (env.demoMode && env.adminEmails.includes(email.data)) {

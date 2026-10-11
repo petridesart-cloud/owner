@@ -18,7 +18,7 @@ export function LoginForm({ next }: { next: string }) {
   if (step === "email") {
     return (
       <form action={(f) => { setEditing(false); requestAction(f); }} className="space-y-4" noValidate>
-        <Field id="email" label="Email" error={req.error} hint="We'll email you a 6-digit code. No password needed.">
+        <Field id="email" label="Email" error={req.error} hint="We'll email you a sign-in code. No password needed.">
           <input
             id="email" name="email" type="email" inputMode="email" autoComplete="email" required
             defaultValue={req.email} placeholder="you@example.com" className={inputClass}
@@ -40,10 +40,10 @@ export function LoginForm({ next }: { next: string }) {
       </p>
       {req.adminCode && <Notice>Demo mode: enter your private admin code (DEMO_ADMIN_CODE) instead of an emailed code.</Notice>}
       {req.demoCode && <Notice>Demo mode: your code is <strong className="tracking-[0.2em]">{req.demoCode}</strong> (in production it&apos;s only emailed).</Notice>}
-      <Field id="code" label={req.adminCode ? "Admin code" : "6-digit code"} error={ver.error}>
+      <Field id="code" label={req.adminCode ? "Admin code" : "Code from your email"} error={ver.error}>
         <input
-          ref={codeRef} id="code" name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]*" maxLength={req.adminCode ? 12 : 6} required
-          placeholder="••••••" className={`${inputClass} text-center font-serif text-3xl tracking-[0.5em]`}
+          ref={codeRef} id="code" name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]*" maxLength={12} required
+          placeholder="••••••••" className={`${inputClass} text-center font-serif text-3xl tracking-[0.35em]`}
           aria-invalid={!!ver.error} aria-describedby={ver.error ? "code-error" : undefined}
         />
       </Field>
