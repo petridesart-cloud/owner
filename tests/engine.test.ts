@@ -508,3 +508,12 @@ describe("waitlist", () => {
   });
 });
 
+
+describe("rate limits", () => {
+  test("allows up to the limit, then refuses, per kind and key", async () => {
+    const key = `test-${Date.now()}`;
+    const hit = async (k = key) => (await db.rpc("rate_limited", { p_kind: "test", p_key: k, p_max: 3, p_window_minutes: 15 })).data;
+    assert.deepEqual([await hit(), await hit(), await hit(), await hit(), await hit()], [false, false, false, true, true]);
+    assert.equal(await hit(`${key}-other`), false);
+  });
+});

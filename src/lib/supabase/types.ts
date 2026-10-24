@@ -953,6 +953,28 @@ export type Database = {
         };
         Relationships: [];
       };
+      rate_events: {
+        Row: {
+          created_at: string;
+          id: number;
+          key_hash: string;
+          kind: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          id?: never;
+          key_hash: string;
+          kind: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: never;
+          key_hash?: string;
+          kind?: string;
+        };
+        Relationships: [];
+      };
       recurring_rules: {
         Row: {
           active: boolean;
@@ -1361,6 +1383,10 @@ export type Database = {
           offer_expires_at: string;
           profile_id: string;
         }[];
+      };
+      rate_limited: {
+        Args: { p_key: string; p_kind: string; p_max: number; p_window_minutes: number };
+        Returns: boolean;
       };
       recalc_lot_expiry: { Args: { p_lot: string }; Returns: undefined };
       reset_demo_data: { Args: Record<PropertyKey, never>; Returns: undefined };

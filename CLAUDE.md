@@ -78,6 +78,7 @@ Booking web app for **Re·Form Pilates Studio**, Limassol, Cyprus (Instagram @re
 | Email 6-digit code login (no magic links, no passwords) | Instagram's in-app browser breaks magic links. Codes are generated with Supabase Auth's admin `generateLink` and delivered by our own notification service (Resend), so we control the template and demo mode can show them. |
 | `APP_ENV=production` forces demo mode off whatever `DEMO_MODE` says | The real app can never show login codes on screen or seed/reset demo data by mistake. |
 | Real app without an email key refuses sign-in with a clear message; login codes aren't stored in the Outbox once email is live | Never claim a code was sent; nobody reading the log can sign in as a client. |
+| Rate limits in SQL (`rate_limited()`, table `rate_events`, hashed keys): code requests 5/email & 20/IP per 15 min (`otp_requests`), code attempts 10/email & 50/IP, studio password 5/email & 10/IP per 15 min, booking-type actions 30/client per 10 min | Stops guessing codes/passwords and runaway scripts without bothering real clients. |
 | Demo mode shows client codes on screen, never admin codes | So the preview can be clicked through without email. Admins enter `DEMO_ADMIN_CODE` instead; otherwise anyone could open the admin on a public preview. |
 | Booking engine in Postgres functions (`book_session`, `cancel_booking`, `process_waitlist`, …) that `SELECT … FOR UPDATE` the class row | Guarantees no double-booking of the last reformer under concurrency (tested with 6 parallel requests → exactly 3 succeed). |
 | Server is the only writer (service role); engine functions executable only by `service_role`; RLS lets clients read only their own rows | Defence in depth if the public anon key is used directly. Health notes: client reads own, instructor reads all, writes server-side so consent is logged. |
@@ -160,7 +161,7 @@ npm run db:types              # after schema changes
   - Her round-1 client notes (`docs/feedback/elysia-client-notes-1.md`): her logo, real prices, cash/Revolut choice, trials and drop-ins, weekly repeat bookings, 3-state colours, new My classes with package progress, new Account, Studio / Events / Rules pages, Back buttons, Photos manager.
   - Admin: Today (awaiting payment with chosen method, roster flags), classes, timetable, closures, clients (profile, health behind a tap, student verification, holiday return, ledger), Outbox, stats, import, settings (price grid, booking window, studio sections), photos, compliance.
   - PWA manifest and icons, Open Graph previews.
-  - 36 engine tests + 6 Playwright flows green on a production build.
+  - 37 engine tests + 6 Playwright flows green on a production build.
 - **Waiting on the owner (questions in the brief):**
   - Answers to the open questions in `docs/feedback/elysia-client-notes-1.md` (euro and DOB required are answered; defaults are live for the rest).
   - Her Revolut link, IBAN, original logo file and photos (she can upload them herself now).

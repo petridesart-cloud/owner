@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { getViewer } from "@/lib/auth";
 import { bookAtStudio, bookSingle, bookWithCredit, bookWithPayment, joinWaitlist, leaveWaitlist } from "@/lib/booking";
 import type { ActionResult } from "@/lib/errors";
+import { TOO_MANY, bookingLimited } from "@/lib/rate-limit";
 
 async function onboardedProfile() {
   const viewer = await getViewer();
@@ -10,6 +11,7 @@ async function onboardedProfile() {
   if (!viewer.profile.onboarded_at) return { error: "Please complete your details first." } as const;
   if (!viewer.profile.date_of_birth) return { error: "Please add your date of birth in Account first." } as const;
   if (!viewer.profile.parq_completed_at) return { error: "Please answer the health questions in Account first." } as const;
+  if (await bookingLimited(viewer.profile.id)) return { error: TOO_MANY } as const;
   return { profile: viewer.profile } as const;
 }
 

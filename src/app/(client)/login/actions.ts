@@ -8,6 +8,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { emailLive, env } from "@/lib/env";
 import { notify } from "@/lib/notifications";
 import { ensureProfile } from "@/lib/auth";
+import { clientIp, rateLimited } from "@/lib/rate-limit";
 
 const sha = (s: string) => createHash("sha256").update(s).digest("hex");
 const Email = z.string().trim().toLowerCase().email();
@@ -78,13 +79,20 @@ export async function verifyCode(_: VerifyState, form: FormData): Promise<Verify
   const next = safeNext(String(form.get("next") ?? "/"));
   if (!email.success || token.length < 6 || token.length > 12) return { ok: false, error: "Enter the code from your email." };
 
+  const ip = await clientIp();
   let otp = token;
   if (env.demoMode && (await isStudioAdmin(email.data))) {
+    if ((await rateLimited("admin_pw", email.data, 5, 15)) || (await rateLimited("admin_pw_ip", ip, 10, 15))) {
+      return { ok: false, error: "Too many tries. Please wait 15 minutes and try again." };
+    }
     if (env.demoAdminCode.length < 8 || token !== env.demoAdminCode) {
       return { ok: false, error: "That password isn't right." };
     }
     const link = await db().auth.admin.generateLink({ type: "magiclink", email: email.data });
     otp = link.data?.properties?.email_otp ?? "";
+  }
+  if ((await rateLimited("verify", email.data, 10, 15)) || (await rateLimited("verify_ip", ip, 50, 15))) {
+    return { ok: false, error: "Too many tries. Please wait 15 minutes, then request a new code." };
   }
   const supabase = await supabaseServer();
   const { data, error } = await supabase.auth.verifyOtp({ email: email.data, token: otp, type: "email" });

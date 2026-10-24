@@ -3,11 +3,13 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireOnboarded } from "@/lib/auth";
 import { saveRecurring, weeklySlots } from "@/lib/recurring";
+import { TOO_MANY, bookingLimited } from "@/lib/rate-limit";
 
 export type WeeklyState = { ok: boolean; message?: string; error?: string };
 
 export async function saveWeekly(_: WeeklyState, form: FormData): Promise<WeeklyState> {
   const viewer = await requireOnboarded("/bookings/weekly");
+  if (await bookingLimited(viewer.profile.id)) return { ok: false, error: TOO_MANY };
   const picked = z.array(z.string().regex(/^[0-9a-f-]{36}\|[1-7]\|\d{2}:\d{2}$/)).max(14).safeParse(form.getAll("slot"));
   if (!picked.success) return { ok: false, error: "Please pick from the list." };
   // Only slots that are really on the timetable.
