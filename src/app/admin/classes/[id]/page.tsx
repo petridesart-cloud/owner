@@ -11,6 +11,8 @@ import { AdminTitle } from "../../ui";
 import { SessionFields } from "../SessionFields";
 import { RosterActions } from "./RosterActions";
 import { MarkPaid } from "../../PaymentButtons";
+import { getMedia, type MediaItem } from "@/lib/media";
+import { DeletePhoto, PhotoControls, Uploader } from "../../photos/Uploader";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +26,7 @@ export default async function SessionAdmin({ params }: { params: Promise<{ id: s
     db().from("class_types").select("*").order("sort_order"),
     db().from("profiles").select("id, full_name, email").is("deleted_at", null).eq("role", "client").order("full_name").limit(1000),
   ]);
+  const [cover, photos] = s.class_types?.kind === "event" ? await Promise.all([getMedia(`event-cover:${s.id}`), getMedia(`event:${s.id}`)]) : [[], []];
   const roster = s.bookings.filter((b) => ["confirmed", "no_show"].includes(b.status));
   const other = s.bookings.filter((b) => ["cancelled", "late_cancelled", "studio_cancelled"].includes(b.status));
   const waitlist = s.waitlist_entries.filter((w) => ["waiting", "offered"].includes(w.status)).sort((a, b) => a.created_at.localeCompare(b.created_at));
@@ -104,9 +107,18 @@ export default async function SessionAdmin({ params }: { params: Promise<{ id: s
           <SessionFields types={types ?? []} d={{
             class_type_id: s.class_type_id, date: dayKey(s.starts_at), time: time(s.starts_at), duration: mins, capacity: s.capacity,
             price: s.price_cents != null ? (s.price_cents / 100).toFixed(2) : "", title: s.title, location: s.location, description: s.description,
-          }} />
+            clients_only: s.clients_only, what_to_bring: s.what_to_bring, event_policy: s.event_policy, recap: s.recap,
+          }} event={s.class_types?.kind === "event"} />
         </ActionForm>
       </section>
+
+      {s.class_types?.kind === "event" && (
+        <section className="card px-5 py-5">
+          <h2 className="display mb-1 text-[0.95rem]">Event photos</h2>
+          <p className="mb-4 text-sm text-ink-soft">Only your own photos, with permission from anyone in them.</p>
+          <EventPhotos id={s.id} cover={cover} photos={photos} />
+        </section>
+      )}
 
       {s.status === "scheduled" && !past && (
         <section className="card border-burgundy/25 px-5 py-5">
@@ -117,6 +129,36 @@ export default async function SessionAdmin({ params }: { params: Promise<{ id: s
           </ActionForm>
         </section>
       )}
+    </div>
+  );
+}
+
+function EventPhotos({ id, cover, photos }: { id: string; cover: MediaItem[]; photos: MediaItem[] }) {
+  const thumb = (p: MediaItem, alt: string) => (
+    <div className="relative size-24 overflow-hidden rounded-2xl bg-lilac-100">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={p.url} alt={alt} className="size-full object-cover" loading="lazy" />
+      <DeletePhoto id={p.id} />
+    </div>
+  );
+  return (
+    <div className="space-y-5">
+      <div>
+        <h3 className="text-sm font-medium text-ink">Background picture</h3>
+        <p className="text-xs text-ink-soft">Shown behind the event on the Events page. Without one, the soft gradient is used.</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {cover.map((p) => <div key={p.id}>{thumb(p, "Event background")}</div>)}
+          <Uploader slot={`event-cover:${id}`} label="Add a background picture" single />
+        </div>
+      </div>
+      <div>
+        <h3 className="text-sm font-medium text-ink">Photos for Previous events</h3>
+        <p className="text-xs text-ink-soft">After the event, these slide one after another with your few words.</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {photos.map((p, i) => <div key={p.id}>{thumb(p, "Event photo")}<PhotoControls id={p.id} caption={p.caption ?? ""} first={i === 0} last={i === photos.length - 1} /></div>)}
+          <Uploader slot={`event:${id}`} label="Add event photos" />
+        </div>
+      </div>
     </div>
   );
 }

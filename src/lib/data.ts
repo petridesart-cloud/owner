@@ -14,6 +14,31 @@ export async function availability(from: Date, to: Date): Promise<Availability[]
   return (data ?? []) as Availability[];
 }
 
+export type EventExtras = { clients_only: boolean; what_to_bring: string | null; event_policy: string | null; recap: string | null };
+
+/** Her per-event options (clients only, what to bring, own terms), keyed by session id. */
+export async function eventExtras(ids: string[]): Promise<Map<string, EventExtras>> {
+  if (!ids.length) return new Map();
+  const { data } = await db().from("class_sessions").select("id, clients_only, what_to_bring, event_policy, recap").in("id", ids);
+  return new Map((data ?? []).map(({ id, ...x }) => [id, x]));
+}
+
+/** Has bought something, been given classes, or come to a class (clients-only events). */
+export async function isStudioClient(profileId: string | undefined) {
+  if (!profileId) return false;
+  const { data } = await db().rpc("is_studio_client", { p_profile: profileId });
+  return data === true;
+}
+
+/** Clients-only events in a list that this viewer can't book (not a client yet, and not already booked). */
+export async function lockedEvents(classes: Availability[], profileId: string | undefined, booked: Set<string>) {
+  const events = classes.filter((c) => c.kind === "event" && !booked.has(c.id)).map((c) => c.id);
+  const extras = await eventExtras(events);
+  const only = events.filter((id) => extras.get(id)?.clients_only);
+  if (!only.length || (await isStudioClient(profileId))) return new Set<string>();
+  return new Set(only);
+}
+
 /** The viewer's live bookings + waitlist entries, keyed by session id. */
 export async function viewerSessionState(profileId: string | undefined) {
   const booked = new Set<string>();

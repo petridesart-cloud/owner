@@ -87,9 +87,6 @@ export default async function SettingsPage() {
             {n("cancellation_cutoff_hours", "Free cancellation until (hours before)", s.cancellation_cutoff_hours)}
             {n("expiry_reminder_days", "Remind before package expires (days)", s.expiry_reminder_days)}
           </div>
-          <Field id="studio_sections" label="Studio page sections" hint="One per line, in order. Add photos to each in Photos.">
-            <textarea id="studio_sections" name="studio_sections" rows={4} defaultValue={s.studio_sections.join("\n")} className={`${inputClass} py-3`} />
-          </Field>
 
           <h3 className="display pt-3 text-[0.85rem]">Message on every page</h3>
           {t("status_banner", "Status banner (optional)", s.status_banner, "e.g. “Studio closed this week, see you Monday!” Leave empty to hide.")}

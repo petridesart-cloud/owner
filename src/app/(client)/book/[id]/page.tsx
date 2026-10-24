@@ -6,7 +6,7 @@ import { BackButton } from "@/components/BackButton";
 import { Badge, ButtonLink, Eyebrow, Notice } from "@/components/ui";
 import { spotsLabel } from "@/components/ClassRow";
 import { getSettings, getViewer } from "@/lib/auth";
-import { availability } from "@/lib/data";
+import { availability, eventExtras, isStudioClient } from "@/lib/data";
 import { db } from "@/lib/supabase/admin";
 import { eur, vatLine } from "@/lib/money";
 import { longDate, nowMs, relativeHours, time } from "@/lib/time";
@@ -28,8 +28,11 @@ export default async function BookPage({ params, searchParams }: { params: Promi
   const [c] = await availability(new Date(start.getTime() - 1000), new Date(start.getTime() + 1000)).then((r) => r.filter((x) => x.id === id));
   if (!c) notFound();
 
-  const [viewer, settings, texts] = await Promise.all([getViewer(), getSettings(), getTexts()]);
+  const [viewer, settings, texts, extrasMap] = await Promise.all([getViewer(), getSettings(), getTexts(), eventExtras([id])]);
   const profile = viewer?.profile;
+  const ev = c.kind === "event" ? extrasMap.get(id) : undefined;
+  const bring = ev ? (ev.what_to_bring ?? "").split("\n").map((l) => l.trim()).filter(Boolean) : texts.what_to_bring;
+  const policy = ev?.event_policy ?? null;
   const [booking, entry] = profile
     ? await Promise.all([
         db().from("bookings").select("id, status").eq("session_id", id).eq("profile_id", profile.id).eq("status", "confirmed").maybeSingle().then((r) => r.data),
@@ -45,6 +48,7 @@ export default async function BookPage({ params, searchParams }: { params: Promi
   }
 
   const past = start <= new Date();
+  const lockedOut = !!ev?.clients_only && !booking && !(await isStudioClient(profile?.id));
   const offered = entry?.status === "offered" && new Date(entry.offer_expires_at!) > new Date();
   const full = c.spots_left === 0 && !offered;
   const usable = profile && c.credit_kind
@@ -112,12 +116,20 @@ export default async function BookPage({ params, searchParams }: { params: Promi
 
         {c.description && <p className="mt-5 text-[0.95rem] leading-relaxed text-ink-soft">{c.description}</p>}
 
-        <section aria-labelledby="bring" className="mt-5 rounded-2xl border border-line bg-paper/70 px-4 py-3.5">
-          <h2 id="bring" className="eyebrow">What to bring</h2>
-          <ul className="mt-2 space-y-1.5 text-sm text-ink">
-            {texts.what_to_bring.map((w) => <li key={w} className="flex items-start gap-1.5"><Flower className="mt-[3px] size-3.5 shrink-0 text-plum-700/70" />{w}</li>)}
-          </ul>
-        </section>
+        {bring.length > 0 && (
+          <section aria-labelledby="bring" className="mt-5 rounded-2xl border border-line bg-paper/70 px-4 py-3.5">
+            <h2 id="bring" className="eyebrow">What to bring</h2>
+            <ul className="mt-2 space-y-1.5 text-sm text-ink">
+              {bring.map((w) => <li key={w} className="flex items-start gap-1.5"><Flower className="mt-[3px] size-3.5 shrink-0 text-plum-700/70" />{w}</li>)}
+            </ul>
+          </section>
+        )}
+        {c.kind === "event" && policy && (
+          <section aria-labelledby="terms" className="mt-3 rounded-2xl border border-line bg-paper/70 px-4 py-3.5">
+            <h2 id="terms" className="eyebrow">Event terms</h2>
+            <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-ink">{policy}</p>
+          </section>
+        )}
 
         <div className="mt-6 border-t border-line pt-5">
           {cancelled && <div className="mb-4"><Notice>Payment cancelled. Your spot was released; you can try again below.</Notice></div>}
@@ -136,9 +148,14 @@ export default async function BookPage({ params, searchParams }: { params: Promi
               <p className="text-sm text-ink-soft">See you on the reformer. Manage or cancel in My classes.</p>
               <ButtonLink href="/bookings" variant="soft" className="w-full">My classes</ButtonLink>
             </div>
+          ) : lockedOut ? (
+            <div className="space-y-3">
+              <Notice>This event is for Re·Form clients. Come to a class or get a package to join the next one.</Notice>
+              {!viewer && <ButtonLink href={`/login?next=${encodeURIComponent(next)}`} variant="soft" className="w-full">Already a client? Sign in</ButtonLink>}
+            </div>
           ) : !viewer ? (
             <div className="space-y-3">
-              <PriceSummary price={c.price_cents} settings={settings} />
+              <PriceSummary price={c.price_cents} settings={settings} event={c.kind === "event"} policy={policy} />
               <ButtonLink href={`/login?next=${encodeURIComponent(next)}`} className="w-full">Secure your spot</ButtonLink>
               <p className="text-center text-xs text-ink-soft">Sign in with your email to book. No password needed.</p>
             </div>
@@ -172,8 +189,9 @@ export default async function BookPage({ params, searchParams }: { params: Promi
                   Once it&apos;s paid you can reserve another, or get a package.
                 </Notice>
               )}
-              {creditCount === 0 && !singles.length && !unpaid && !requestedPack && <PriceSummary price={c.price_cents} settings={settings} />}
-              {creditCount === 0 && singles.length > 0 && <p className="text-sm text-ink-soft">Free cancellation up to {settings.cancellation_cutoff_hours}h before class. <Link href="/policy" className="underline underline-offset-4">Policies</Link></p>}
+              {creditCount === 0 && !singles.length && !unpaid && !requestedPack && <PriceSummary price={c.price_cents} settings={settings} event={c.kind === "event"} policy={policy} />}
+              {creditCount === 0 && singles.length > 0 && c.kind === "event" && <p className="text-sm text-ink-soft">{policy ? "Please read the event terms above." : `Free cancellation up to ${settings.cancellation_cutoff_hours}h before.`}</p>}
+              {creditCount === 0 && singles.length > 0 && c.kind !== "event" && <p className="text-sm text-ink-soft">Free cancellation up to {settings.cancellation_cutoff_hours}h before class. <Link href="/policy" className="underline underline-offset-4">Policies</Link></p>}
               {creditCount > 0 && <p className="text-sm text-ink-soft">Free cancellation up to {settings.cancellation_cutoff_hours}h before class.</p>}
               {(creditCount > 0 || singles.length > 0 || settings.online_payments_enabled || settings.allow_pay_later) && (
                 <BookActions
@@ -193,19 +211,23 @@ export default async function BookPage({ params, searchParams }: { params: Promi
   );
 }
 
-function PriceSummary({ price, settings }: { price: number; settings: { vat_rate: number; vat_registered: boolean; cancellation_cutoff_hours: number; online_payments_enabled: boolean } }) {
+function PriceSummary({ price, settings, event = false, policy = null }: { price: number; settings: { vat_rate: number; vat_registered: boolean; cancellation_cutoff_hours: number; online_payments_enabled: boolean }; event?: boolean; policy?: string | null }) {
   const vat = vatLine(price, Number(settings.vat_rate), settings.vat_registered);
   return (
     <div className="rounded-2xl border border-line bg-paper p-4 text-sm">
       <div className="flex items-baseline justify-between">
-        <span className="text-ink">Single class</span>
+        <span className="text-ink">{event ? "Event fee" : "Single class"}</span>
         <span className="font-serif text-2xl text-ink">{eur(price)}</span>
       </div>
       {vat && <p className="mt-0.5 text-right text-xs text-ink-soft">{vat}</p>}
-      <p className="mt-3 text-sm leading-relaxed text-ink-soft">
-        Free cancellation up to {settings.cancellation_cutoff_hours} hours before class. Later cancellations aren&apos;t refunded.{" "}
-        <Link href="/policy/payments" className="underline underline-offset-4">Cancellation policy</Link>
-      </p>
+      {event && policy ? (
+        <p className="mt-3 text-sm leading-relaxed text-ink-soft">See the event terms above.</p>
+      ) : (
+        <p className="mt-3 text-sm leading-relaxed text-ink-soft">
+          Free cancellation up to {settings.cancellation_cutoff_hours} hours before{event ? "" : " class"}. Later cancellations aren&apos;t refunded.{" "}
+          <Link href="/policy/payments" className="underline underline-offset-4">Cancellation policy</Link>
+        </p>
+      )}
     </div>
   );
 }

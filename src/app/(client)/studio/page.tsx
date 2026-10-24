@@ -14,20 +14,14 @@ export const dynamic = "force-dynamic";
 
 export default async function StudioPage() {
   const [s, t, photos, portrait] = await Promise.all([getSettings(), getTexts(), getMedia("studio:"), getMedia("instructor")]);
-  const sections = s.studio_sections.length ? s.studio_sections : ["Reformers", "Mat"];
   return (
     <div>
       <div className="px-5 pt-3"><BackButton href="/" /></div>
-      <PageTitle title="Studio" script="The">{t.studio_text}</PageTitle>
+      <PageTitle title="Studio" script="The">{t.studio_text || undefined}</PageTitle>
 
-      <div className="space-y-7">
-        {sections.map((name) => (
-          <section key={name} aria-label={name}>
-            <h2 className="display mb-3 px-5 text-[1.05rem] text-ink">{name}</h2>
-            <PhotoStrip photos={photos.filter((p) => p.slot === `studio:${name}`)} label={name} />
-          </section>
-        ))}
-      </div>
+      <section aria-label="Photos of the studio">
+        <PhotoStrip photos={photos} label="The studio" slides />
+      </section>
 
       <Section title="What to bring" className="mt-8">
         <ul className="card space-y-2 px-5 py-5 text-[0.95rem] leading-relaxed text-ink">

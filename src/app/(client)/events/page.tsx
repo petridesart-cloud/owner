@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, MapPin } from "lucide-react";
+import { ArrowRight, Lock, MapPin } from "lucide-react";
 import { BackButton } from "@/components/BackButton";
 import { PhotoStrip } from "@/components/PhotoStrip";
 import { Badge, Card, Eyebrow, PageTitle, Section } from "@/components/ui";
 import { getViewer } from "@/lib/auth";
-import { availability, viewerSessionState } from "@/lib/data";
-import { getMedia } from "@/lib/media";
+import { getTexts } from "@/lib/content";
+import { availability, eventExtras, isStudioClient, viewerSessionState, type Availability } from "@/lib/data";
+import { getMedia, type MediaItem } from "@/lib/media";
 import { db } from "@/lib/supabase/admin";
 import { eur } from "@/lib/money";
 import { longDate, time } from "@/lib/time";
@@ -16,39 +17,43 @@ export const dynamic = "force-dynamic";
 
 export default async function EventsPage() {
   const now = new Date();
-  const [viewer, upcomingAll, photos, { data: past }] = await Promise.all([
+  const [viewer, texts, upcomingAll, photos, covers, { data: past }] = await Promise.all([
     getViewer(),
+    getTexts(),
     availability(now, new Date(now.getTime() + 365 * 86_400_000)),
     getMedia("event:"),
-    db().from("class_sessions").select("id, title, description, starts_at, location, class_types!inner(kind)")
+    getMedia("event-cover:"),
+    db().from("class_sessions").select("id, title, recap, starts_at, location, class_types!inner(kind)")
       .eq("class_types.kind", "event").eq("status", "scheduled").lt("starts_at", now.toISOString())
       .order("starts_at", { ascending: false }).limit(12),
   ]);
   const upcoming = upcomingAll.filter((c) => c.kind === "event" && c.status === "scheduled");
-  const state = await viewerSessionState(viewer?.profile.id);
+  const [state, extras, client] = await Promise.all([
+    viewerSessionState(viewer?.profile.id),
+    eventExtras(upcoming.map((e) => e.id)),
+    isStudioClient(viewer?.profile.id),
+  ]);
+  // The archive shows the events she has added photos or a few words to.
+  const archive = (past ?? []).filter((e) => e.recap || photos.some((p) => p.slot === `event:${e.id}`));
 
   return (
     <div>
       <div className="px-5 pt-3"><BackButton href="/" /></div>
-      <PageTitle title="Events" script="Special">SUP Pilates, brunch and more. Paid individually, open to everyone.</PageTitle>
+      <PageTitle title="Events" script="Special">{texts.events_intro || undefined}</PageTitle>
 
-      <Section title="Coming up">
+      <Section title="Upcoming events">
         {upcoming.length ? (
           <ul className="space-y-3">
             {upcoming.map((e) => {
-              const booked = state.booked.has(e.id);
+              const cover = covers.find((p) => p.slot === `event-cover:${e.id}`);
+              const locked = !!extras.get(e.id)?.clients_only && !client && !state.booked.has(e.id);
               return (
                 <li key={e.id}>
-                  <Link href={`/book/${e.id}`} className="block overflow-hidden rounded-[var(--radius-card)] bg-gradient-to-br from-[#d9ecf3] via-lilac-100 to-mauve-soft p-6 shadow-[var(--shadow-soft)] transition hover:shadow-[var(--shadow-lift)]">
-                    <Eyebrow>{longDate(e.starts_at)} · {time(e.starts_at)}</Eyebrow>
-                    <h3 className="mt-2 font-script text-[2.4rem] leading-none text-ink">{e.title}</h3>
-                    {e.description && <p className="mt-3 text-sm leading-relaxed text-ink">{e.description}</p>}
-                    {e.location && <p className="mt-2 flex items-center gap-1.5 text-sm text-ink-soft"><MapPin aria-hidden size={14} />{e.location}</p>}
-                    <div className="mt-4 flex items-center justify-between gap-3">
-                      {booked ? <Badge tone="booked">You&apos;re booked</Badge> : e.spots_left ? <Badge tone="open">{e.spots_left} spots · {eur(e.price_cents)}</Badge> : <Badge tone="waitlist">Full · Join waitlist</Badge>}
-                      <ArrowRight aria-hidden size={17} className="text-ink" />
-                    </div>
-                  </Link>
+                  {locked ? <LockedEvent e={e} cover={cover} signedIn={!!viewer} /> : (
+                    <Link href={`/book/${e.id}`} className="block rounded-[var(--radius-card)] shadow-[var(--shadow-soft)] transition hover:shadow-[var(--shadow-lift)]">
+                      <EventCard e={e} cover={cover} clientsOnly={!!extras.get(e.id)?.clients_only} booked={state.booked.has(e.id)} />
+                    </Link>
+                  )}
                 </li>
               );
             })}
@@ -58,21 +63,66 @@ export default async function EventsPage() {
         )}
       </Section>
 
-      {(past ?? []).length > 0 && (
+      {archive.length > 0 && (
         <Section title="Previous events" className="mt-10">
-          <ul className="-mx-5 space-y-7">
-            {past!.map((e) => (
+          <ul className="-mx-5 space-y-8">
+            {archive.map((e) => (
               <li key={e.id}>
                 <div className="mb-3 px-5">
                   <p className="font-medium text-ink">{e.title}</p>
-                  <p className="text-sm text-ink-soft">{longDate(e.starts_at)}{e.location ? ` · ${e.location}` : ""}</p>
+                  <p className="flex items-center gap-1.5 text-sm text-ink-soft">{longDate(e.starts_at)}{e.location && <><span aria-hidden>·</span><MapPin aria-hidden size={13} />{e.location}</>}</p>
                 </div>
-                <PhotoStrip photos={photos.filter((p) => p.slot === `event:${e.id}`)} label={e.title ?? "Event"} />
+                {photos.some((p) => p.slot === `event:${e.id}`) && <PhotoStrip photos={photos.filter((p) => p.slot === `event:${e.id}`)} label={e.title ?? "Event"} slides />}
+                {e.recap && <p className="mt-3 px-5 text-[0.95rem] leading-relaxed text-ink-soft">{e.recap}</p>}
               </li>
             ))}
           </ul>
         </Section>
       )}
+    </div>
+  );
+}
+
+/** Her background picture (or the soft gradient), with the details on a frosted panel so the text stays readable. */
+function EventCard({ e, cover, booked, clientsOnly }: { e: Availability; cover?: MediaItem; booked: boolean; clientsOnly: boolean }) {
+  return (
+    <div className="relative overflow-hidden rounded-[var(--radius-card)] bg-gradient-to-br from-[#d9ecf3] via-lilac-100 to-mauve-soft">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      {cover && <img src={cover.url} alt="" loading="lazy" className="absolute inset-0 size-full object-cover" />}
+      <div className={`relative p-6 ${cover ? "pt-36" : ""}`}>
+        <div className={cover ? "-mx-3 -mb-3 rounded-[18px] bg-white/85 p-4 backdrop-blur-md" : ""}>
+          <Eyebrow>{longDate(e.starts_at)} · {time(e.starts_at)}</Eyebrow>
+          <h3 className="mt-2 font-script text-[2.4rem] leading-none text-ink">{e.title}</h3>
+          {e.description && <p className="mt-3 text-sm leading-relaxed text-ink">{e.description}</p>}
+          {e.location && <p className="mt-2 flex items-center gap-1.5 text-sm text-ink-soft"><MapPin aria-hidden size={14} />{e.location}</p>}
+          <div className="mt-4 flex flex-wrap items-center gap-1.5">
+            {booked ? <Badge tone="booked">You&apos;re booked</Badge>
+              : e.spots_left ? <Badge tone="open">{e.spots_left} of {e.capacity} spots left · {eur(e.price_cents)}</Badge>
+              : <Badge tone="waitlist">Full · Join waitlist</Badge>}
+            {clientsOnly && <Badge tone="plain">Clients only</Badge>}
+            <ArrowRight aria-hidden size={17} className="ml-auto text-ink" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Clients-only event seen by someone who isn't a client yet: blurred, nothing to tap. */
+function LockedEvent({ e, cover, signedIn }: { e: Availability; cover?: MediaItem; signedIn: boolean }) {
+  return (
+    <div className="relative overflow-hidden rounded-[var(--radius-card)] shadow-[var(--shadow-soft)]">
+      <div aria-hidden className="pointer-events-none select-none blur-md">
+        <EventCard e={e} cover={cover} booked={false} clientsOnly={false} />
+      </div>
+      <p className="sr-only">Clients-only event, {longDate(e.starts_at)}.</p>
+      <div className="absolute inset-0 grid place-items-center bg-paper/40 p-6 text-center">
+        <div className="rounded-[18px] bg-white/90 px-5 py-4 shadow-[var(--shadow-soft)] backdrop-blur">
+          <p className="flex items-center justify-center gap-1.5 text-sm font-medium text-ink"><Lock aria-hidden size={15} />For Re·Form clients</p>
+          <p className="mt-1 text-xs leading-relaxed text-ink-soft">A special event for our clients. Come to a class or get a package to join the next one.</p>
+          {!signedIn && <Link href={`/login?next=${encodeURIComponent(`/book/${e.id}`)}`} className="mt-2 inline-flex min-h-11 items-center text-sm font-medium text-ink underline underline-offset-4">Already a client? Sign in</Link>}
+        </div>
+      </div>
     </div>
   );
 }

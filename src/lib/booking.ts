@@ -36,7 +36,10 @@ export type SessionInfo = Awaited<ReturnType<typeof sessionInfo>>;
 export const policyLine = (cancelBy: Date, cutoff: number) =>
   `Free cancellation until ${spokenDateTime(cancelBy)} (${cutoff}h before class). Later cancellations and no-shows aren't refunded.`;
 
-const tmpl = (s: SessionInfo) => ({ className: s.name, when: spokenDateTime(s.starts_at), location: s.where, policy: policyLine(s.cancelBy, s.cutoff) });
+const tmpl = (s: SessionInfo) => ({
+  className: s.name, when: spokenDateTime(s.starts_at), location: s.where,
+  policy: s.type.kind === "event" && s.event_policy ? s.event_policy : policyLine(s.cancelBy, s.cutoff), // events carry her own terms
+});
 
 async function profileById(id: string) {
   const { data } = await db().from("profiles").select("*").eq("id", id).single();

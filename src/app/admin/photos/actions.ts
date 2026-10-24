@@ -4,14 +4,16 @@ import { randomUUID } from "node:crypto";
 import { requireAdmin, getSettings } from "@/lib/auth";
 import { db } from "@/lib/supabase/admin";
 import type { ActionResult } from "@/lib/errors";
+import { STUDIO_SLOT } from "@/lib/media";
 
 const TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
 
 async function validSlot(slot: string) {
   if (slot === "logo" || slot === "instructor") return true;
-  if (slot.startsWith("studio:")) return (await getSettings()).studio_sections.includes(slot.slice(7));
-  if (slot.startsWith("event:")) {
-    const id = slot.slice(6);
+  if (slot === STUDIO_SLOT) return true;
+  if (slot.startsWith("studio:")) return (await getSettings()).studio_sections.includes(slot.slice(7)); // older sections
+  if (slot.startsWith("event:") || slot.startsWith("event-cover:")) {
+    const id = slot.slice(slot.indexOf(":") + 1);
     if (!/^[0-9a-f-]{36}$/.test(id)) return false;
     const { data } = await db().from("class_sessions").select("id, class_types!inner(kind)").eq("id", id).eq("class_types.kind", "event").maybeSingle();
     return !!data;
@@ -34,8 +36,8 @@ export async function uploadPhoto(slot: string, form: FormData): Promise<ActionR
   const { error } = await db().storage.from("media").upload(path, Buffer.from(await file.arrayBuffer()), { contentType: file.type, cacheControl: "3600" });
   if (error) return { ok: false, error: "Upload failed. Please try again." };
 
-  if (slot === "logo") {
-    const { data: old } = await db().from("media").select("id, path").eq("slot", "logo");
+  if (slot === "logo" || slot.startsWith("event-cover:")) { // one picture: replace the old one
+    const { data: old } = await db().from("media").select("id, path").eq("slot", slot);
     if (old?.length) {
       await db().storage.from("media").remove(old.map((o) => o.path));
       await db().from("media").delete().in("id", old.map((o) => o.id));

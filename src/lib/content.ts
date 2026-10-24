@@ -2,7 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { db } from "@/lib/supabase/admin";
 import { getSettings } from "@/lib/auth";
-import { MAGIC_TEXT, STUDIO_RULES, STUDIO_TEXT, WHAT_TO_BRING, paymentsPolicy, type SiteTexts } from "@/lib/policy";
+import { EVENTS_INTRO, MAGIC_TEXT, STUDIO_RULES, STUDIO_TEXT, WHAT_TO_BRING, paymentsPolicy, type SiteTexts } from "@/lib/policy";
 
 const lines = (v: string) => v.split("\n").map((l) => l.trim()).filter(Boolean);
 
@@ -15,6 +15,7 @@ export const getTexts = cache(async (): Promise<SiteTexts> => {
     payments_policy: v.has("payments_policy") ? lines(v.get("payments_policy")!) : paymentsPolicy(settings),
     what_to_bring: v.has("what_to_bring") ? lines(v.get("what_to_bring")!) : WHAT_TO_BRING,
     magic_text: v.get("magic_text") ?? MAGIC_TEXT,
-    studio_text: v.get("studio_text") ?? STUDIO_TEXT,
+    studio_text: v.get("studio_text") ?? STUDIO_TEXT, // saved empty = hidden
+    events_intro: v.get("events_intro") ?? EVENTS_INTRO,
   };
 });

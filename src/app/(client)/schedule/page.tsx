@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ClassRow } from "@/components/ClassRow";
 import { stateColors } from "@/components/ui";
 import { getSettings, getViewer } from "@/lib/auth";
-import { availability, viewerSessionState } from "@/lib/data";
+import { availability, lockedEvents, viewerSessionState } from "@/lib/data";
 import { addDaysKey, dayKey, keyToDate, longDate, monthYear, todayKey, weekdayShort } from "@/lib/time";
 import { scheduleTick } from "@/lib/tick";
 
@@ -21,6 +21,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const keys = Array.from({ length: DAYS }, (_, i) => addDaysKey(today, i));
   const classes = await availability(now, new Date(now.getTime() + DAYS * 86_400_000));
   const state = await viewerSessionState(viewer?.profile.id);
+  const locked = await lockedEvents(classes, viewer?.profile.id, state.booked);
 
   const byDay = new Map<string, typeof classes>();
   for (const c of classes) {
@@ -79,7 +80,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
           <ul className="space-y-2.5">
             {list.map((c, i) => (
               <li key={c.id} className="animate-rise" style={{ animationDelay: `${i * 35}ms` }}>
-                <ClassRow c={c} state={state.booked.has(c.id) ? "booked" : state.waitlisted.get(c.id)} />
+                <ClassRow c={c} state={state.booked.has(c.id) ? "booked" : state.waitlisted.get(c.id)} locked={locked.has(c.id)} />
               </li>
             ))}
           </ul>

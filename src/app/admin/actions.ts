@@ -83,6 +83,9 @@ const SessionForm = z.object({
   title: z.string().trim().max(80).optional(),
   location: z.string().trim().max(160).optional(),
   description: z.string().trim().max(1000).optional(),
+  what_to_bring: z.string().trim().max(600).optional(),
+  event_policy: z.string().trim().max(1500).optional(),
+  recap: z.string().trim().max(600).optional(),
 });
 
 function sessionRow(form: FormData) {
@@ -98,6 +101,10 @@ function sessionRow(form: FormData) {
     title: p.data.title || null,
     location: p.data.location || null,
     description: p.data.description || null,
+    clients_only: form.get("clients_only") === "on",
+    what_to_bring: p.data.what_to_bring || null,
+    event_policy: p.data.event_policy || null,
+    recap: p.data.recap || null,
   };
 }
 
@@ -364,7 +371,6 @@ export async function saveSettings(_: ActionResult, form: FormData): Promise<Act
     contact_email: str("contact_email"), contact_phone: str("contact_phone"), instagram_handle: str("instagram_handle").replace(/^@/, ""),
     policy_version: str("policy_version"),
     booking_window_days: Math.round(num("booking_window_weeks") * 7) || 28,
-    studio_sections: str("studio_sections").split("\n").map((x) => x.trim().slice(0, 40)).filter(Boolean).slice(0, 12),
     updated_at: new Date().toISOString(),
   }).eq("id", 1);
   if (error) return { ok: false, error: "Some values are out of range. Please check them." };
@@ -518,12 +524,13 @@ export async function resetDemoData(): Promise<ActionResult> {
 }
 
 // ── Her texts & team ───────────────────────────────────────────────────
-const TEXT_KEYS = ["studio_rules", "payments_policy", "what_to_bring", "magic_text", "studio_text"] as const;
+const TEXT_KEYS = ["studio_rules", "payments_policy", "what_to_bring", "magic_text", "studio_text", "events_intro"] as const;
+const OPTIONAL_TEXTS: readonly string[] = ["studio_text", "events_intro"]; // empty hides them; the others fall back to the defaults
 
 export async function saveTexts(_: ActionResult, form: FormData): Promise<ActionResult> {
   await admin("save_texts");
   const rows = TEXT_KEYS.map((key) => ({ key, value: String(form.get(key) ?? "").trim().slice(0, 6000), updated_at: new Date().toISOString() }))
-    .filter((r) => r.value);
+    .filter((r) => r.value || OPTIONAL_TEXTS.includes(r.key));
   const { error } = await db().from("site_content").upsert(rows);
   if (error) return { ok: false, error: "Couldn't save the texts." };
   const intro = String(form.get("intro_line") ?? "").trim();

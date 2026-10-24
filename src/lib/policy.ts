@@ -32,4 +32,6 @@ export const MAGIC_TEXT = `Re·Form is a small studio on purpose: three reformer
 
 export const STUDIO_TEXT = "A calm, light-filled space with three reformers, so every class gets real attention.";
 
-export type SiteTexts = { studio_rules: string[]; payments_policy: string[]; what_to_bring: string[]; magic_text: string; studio_text: string };
+export type SiteTexts = { studio_rules: string[]; payments_policy: string[]; what_to_bring: string[]; magic_text: string; studio_text: string; events_intro: string };
+
+export const EVENTS_INTRO = "Re·Form events, collaborations and more.";

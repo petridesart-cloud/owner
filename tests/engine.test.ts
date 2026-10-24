@@ -536,3 +536,18 @@ describe("trials by phone", () => {
   });
 });
 
+
+describe("clients-only events", () => {
+  test("new people can't book or join the waitlist online; clients can; the studio can add anyone", async () => {
+    const s = await session(48 * H, 1);
+    await db.from("class_sessions").update({ clients_only: true }).eq("id", s);
+    const stranger = await client("co-new");
+    assert.equal((await book(stranger, s, "trial", "online", "cash")).error?.message, "clients_only");
+    const regular = await client("co-client");
+    await grant(regular, 4, null);
+    assert.ifError((await book(regular, s)).error);
+    // Now full: the waitlist is clients-only too.
+    assert.equal((await db.rpc("join_waitlist", { p_profile: stranger, p_session: s })).error?.message, "clients_only");
+    assert.notEqual((await book(stranger, s, "credit", "manual")).error?.message, "clients_only"); // refused only for lack of credits
+  });
+});

@@ -139,47 +139,59 @@ export type Database = {
           cancelled_reason: string | null;
           capacity: number;
           class_type_id: string;
+          clients_only: boolean;
           created_at: string;
           description: string | null;
           ends_at: string;
+          event_policy: string | null;
           id: string;
           location: string | null;
           price_cents: number | null;
+          recap: string | null;
           starts_at: string;
           status: Database["public"]["Enums"]["session_status"];
           template_id: string | null;
           title: string | null;
+          what_to_bring: string | null;
         };
         ComputedFields: never;
         Insert: {
           cancelled_reason?: string | null;
           capacity: number;
           class_type_id: string;
+          clients_only?: boolean;
           created_at?: string;
           description?: string | null;
           ends_at: string;
+          event_policy?: string | null;
           id?: string;
           location?: string | null;
           price_cents?: number | null;
+          recap?: string | null;
           starts_at: string;
           status?: Database["public"]["Enums"]["session_status"];
           template_id?: string | null;
           title?: string | null;
+          what_to_bring?: string | null;
         };
         Update: {
           cancelled_reason?: string | null;
           capacity?: number;
           class_type_id?: string;
+          clients_only?: boolean;
           created_at?: string;
           description?: string | null;
           ends_at?: string;
+          event_policy?: string | null;
           id?: string;
           location?: string | null;
           price_cents?: number | null;
+          recap?: string | null;
           starts_at?: string;
           status?: Database["public"]["Enums"]["session_status"];
           template_id?: string | null;
           title?: string | null;
+          what_to_bring?: string | null;
         };
         Relationships: [
           {
@@ -1377,6 +1389,7 @@ export type Database = {
       install_catalogue: { Args: Record<PropertyKey, never>; Returns: undefined };
       is_admin: { Args: Record<PropertyKey, never>; Returns: boolean };
       is_closed_on: { Args: { p_at: string }; Returns: boolean };
+      is_studio_client: { Args: { p_profile: string }; Returns: boolean };
       join_waitlist: { Args: { p_profile: string; p_session: string }; Returns: Json };
       leave_waitlist: {
         Args: { p_entry: string; p_profile: string };
