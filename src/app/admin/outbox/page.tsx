@@ -2,9 +2,10 @@ import { Mail, MessageSquare } from "lucide-react";
 import { ActionForm } from "@/components/ActionForm";
 import { Badge } from "@/components/ui";
 import { db } from "@/lib/supabase/admin";
-import { notificationsMode } from "@/lib/notifications";
+import { emailFromOk, notificationsMode } from "@/lib/notifications";
+import { emailLive, env } from "@/lib/env";
 import { dayMonth, time } from "@/lib/time";
-import { runTickNow } from "../actions";
+import { runTickNow, sendTestEmail } from "../actions";
 import { AdminTitle } from "../ui";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +15,18 @@ export default async function OutboxPage() {
   return (
     <div>
       <AdminTitle title="Outbox" sub={notificationsMode() === "outbox" ? "Demo mode: messages are logged here, not sent." : "Live: messages are sent via Resend / Twilio and logged here."} />
+      <section className="card mb-4 space-y-3 px-4 py-4 text-sm" aria-label="Email status">
+        <p className="flex items-center justify-between gap-3">
+          <span className="font-medium text-ink">Email</span>
+          <Badge tone={emailLive() && emailFromOk() ? "open" : env.demoMode ? "plain" : "full"}>
+            {emailLive() ? (emailFromOk() ? "Live" : "Live · check sender") : env.demoMode ? "Demo: logged only" : "Not set up"}
+          </Badge>
+        </p>
+        <p className="text-ink-soft">Sender: <span className="text-ink">{env.emailFrom}</span></p>
+        {!env.demoMode && !emailLive() && <p className="text-burgundy">Clients can&apos;t sign in until email is set up (RESEND_API_KEY and EMAIL_FROM).</p>}
+        {emailLive() && !emailFromOk() && <p className="text-burgundy">The sender address is a placeholder. Use an address on your own verified domain.</p>}
+        <ActionForm action={sendTestEmail} submit="Send me a test email" variant="soft" />
+      </section>
       <div className="mb-5"><ActionForm action={runTickNow} submit="Send due reminders & waitlist offers now" variant="ghost" /></div>
       <ul className="space-y-3">
         {(rows ?? []).map((n) => (

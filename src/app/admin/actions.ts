@@ -426,6 +426,16 @@ export async function toggleCompliance(key: string, done: boolean) {
   revalidatePath("/admin/compliance");
 }
 
+/** Send a test email to the signed-in admin and say what happened. */
+export async function sendTestEmail(): Promise<ActionResult> {
+  const viewer = await admin("test_email");
+  const r = await notify({ profileId: viewer.profile.id, email: viewer.email }, "test_email", {});
+  revalidatePath("/admin/outbox");
+  if (r.email === "sent") return { ok: true, message: `Sent to ${viewer.email}. Check your inbox (and spam, just in case).` };
+  if (r.email === "logged") return { ok: true, message: "Email isn't live here (demo mode or no email key), so it was only logged below." };
+  return { ok: false, error: "Sending failed. The details are in the message below; usually the domain isn't verified in Resend yet." };
+}
+
 export async function runTickNow(): Promise<ActionResult> {
   await admin("run_tick");
   const r = await runTick();

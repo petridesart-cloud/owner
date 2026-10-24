@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
-import { env } from "@/lib/env";
+import { emailLive, env } from "@/lib/env";
 import { notify } from "@/lib/notifications";
 import { ensureProfile } from "@/lib/auth";
 
@@ -30,6 +30,10 @@ export async function requestCode(_: RequestState, form: FormData): Promise<Requ
   const parsed = Email.safeParse(form.get("email"));
   if (!parsed.success) return { ok: false, error: "Please enter a valid email address." };
   const email = parsed.data;
+  if (!env.demoMode && !emailLive()) {
+    console.error("Sign-in requested but email sending isn't configured (RESEND_API_KEY)");
+    return { ok: false, error: "Sign-in by email isn't switched on yet. Please message the studio on Instagram to book." };
+  }
 
   const h = await headers();
   const ip = (h.get("x-forwarded-for") ?? "").split(",")[0].trim() || "local";
@@ -57,7 +61,8 @@ export async function requestCode(_: RequestState, form: FormData): Promise<Requ
   }
 
   const { data: profile } = await db().from("profiles").select("id").ilike("email", email).maybeSingle();
-  await notify({ profileId: profile?.id, email }, "login_code", { code });
+  const sent = await notify({ profileId: profile?.id, email }, "login_code", { code });
+  if (sent.email === "failed") return { ok: false, error: "We couldn't send the email just now. Please try again in a minute." };
 
   // Demo mode shows client codes on screen. Never for admin emails: those need DEMO_ADMIN_CODE.
   if (env.demoMode && (await isStudioAdmin(email))) return { ok: true, email, adminCode: true };

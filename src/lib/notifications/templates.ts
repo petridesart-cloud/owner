@@ -14,6 +14,7 @@ export type TemplateName =
   | "payment_failed"
   | "credits_expiring"
   | "credits_low"
+  | "test_email"
   | "weekly_booked"
   | "weekly_full";
 
@@ -139,6 +140,13 @@ export function render(t: TemplateName, raw: TemplateData): Rendered {
         lines: [`Hi ${first(d.name)}, you have 1 ${d.className ?? ""} class left. Top up whenever you're ready.`],
         cta: { label: "See packages", href: `${link}/packs` },
         sms: `Re·Form: you have 1 class left. Top up: ${link}/packs`,
+      };
+    case "test_email":
+      return {
+        subject: "Re·Form test email",
+        heading: "Email is working",
+        lines: ["This is a test from your booking app. If it landed in your inbox (not spam), clients will get their codes, confirmations and reminders the same way."],
+        sms: "Re·Form test message: SMS is working.",
       };
     case "weekly_booked":
       return {
