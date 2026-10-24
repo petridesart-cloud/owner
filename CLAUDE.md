@@ -174,6 +174,7 @@ npm run db:types              # after schema changes
   - Answers to the open questions in `docs/feedback/elysia-client-notes-1.md` (euro and DOB required are answered; defaults are live for the rest) and `elysia-client-notes-2.md` (who counts as a client, event cancellation cutoff).
   - Her Revolut link, IBAN, original logo file and photos (she can upload them herself now).
   - Address, her full name, contact details.
+- **Hosting plan (owner's decision):** Vercel Hobby during the soft launch; upgrade `reform-studio` to Pro before the link goes in her Instagram bio (`docs/launch/0-checklist.md` step 6).
 - **Proposed v2:**
   - Wallet passes, auto-renewing memberships (code exists, flagged off), corporate accounts, referrals, gift vouchers.
   - Private feedback, demand insights, Greek/Russian, motion system with sheets/gestures.
