@@ -101,7 +101,7 @@ export default async function SettingsPage() {
               </Checkbox>
               <Checkbox id="allow_pay_later" name="allow_pay_later" defaultChecked={s.allow_pay_later}>Allow booking one class before paying (your policy: off)</Checkbox>
               <Checkbox id="online_payments_enabled" name="online_payments_enabled" defaultChecked={s.online_payments_enabled} disabled={!unlocked}>
-                Online card payments (Stripe){process.env.DEMO_MODE === "true" ? ", test mode in this demo" : ""}
+                Online card payments (Stripe){env.demoMode ? ", test mode in this demo" : ""}
               </Checkbox>
               {!unlocked && <p className="-mt-2 pl-8 text-xs text-ink-soft">Locked until the Launch checklist&apos;s “Before online payments” items are ticked.</p>}
               <div className="grid grid-cols-2 gap-3">

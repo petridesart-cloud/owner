@@ -13,8 +13,11 @@ export const env = {
   twilioFrom: process.env.TWILIO_FROM,
   cronSecret: process.env.CRON_SECRET,
   adminEmails: (process.env.ADMIN_EMAILS || "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean),
+  // The real studio app (set APP_ENV=production on that deployment only).
+  isProduction: process.env.APP_ENV === "production",
   // Demo mode: login codes are shown on screen and messages only go to the admin Outbox.
-  demoMode: process.env.DEMO_MODE === "true",
+  // It can never be switched on for the production app, whatever DEMO_MODE says.
+  demoMode: process.env.DEMO_MODE === "true" && process.env.APP_ENV !== "production",
   // In demo mode, admin emails sign in with this secret instead of an on-screen code.
   demoAdminCode: (process.env.DEMO_ADMIN_CODE || "").replace(/\D/g, ""),
 };

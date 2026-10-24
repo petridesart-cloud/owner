@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth";
+import { env } from "@/lib/env";
 import { db } from "@/lib/supabase/admin";
 import { cancelBooking, cancelSession, notifyOffers, onPaymentPaid, runTick, sessionInfo } from "@/lib/booking";
 import { notify } from "@/lib/notifications";
@@ -319,7 +320,7 @@ const PAYMENT_CHECKLIST = ["pay_registered_self_employed", "pay_vat_position_con
 
 /** Online payments can only be switched on once the studio is set up to take them (or in demo mode, test checkout only). */
 export async function paymentsUnlocked() {
-  if (process.env.DEMO_MODE === "true") return true;
+  if (env.demoMode) return true;
   const { data } = await db().from("compliance_items").select("key, done").in("key", PAYMENT_CHECKLIST);
   return PAYMENT_CHECKLIST.every((k) => data?.find((r) => r.key === k)?.done);
 }
@@ -489,7 +490,7 @@ export async function importTimetable(rows: Record<string, unknown>[], name: str
 
 // ── Demo ───────────────────────────────────────────────────────────────
 export async function resetDemoData(): Promise<ActionResult> {
-  if (process.env.DEMO_MODE !== "true") return { ok: false, error: "Reset is only available in demo mode." };
+  if (!env.demoMode) return { ok: false, error: "Reset is only available in demo mode." };
   await admin("reset_demo_data");
   const { error } = await db().rpc("reset_demo_data");
   if (error) return { ok: false, error: "Reset failed. Check the server logs." };

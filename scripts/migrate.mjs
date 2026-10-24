@@ -1,5 +1,5 @@
 // Applies supabase/migrations/*.sql to the deployment's database (in order, once each),
-// then seeds demo data on a fresh database when DEMO_MODE=true.
+// then seeds demo data on a fresh database when DEMO_MODE=true (never when APP_ENV=production).
 // Runs on Vercel before `next build` (see the vercel-build script). Skips when no
 // database URL is configured, so local builds are unaffected.
 import fs from "node:fs";
@@ -28,7 +28,10 @@ try {
       await tx`insert into public._app_migrations (name) values (${f})`;
     });
   }
-  if (process.env.DEMO_MODE === "true") {
+  if (process.env.APP_ENV === "production" && process.env.DEMO_MODE === "true") {
+    console.warn("[migrate] DEMO_MODE is ignored because APP_ENV=production");
+  }
+  if (process.env.DEMO_MODE === "true" && process.env.APP_ENV !== "production") {
     const [{ n }] = await sql`select count(*)::int as n from public.class_types`;
     if (n === 0) {
       console.log("[migrate] fresh database: seeding demo data");
