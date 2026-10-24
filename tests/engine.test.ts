@@ -517,3 +517,22 @@ describe("rate limits", () => {
     assert.equal(await hit(`${key}-other`), false);
   });
 });
+
+describe("trials by phone", () => {
+  test("a second account with the same phone number (any format) can't take another trial", async () => {
+    const D = 86_400_000;
+    const a = await client("phone-a");
+    await db.from("profiles").update({ phone: "+357 99 123 987" }).eq("id", a);
+    assert.ifError((await book(a, await session(3 * D), "trial", "online", "cash")).error);
+    const b = await client("phone-b");
+    await db.from("profiles").update({ phone: "99123987" }).eq("id", b);
+    assert.equal((await book(b, await session(4 * D), "trial")).error?.message, "trial_used");
+    assert.equal((await db.rpc("trial_eligible", { p_profile: b, p_kind: "reformer" })).data, false);
+    // A different number is still eligible; mat trials are separate.
+    const c = await client("phone-c");
+    await db.from("profiles").update({ phone: "+357 96 000 111" }).eq("id", c);
+    assert.equal((await db.rpc("trial_eligible", { p_profile: c, p_kind: "reformer" })).data, true);
+    assert.equal((await db.rpc("trial_eligible", { p_profile: b, p_kind: "mat" })).data, true);
+  });
+});
+

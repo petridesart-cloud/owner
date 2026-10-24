@@ -1376,6 +1376,7 @@ export type Database = {
       my_profile_id: { Args: Record<PropertyKey, never>; Returns: string };
       pause_membership: { Args: { p_membership: string }; Returns: undefined };
       period_end: { Args: { p_days: number; p_start: string }; Returns: string };
+      phone_key: { Args: { p: string }; Returns: string };
       process_waitlist: {
         Args: { p_session: string };
         Returns: {
@@ -1482,6 +1483,10 @@ export type Database = {
           offer_expires_at: string;
           profile_id: string;
         }[];
+      };
+      trial_eligible: {
+        Args: { p_kind: Database["public"]["Enums"]["credit_kind"]; p_profile: string };
+        Returns: boolean;
       };
       usable_credits: {
         Args: { p_class: string; p_kind: Database["public"]["Enums"]["credit_kind"]; p_profile: string };

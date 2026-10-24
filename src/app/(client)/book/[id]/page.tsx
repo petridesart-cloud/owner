@@ -62,13 +62,8 @@ export default async function BookPage({ params, searchParams }: { params: Promi
     : { data: [] };
   let trialOk = false;
   if (profile && c.credit_kind && singleProducts?.some((p) => p.tag === "trial")) {
-    const [{ count: classesOfType }, { count: trials }] = await Promise.all([
-      db().from("bookings").select("id, class_sessions!inner(class_types!inner(credit_kind))", { count: "exact", head: true })
-        .eq("profile_id", profile.id).in("status", ["held", "confirmed", "late_cancelled", "no_show"]).eq("class_sessions.class_types.credit_kind", c.credit_kind),
-      db().from("payments").select("id, products!inner(tag, credit_kind)", { count: "exact", head: true })
-        .eq("profile_id", profile.id).in("status", ["pending", "paid"]).eq("products.tag", "trial").eq("products.credit_kind", c.credit_kind),
-    ]);
-    trialOk = !classesOfType && !trials;
+    // Same check as the booking engine (also matches the phone number, so a new email doesn't give a second trial).
+    trialOk = (await db().rpc("trial_eligible", { p_profile: profile.id, p_kind: c.credit_kind })).data === true;
   }
   // Say up front what would otherwise only fail on tap: one unpaid class at a time; a package already requested.
   const [{ data: unpaid }, { data: requestedPack }] = profile && creditCount === 0

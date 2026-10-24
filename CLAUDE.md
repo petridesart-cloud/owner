@@ -41,7 +41,7 @@ Booking web app for **Re·Form Pilates Studio**, Limassol, Cyprus (Instagram @re
   - Inside 6h, or a no-show: the credit is forfeited. The client can still release the spot to the waitlist.
   - Admin toggle (default off): refund the credit if the spot gets re-booked.
 - **Packages (her real prices):** "N per week × 1 or 2 months" (Reformer €70/130/180/220 and €120/240/300/410; Mat €50/90/120/150 and €85/150/200/260). Classes = per week × 4 × months; "per week" is a guide, not a cap.
-  - **Trial** (Reformer €25, Mat €20): only for someone who has never booked that class type. **Drop-in** (€35 / €30). Both reserve the spot with an unpaid payment and the client's chosen method (cash/Revolut); she marks it paid. One unpaid class at a time.
+  - **Trial** (Reformer €25, Mat €20): only for someone who has never booked that class type, matched by account **and phone number** (`trial_eligible()`, last 8 digits). **Drop-in** (€35 / €30). Both reserve the spot with an unpaid payment and the client's chosen method (cash/Revolut); she marks it paid. One unpaid class at a time.
   - Prepaid, 30 or 60 days of validity counted **from the first class**.
   - "Not started yet" until the first booking. Provisional expiry follows the earliest booked class and is locked once that class has passed.
   - Classes can't be booked beyond the expiry date. Unused classes expire (ledger `expiry`).
@@ -169,4 +169,3 @@ npm run db:types              # after schema changes
 - **Proposed v2:**
   - Wallet passes, auto-renewing memberships (code exists, flagged off), corporate accounts, referrals, gift vouchers.
   - Private feedback, demand insights, Greek/Russian, motion system with sheets/gestures.
-  - Stop repeat trials from new email addresses (phone match), photo captions/reordering.
