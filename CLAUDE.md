@@ -62,7 +62,7 @@ Booking web app for **Re·Form Pilates Studio**, Limassol, Cyprus (Instagram @re
   - Started packages are frozen: their expiry extends by the closed days in their window (overlapping closures counted once), recorded as ledger `freeze_extension`.
   - Cyprus public holidays for the next 12 months are preloaded as suggestions she confirms.
   - "Missed class: public holiday" returns a class with a reason.
-- **Waitlist:** the first in line gets 2h (or until the cutoff) to claim. A live offer reserves the spot.
+- **Waitlist (auto-book, owner's decision):** when a spot opens more than the cutoff (6h) before class, the first in line is booked automatically with a usable package class and emailed (`waitlist_booked`), so they can still cancel free. Otherwise (no usable class, events, inside 6h) they get an offer: 2h, or until the cutoff, or until class time if already inside it. A live offer reserves the spot.
 - **Booking window:** clients book up to 4 weeks ahead (`booking_window_days`, Settings); the studio can add anyone beyond it.
 - **Same days every week:** clients pick weekly slots (`recurring_rules`); `applyRecurring()` books them while the package lasts, inside the window, on save, on Mark as paid, on timetable save and on every tick. Full weeks are skipped with a one-tap waitlist email; classes the client cancelled are never re-booked.
 - **Her photos:** Admin → Settings → Photos uploads to the public Storage bucket `media` (table `media`, slots `logo`, `instructor`, `studio:<section>`, `event:<id>`), resized in the browser to ≤1600px. Studio sections are a setting.
@@ -160,7 +160,7 @@ npm run db:types              # after schema changes
   - Her round-1 client notes (`docs/feedback/elysia-client-notes-1.md`): her logo, real prices, cash/Revolut choice, trials and drop-ins, weekly repeat bookings, 3-state colours, new My classes with package progress, new Account, Studio / Events / Rules pages, Back buttons, Photos manager.
   - Admin: Today (awaiting payment with chosen method, roster flags), classes, timetable, closures, clients (profile, health behind a tap, student verification, holiday return, ledger), Outbox, stats, import, settings (price grid, booking window, studio sections), photos, compliance.
   - PWA manifest and icons, Open Graph previews.
-  - 33 engine tests + 6 Playwright flows green on a production build.
+  - 36 engine tests + 6 Playwright flows green on a production build.
 - **Waiting on the owner (questions in the brief):**
   - Answers to the open questions in `docs/feedback/elysia-client-notes-1.md` (euro and DOB required are answered; defaults are live for the rest).
   - Her Revolut link, IBAN, original logo file and photos (she can upload them herself now).

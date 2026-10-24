@@ -15,6 +15,7 @@ export type TemplateName =
   | "credits_expiring"
   | "credits_low"
   | "test_email"
+  | "waitlist_booked"
   | "weekly_booked"
   | "weekly_full";
 
@@ -140,6 +141,14 @@ export function render(t: TemplateName, raw: TemplateData): Rendered {
         lines: [`Hi ${first(d.name)}, you have 1 ${d.className ?? ""} class left. Top up whenever you're ready.`],
         cta: { label: "See packages", href: `${link}/packs` },
         sms: `Re·Form: you have 1 class left. Top up: ${link}/packs`,
+      };
+    case "waitlist_booked":
+      return {
+        subject: `You're in: ${d.className}, ${d.when}`,
+        heading: "A spot opened up for you",
+        lines: [`Hi ${first(d.name)}, good news: a spot opened in <strong>${d.className}</strong> on ${d.when}, and you were first on the waitlist, so we booked you in.`, d.note ?? ""],
+        cta: { label: "My classes", href: `${link}/bookings` },
+        sms: `Re·Form: a spot opened and you're booked for ${d.className}, ${d.when}. Can't make it? Cancel in the app.`,
       };
     case "test_email":
       return {

@@ -459,3 +459,52 @@ describe("client notes, round 1", () => {
     assert.equal((await db.from("recurring_rules").select("id", { count: "exact", head: true }).eq("profile_id", p)).count, 0);
   });
 });
+
+describe("waitlist", () => {
+  const D = 86_400_000;
+  const H = 3_600_000;
+  const waitFor = async (startsIn: number, waiterCredits: number) => {
+    const sid = await session(startsIn, 1);
+    const a = await client("wl-a"); await grant(a, 1, null);
+    const ra = await book(a, sid);
+    assert.ifError(ra.error);
+    const b = await client("wl-b");
+    if (waiterCredits) await grant(b, waiterCredits, null);
+    assert.ifError((await db.rpc("join_waitlist", { p_profile: b, p_session: sid })).error);
+    // A frees the spot, then the waitlist is processed (the app does both on cancel).
+    await db.rpc("cancel_booking", { p_booking: (ra.data as { booking_id: string }).booking_id, p_profile: a, p_admin: true });
+    const { data: rows, error } = await db.rpc("process_waitlist", { p_session: sid });
+    assert.ifError(error);
+    return { sid, b, rows: (rows ?? []) as { profile_id: string; offer_expires_at: string | null }[] };
+  };
+
+  test("a spot that opens more than 6h ahead auto-books the first in line who has a class", async () => {
+    const { sid, b, rows } = await waitFor(3 * D, 2);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].profile_id, b);
+    assert.equal(rows[0].offer_expires_at, null);
+    const { data: bk } = await db.from("bookings").select("status, paid_with").eq("session_id", sid).eq("profile_id", b).single();
+    assert.deepEqual(bk, { status: "confirmed", paid_with: "credit" });
+    const { data: lots } = await db.from("credit_lots").select("remaining").eq("profile_id", b);
+    assert.equal(lots?.[0].remaining, 1);
+    assert.equal((await db.from("waitlist_entries").select("status").eq("session_id", sid).eq("profile_id", b).single()).data?.status, "claimed");
+  });
+
+  test("without a usable class, the first in line gets a held offer instead", async () => {
+    const { sid, b, rows } = await waitFor(3 * D, 0);
+    assert.equal(rows.length, 1);
+    assert.ok(rows[0].offer_expires_at);
+    assert.equal((await db.from("waitlist_entries").select("status").eq("session_id", sid).eq("profile_id", b).single()).data?.status, "offered");
+    // The offer reserves the spot: someone else can't take it.
+    const c = await client("wl-c"); await grant(c, 1, null);
+    assert.equal((await book(c, sid)).error?.message, "full");
+  });
+
+  test("inside the 6h cutoff nobody is auto-booked; they get an offer until class time", async () => {
+    const { b, rows } = await waitFor(3 * H, 2);
+    assert.equal(rows[0].profile_id, b);
+    assert.ok(rows[0].offer_expires_at);
+    assert.ok(new Date(rows[0].offer_expires_at!).getTime() <= Date.now() + 3 * H + 60_000);
+  });
+});
+

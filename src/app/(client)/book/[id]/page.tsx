@@ -156,12 +156,12 @@ export default async function BookPage({ params, searchParams }: { params: Promi
             </div>
           ) : entry?.status === "waiting" ? (
             <div className="space-y-3">
-              <Notice>You&apos;re <strong>#{position}</strong> on the waitlist. If a spot opens, we&apos;ll email you and hold it for you for {Math.round(settings.waitlist_window_minutes / 60)}h.</Notice>
+              <Notice>You&apos;re <strong>#{position}</strong> on the waitlist. If a spot opens, we&apos;ll book you in with a class from your package (or hold the spot for you for {Math.round(settings.waitlist_window_minutes / 60)}h) and email you.</Notice>
               <BookActions mode="leave" sessionId={id} entryId={entry.id} />
             </div>
           ) : full ? (
             <div className="space-y-3">
-              <p className="text-sm text-ink-soft">This class is full{c.waitlist_count ? ` and ${c.waitlist_count} ${c.waitlist_count === 1 ? "person is" : "people are"} waiting` : ""}. Join the waitlist: if a spot opens, the first person in line gets it.</p>
+              <p className="text-sm text-ink-soft">This class is full{c.waitlist_count ? ` and ${c.waitlist_count} ${c.waitlist_count === 1 ? "person is" : "people are"} waiting` : ""}. Join the waitlist: if a spot opens more than {settings.cancellation_cutoff_hours}h before class and you have a class in your package, we book you in automatically and email you. Otherwise we email you and hold the spot for you.</p>
               <BookActions mode="waitlist" sessionId={id} />
             </div>
           ) : (

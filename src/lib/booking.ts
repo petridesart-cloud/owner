@@ -9,7 +9,7 @@ import { spokenDateTime, time, relativeHours } from "@/lib/time";
 import { eur, vatPortion } from "@/lib/money";
 import { applyRecurring } from "@/lib/recurring";
 
-type OfferRow = { entry_id: string; profile_id: string; offer_expires_at: string };
+type OfferRow = { entry_id: string; profile_id: string; offer_expires_at: string | null };
 
 export async function sessionInfo(sessionId: string) {
   const { data } = await db()
@@ -244,6 +244,16 @@ export async function notifyOffers(rows: OfferRow[]) {
     const { data: w } = await db().from("waitlist_entries").select("session_id").eq("id", r.entry_id).single();
     if (!w) continue;
     const [s, p] = await Promise.all([sessionInfo(w.session_id), profileById(r.profile_id)]);
+    if (!r.offer_expires_at) {
+      // Auto-booked from the waitlist with a class from their package.
+      const cfg = await getSettings();
+      const { data: b } = await db().from("bookings").select("id").eq("session_id", s.id).eq("profile_id", p.id).eq("status", "confirmed").maybeSingle();
+      const freeUntil = new Date(new Date(s.starts_at).getTime() - cfg.cancellation_cutoff_hours * 3_600_000);
+      await notify({ profileId: p.id, email: p.email, phone: p.phone }, "waitlist_booked",
+        { name: p.full_name ?? undefined, ...tmpl(s), note: `1 class from your package was used. Can't make it? Cancel free until ${spokenDateTime(freeUntil)}.` },
+        { sms: true, sessionId: s.id, bookingId: b?.id, dedupeKey: `waitlist-booked:${r.entry_id}` });
+      continue;
+    }
     await notify({ profileId: p.id, email: p.email, phone: p.phone }, "waitlist_offer",
       { name: p.full_name ?? undefined, ...tmpl(s), note: `It's held for you until ${time(r.offer_expires_at)} (${relativeHours(r.offer_expires_at)}). After that it goes to the next person.` },
       { sms: true, sessionId: s.id, dedupeKey: `offer:${r.entry_id}` });
