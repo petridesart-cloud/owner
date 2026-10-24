@@ -19,7 +19,8 @@ async function validSlot(slot: string) {
   return false;
 }
 
-/** Her photos go to the public "media" bucket. Only images, max 5 MB; the logo slot holds one. */
+/** Her photos go to the public "media" bucket. Only images, max 5 MB; the logo slot holds one.
+ * Short CDN cache so a removed photo (e.g. someone withdrew consent) disappears within the hour. */
 export async function uploadPhoto(slot: string, form: FormData): Promise<ActionResult> {
   const viewer = await requireAdmin();
   const file = form.get("file");
@@ -30,7 +31,7 @@ export async function uploadPhoto(slot: string, form: FormData): Promise<ActionR
   if (!(await validSlot(slot))) return { ok: false, error: "Unknown place for this photo." };
 
   const path = `${slot.replace(/[^a-z0-9-]+/gi, "-").toLowerCase()}/${randomUUID()}.${ext}`;
-  const { error } = await db().storage.from("media").upload(path, Buffer.from(await file.arrayBuffer()), { contentType: file.type, cacheControl: "31536000" });
+  const { error } = await db().storage.from("media").upload(path, Buffer.from(await file.arrayBuffer()), { contentType: file.type, cacheControl: "3600" });
   if (error) return { ok: false, error: "Upload failed. Please try again." };
 
   if (slot === "logo") {
