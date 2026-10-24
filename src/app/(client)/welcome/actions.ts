@@ -1,5 +1,6 @@
 "use server";
 import { redirect } from "next/navigation";
+import { safeNext } from "@/lib/safe-next";
 import { z } from "zod";
 import { db } from "@/lib/supabase/admin";
 import { getSettings, requireViewer } from "@/lib/auth";
@@ -45,5 +46,5 @@ export async function completeWelcome(_: WelcomeState, form: FormData): Promise<
   await db().from("consents").insert(rows);
   // Step 2: the health questions on their own page.
   const next = String(form.get("next") ?? "/");
-  redirect(`/health?next=${encodeURIComponent(next.startsWith("/") && !next.startsWith("//") ? next : "/")}`);
+  redirect(`/health?next=${encodeURIComponent(safeNext(next))}`);
 }

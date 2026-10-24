@@ -19,6 +19,12 @@ async function client(tag: string) {
   const { data } = await db.from("profiles").insert({ full_name: `Test ${tag}`, email: `t-${tag}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}@example.com`, onboarded_at: new Date().toISOString() }).select("id").single();
   return data!.id;
 }
+/** A clients-only event (only events can be clients-only). */
+async function clientsOnlyEvent(startsInMs: number, capacity = 3) {
+  const type = (await db.from("class_types").select("id").eq("kind", "event").limit(1).single()).data!.id;
+  const { data } = await db.from("class_sessions").insert({ class_type_id: type, starts_at: iso(startsInMs), ends_at: iso(startsInMs + 90 * 60_000), capacity, title: "Engine event", clients_only: true }).select("id").single();
+  return data!.id;
+}
 async function session(startsInMs: number, capacity = 3) {
   const { data } = await db.from("class_sessions").insert({ class_type_id: reformer, starts_at: iso(startsInMs), ends_at: iso(startsInMs + 50 * 60_000), capacity, title: "Engine test" }).select("id").single();
   return data!.id;
@@ -539,16 +545,22 @@ describe("trials by phone", () => {
 
 describe("clients-only events", () => {
   test("new people can't book or join the waitlist online; clients can; the studio can add anyone", async () => {
-    const s = await session(48 * H, 1);
-    await db.from("class_sessions").update({ clients_only: true }).eq("id", s);
+    const s = await clientsOnlyEvent(48 * H, 1);
     const stranger = await client("co-new");
-    assert.equal((await book(stranger, s, "trial", "online", "cash")).error?.message, "clients_only");
+    assert.equal((await book(stranger, s, "drop_in", "online", "cash")).error?.message, "clients_only");
     const regular = await client("co-client");
     await grant(regular, 4, null);
-    assert.ifError((await book(regular, s)).error);
+    assert.ifError((await book(regular, s, "drop_in", "online", "cash")).error);
     // Now full: the waitlist is clients-only too.
     assert.equal((await db.rpc("join_waitlist", { p_profile: stranger, p_session: s })).error?.message, "clients_only");
-    assert.notEqual((await book(stranger, s, "credit", "manual")).error?.message, "clients_only"); // refused only for lack of credits
+    assert.notEqual((await book(stranger, s, "drop_in", "manual", "cash")).error?.message, "clients_only");
+  });
+
+  test("the flag on a regular class is ignored (only events can be clients-only)", async () => {
+    const s = await session(48 * H);
+    await db.from("class_sessions").update({ clients_only: true }).eq("id", s);
+    const stranger = await client("co-regular");
+    assert.ifError((await book(stranger, s, "trial", "online", "cash")).error);
   });
 });
 
@@ -610,8 +622,7 @@ describe("studio notes, round 1", () => {
 
 describe("clients-only events: who can see them", () => {
   test("an active package counts, a trial or an ended package doesn't; the studio can add someone", async () => {
-    const s = await session(72 * H, 5);
-    await db.from("class_sessions").update({ clients_only: true }).eq("id", s);
+    const s = await clientsOnlyEvent(72 * H, 5);
     const can = async (p: string) => (await db.rpc("can_access_event", { p_profile: p, p_session: s })).data;
     const active = await client("acc-active"); await grant(active, 2, 20 * 24 * H);
     const ended = await client("acc-ended"); const lot = await grant(ended, 1, 20 * 24 * H);
@@ -623,6 +634,28 @@ describe("clients-only events: who can see them", () => {
     assert.equal(await can(trial), false);
     await db.from("event_access").insert({ session_id: s, profile_id: trial });
     assert.equal(await can(trial), true);
-    assert.equal((await book(ended, s, "trial", "online", "cash")).error?.message, "clients_only");
+    assert.equal((await book(ended, s, "drop_in", "online", "cash")).error?.message, "clients_only");
+    const admin = (await db.from("profiles").insert({ full_name: "Test admin", email: `t-admin-${Date.now()}@example.com`, role: "admin" }).select("id").single()).data!.id;
+    assert.equal(await can(admin), true, "the studio sees every event");
+  });
+});
+
+describe("repeating timetable keeps her changes", () => {
+  test("a class she cancelled or moved doesn't come back when the timetable tops itself up", async () => {
+    const t0 = todayKey();
+    const { data: tpl } = await db.from("timetable_templates").insert({ name: "keep changes", valid_from: t0, valid_to: addDaysKey(t0, 4), repeats: true }).select("id").single();
+    await db.from("template_slots").insert([1, 2, 3, 4, 5, 6, 7].map((weekday) => ({ template_id: tpl!.id, weekday, start_time: "04:10", class_type_id: reformer })));
+    await db.rpc("generate_sessions", { p_template: tpl!.id });
+    const at = (k: string) => localToUtc(k, "04:10");
+    const day2 = addDaysKey(t0, 2), day3 = addDaysKey(t0, 3);
+    const s2 = (await db.from("class_sessions").select("id").eq("template_id", tpl!.id).eq("starts_at", at(day2)).single()).data!.id;
+    const s3 = (await db.from("class_sessions").select("id").eq("template_id", tpl!.id).eq("starts_at", at(day3)).single()).data!.id;
+    await db.from("class_sessions").update({ status: "cancelled" }).eq("id", s2);
+    await db.from("class_sessions").update({ starts_at: localToUtc(day3, "04:40"), ends_at: localToUtc(day3, "05:30") }).eq("id", s3);
+    await db.rpc("extend_timetable", {});
+    const live = async (k: string) => (await db.from("class_sessions").select("id", { count: "exact", head: true }).eq("class_type_id", reformer).eq("starts_at", at(k)).eq("status", "scheduled")).count;
+    assert.equal(await live(day2), 0, "cancelled class came back");
+    assert.equal(await live(day3), 0, "moved class came back at the old time");
+    assert.ok(((await db.from("class_sessions").select("id", { count: "exact", head: true }).eq("template_id", tpl!.id).gte("starts_at", at(addDaysKey(t0, 30)))).count ?? 0) > 0, "new weeks were added");
   });
 });

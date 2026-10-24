@@ -217,6 +217,7 @@ const LOT_ERRORS: Record<string, string> = {
   reason_required: "Please add a reason (it's kept in the client's history).",
   bad_days: "Enter a number of days between 1 and 365.",
   bad_date: "Pick a date from today on.",
+  no_end_date: "These classes have no end date, so there is nothing to extend.",
   booked_after: "They're booked into classes after that date with this package. Cancel those first.",
   bad_credits: "Enter between 1 and 50 classes.",
   not_enough_credits: "They don't have that many classes left in this package.",

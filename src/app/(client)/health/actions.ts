@@ -1,6 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { safeNext } from "@/lib/safe-next";
 import { getSettings, requireViewer } from "@/lib/auth";
 import { CONDITIONS, POSTPARTUM } from "@/lib/health";
 import { saveHealthAnswers } from "@/lib/profile";
@@ -40,5 +41,5 @@ export async function saveHealth(_: HealthState, form: FormData): Promise<Health
 
   revalidatePath("/account");
   const next = String(form.get("next") ?? "");
-  redirect(next.startsWith("/") && !next.startsWith("//") ? next : "/account?health=saved");
+  redirect(safeNext(next, "/account?health=saved"));
 }

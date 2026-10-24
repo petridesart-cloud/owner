@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { ActionForm } from "@/components/ActionForm";
 import { Field, inputClass } from "@/components/ui";
 import { db } from "@/lib/supabase/admin";
-import { dayMonth, dotDate, lastDay, longDate, nowMs, time, todayKey } from "@/lib/time";
+import { dayMonth, dotDate, isBirthday, lastDay, longDate, nowMs, time, todayKey } from "@/lib/time";
 import { HealthInfo } from "../../HealthInfo";
 import { PHOTO_CONSENT, type PhotoConsent } from "@/lib/photo-consent";
 import { ageOn } from "@/lib/profile";
@@ -46,7 +46,7 @@ function TwoLine({ label, reformer, mat }: { label: string; reformer: number; ma
   );
 }
 
-const paidLine = (g: Group) => g.key.startsWith("manual-") ? "Settled outside the app" : g.paidCents != null ? `${eur(g.paidCents)}${g.paidAt ? ` paid ${dotDate(g.paidAt)}` : ""}${g.method ? ` · ${METHOD[g.method] ?? g.method}` : ""}` : "Not paid in the app";
+const paidLine = (g: Group) => g.key.startsWith("manual-") ? "Settled outside the app" : g.total != null && g.paidCents == null ? "Added by the studio" : g.paidCents != null ? `${eur(g.paidCents)}${g.paidAt ? ` paid ${dotDate(g.paidAt)}` : ""}${g.method ? ` · ${METHOD[g.method] ?? g.method}` : ""}` : "Not paid in the app";
 const period = (g: Group) => g.total == null ? "" : g.startsAt
   ? `${dotDate(g.startsAt)} – ${g.endsAt ? dotDate(lastDay(g.endsAt)) : "…"}`
   : "Starts with the first class";
@@ -71,7 +71,7 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
   ]);
   const current = groups.filter((g) => g.current);
   const lots = groups.filter((g) => g.total != null && (g.current || (g.endsAt ?? "") > new Date(nowMs() - 60 * 86_400_000).toISOString()));
-  const birthday = !!c.date_of_birth && c.date_of_birth.slice(5) === todayKey().slice(5);
+  const birthday = isBirthday(c.date_of_birth, todayKey());
   const first = c.first_name ?? c.full_name?.split(" ")[0] ?? "";
   const pending = (payments ?? []).filter((p) => p.status === "pending");
   const [latestHealth, ...olderHealth] = history ?? [];

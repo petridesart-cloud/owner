@@ -1,7 +1,7 @@
 import "server-only";
 import { db } from "@/lib/supabase/admin";
 import { ageOn } from "@/lib/profile";
-import { dayKey } from "@/lib/time";
+import { dayKey, isBirthday } from "@/lib/time";
 
 export type RosterSession = Awaited<ReturnType<typeof sessionsWithRoster>>[number];
 
@@ -32,7 +32,7 @@ export async function sessionsWithRoster(from: string, to: string) {
       ...b,
       firstClass: !!b.profiles && first.get(b.profiles.id) === s.starts_at,
       // On the class day (studio time): birthday, and under-18s (parental consent).
-      birthday: !!b.profiles?.date_of_birth && b.profiles.date_of_birth.slice(5) === dayKey(s.starts_at).slice(5),
+      birthday: isBirthday(b.profiles?.date_of_birth, dayKey(s.starts_at)),
       minor: !!b.profiles?.date_of_birth && ageOn(b.profiles.date_of_birth, dayKey(s.starts_at)) < 18,
       tag: b.payment?.products?.tag as "trial" | "drop_in" | undefined,
     })),

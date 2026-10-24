@@ -1473,6 +1473,7 @@ export type Database = {
       expire_unpaid_requests: { Args: Record<PropertyKey, never>; Returns: string[] };
       extend_timetable: { Args: { p_days?: number }; Returns: number };
       generate_sessions: { Args: { p_template: string }; Returns: number };
+      generate_sessions_range: { Args: { p_from: string; p_template: string; p_to: string }; Returns: number };
       grant_lot: {
         Args: {
           p_actor?: string;

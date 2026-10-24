@@ -2,6 +2,7 @@
 import { createHash } from "node:crypto";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { safeNext } from "@/lib/safe-next";
 import { z } from "zod";
 import { db } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
@@ -114,6 +115,3 @@ export async function signOut() {
   await supabase.auth.signOut();
 }
 
-function safeNext(n: string) {
-  return n.startsWith("/") && !n.startsWith("//") ? n : "/";
-}

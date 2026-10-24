@@ -161,7 +161,7 @@ export default async function BookPage({ params, searchParams }: { params: Promi
           ) : booking ? (
             <div className="space-y-3 text-center">
               <Badge tone="booked">You&apos;re booked</Badge>
-              <p className="text-sm text-ink-soft">See you on the reformer. Manage or cancel in My classes.</p>
+              <p className="text-sm text-ink-soft">{c.kind === "event" ? "See you there! You'll find it in My classes." : "See you on the reformer. Manage or cancel in My classes."}</p>
               <ButtonLink href="/bookings" variant="soft" className="w-full">My classes</ButtonLink>
             </div>
           ) : !viewer ? (
@@ -179,12 +179,12 @@ export default async function BookPage({ params, searchParams }: { params: Promi
             </div>
           ) : entry?.status === "waiting" ? (
             <div className="space-y-3">
-              <Notice>You&apos;re <strong>#{position}</strong> on the waitlist. If a spot opens, we&apos;ll book you in with a class from your package (or hold the spot for you for {Math.round(settings.waitlist_window_minutes / 60)}h) and email you.</Notice>
+              <Notice>You&apos;re <strong>#{position}</strong> on the waitlist. {c.kind === "event" ? <> If a spot opens, we&apos;ll hold it for you and email you.</> : <> If a spot opens, we&apos;ll book you in with a class from your package (or hold the spot for you for {Math.round(settings.waitlist_window_minutes / 60)}h) and email you.</>}</Notice>
               <BookActions mode="leave" sessionId={id} entryId={entry.id} />
             </div>
           ) : full ? (
             <div className="space-y-3">
-              <p className="text-sm text-ink-soft">This class is full{c.waitlist_count ? ` and ${c.waitlist_count} ${c.waitlist_count === 1 ? "person is" : "people are"} waiting` : ""}. Join the waitlist: if a spot opens more than {settings.cancellation_cutoff_hours}h before class and you have a class in your package, we book you in automatically and email you. Otherwise we email you and hold the spot for you.</p>
+              <p className="text-sm text-ink-soft">This class is full{c.waitlist_count ? ` and ${c.waitlist_count} ${c.waitlist_count === 1 ? "person is" : "people are"} waiting` : ""}. {c.kind === "event" ? "Join the waitlist: if a spot opens, we email you and hold it for you." : `Join the waitlist: if a spot opens more than ${settings.cancellation_cutoff_hours}h before class and you have a class in your package, we book you in automatically and email you. Otherwise we email you and hold the spot for you.`}</p>
               <BookActions mode="waitlist" sessionId={id} />
             </div>
           ) : (
@@ -201,7 +201,7 @@ export default async function BookPage({ params, searchParams }: { params: Promi
                 </Notice>
               )}
               {creditCount === 0 && !singles.length && !unpaid && !requestedPack && <PriceSummary price={c.price_cents} settings={settings} event={c.kind === "event"} policy={policy} />}
-              {creditCount === 0 && singles.length > 0 && c.kind === "event" && <p className="text-sm text-ink-soft">{policy ? "Please read the event terms above." : `Free cancellation up to ${settings.cancellation_cutoff_hours}h before.`}</p>}
+              {creditCount === 0 && singles.length > 0 && c.kind === "event" && <p className="text-sm text-ink-soft">Please read the event terms above.</p>}
               {creditCount === 0 && singles.length > 0 && c.kind !== "event" && <p className="text-sm text-ink-soft">Free cancellation up to {settings.cancellation_cutoff_hours}h before class. <Link href="/policy" className="underline underline-offset-4">Policies</Link></p>}
               {creditCount > 0 && <p className="text-sm text-ink-soft">Free cancellation up to {settings.cancellation_cutoff_hours}h before class.</p>}
               {(creditCount > 0 || singles.length > 0 || settings.online_payments_enabled || settings.allow_pay_later) && (

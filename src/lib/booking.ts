@@ -347,7 +347,7 @@ export async function runTick(source: "cron" | "page" | "admin" = "page") {
       const template = offset <= 180 ? "reminder_2h" : "reminder_24h";
       await notify({ profileId: p.id, email: p.email, phone: p.phone }, template,
         { name: p.full_name ?? undefined, ...tmpl(s), when: offset <= 180 ? time(s.starts_at) : spokenDateTime(s.starts_at),
-          note: "Remember your grip socks · arrive 5–10 minutes early." },
+          note: s.type.kind === "event" ? undefined : "Remember your grip socks · arrive 5–10 minutes early." },
         { sms: offset <= 180, bookingId: b.id, sessionId: s.id, dedupeKey: `reminder:${offset}:${b.id}` });
       sent++;
     }

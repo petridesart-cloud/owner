@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Cake, ChevronRight, Search } from "lucide-react";
 import { db } from "@/lib/supabase/admin";
-import { todayKey } from "@/lib/time";
+import { isBirthday, todayKey } from "@/lib/time";
 import { AdminTitle } from "../ui";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +17,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
   if (term) query = query.or(`full_name.ilike.%${term}%,email.ilike.%${term}%,phone.ilike.%${term}%`);
   const { data } = await query;
   const now = new Date().toISOString();
-  const today = todayKey().slice(5);
+  const today = todayKey();
 
   // Active: classes left in a package that hasn't expired, or a class coming up (trial, drop-in, event).
   const isActive = (c: NonNullable<typeof data>[number]) =>
@@ -31,7 +31,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
   const list = (rows: Row[], birthdays: boolean) => (
     <ul className="card divide-y divide-line">
       {rows.map((c) => {
-        const birthday = birthdays && c.date_of_birth?.slice(5) === today;
+        const birthday = birthdays && isBirthday(c.date_of_birth, today);
         return (
           <li key={c.id}>
             <Link href={`/admin/clients/${c.id}`} className="flex min-h-14 items-center justify-between gap-3 px-4 py-2.5 hover:bg-lilac-50">

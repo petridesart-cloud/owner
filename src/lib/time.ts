@@ -37,6 +37,14 @@ export function addDaysKey(key: string, n: number) {
 
 export const todayKey = () => dayKey(new Date());
 
+/** Is it their birthday on this studio date? 29 February birthdays fall on 28 February in other years. */
+export function isBirthday(dob: string | null | undefined, key: string) {
+  if (!dob) return false;
+  const md = dob.slice(5), y = Number(key.slice(0, 4));
+  const leap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+  return md === key.slice(5) || (md === "02-29" && !leap && key.slice(5) === "02-28");
+}
+
 /** Accessible label, e.g. "Monday 13 October, 08:00". */
 export const spokenDateTime = (v: string | Date) => `${longDate(v)}, ${time(v)}`;
 

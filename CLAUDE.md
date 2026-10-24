@@ -76,7 +76,7 @@ Booking web app for **Re·Form Pilates Studio**, Limassol, Cyprus (Instagram @re
 - **Keep it simple:** 5 admin tabs (Today, Classes, Clients, Stats, Settings); less-used tools sit inside Classes and Settings. Settings shows the essentials first, with technical options under "Advanced". Every admin page but Today has a Back button (`AdminTitle back=`).
 - **Studio notes, round 1** (`docs/feedback/elysia-studio-notes-1.md`):
   - Classes: swipeable `DayStrip` (shared with the client Schedule), opens on the next day with classes; class page lists "Clients".
-  - Timetable repeats: the newest template (`timetable_templates.repeats`) is topped up ~9 weeks ahead by `extend_timetable()` on every tick; saving a new one calls `replace_timetable_from()` (older templates stop; their empty future classes from that date are deleted, booked ones kept). `generate_sessions` skips confirmed closure days.
+  - Timetable repeats: the newest template (`timetable_templates.repeats`) is topped up ~9 weeks ahead by `extend_timetable()` on every tick; saving a new one calls `replace_timetable_from()` (older templates stop; their empty future classes from that date are deleted, booked ones kept). `generate_sessions` skips confirmed closure days. Top-ups only add the new days (`generate_sessions_range`) and never create a class where one of that type already exists at that time (cancelled included): the `class_sessions_no_dupe` index only covers scheduled classes, so without this her cancelled or moved classes came back.
   - Clients: Active (live package classes or an upcoming booking) / Not active, alphabetical, name + phone, birthday cake + `sendBirthday` (template `birthday`, once a year per client).
   - Client page (`src/lib/client-history.ts`): Packages / Attended / No-shows boxes (no-show = `no_show` + `late_cancelled`), current package card, details & notes, health history (`health_history`, a copy on every save; studio only; erased with the account; in the data export), student, Adjust package (`admin_adjust_lot`: extend / freeze / end / add / remove, all ledger entries; `giveClasses` for classes with their own end date), History grouped by package, Payments and Ledger as drop-downs.
   - Stats: this week, this month (revenue, new clients), Reformer vs Mat, fill rate by day, package classes used/expired, payments by method. "Monthly recurring" removed (memberships are off).
@@ -108,6 +108,7 @@ Booking web app for **Re·Form Pilates Studio**, Limassol, Cyprus (Instagram @re
 | Never edit an applied migration; replace functions in a new one (e.g. `seed_demo` v2 in `20261024000200`) | `scripts/migrate.mjs` runs each file once on the live database; edits to old files never reach it. |
 | Weekly repeat bookings in TypeScript (`src/lib/recurring.ts`) on top of `book_session` | Reuses every engine rule (capacity lock, validity, window) and the notification service; no second booking path. |
 | A trigger cancels the pending payment when an unpaid trial/drop-in booking is released (cancelled in time, studio-cancelled, expired); late cancels and no-shows keep it for her to decide (Remove button) | Otherwise it lingers in "Awaiting payment", blocks the trial, and Mark as paid would re-confirm a cancelled booking. |
+| Redirect targets (`next`) go through `safeNext()` (`src/lib/safe-next.ts`) | `/\\evil.com` passes a plain "starts with / but not //" check and browsers treat it as another site. |
 | Forms submit through `keepValues()` (`src/lib/keep-form.ts`) instead of `<form action>` | React 19 resets `<form action>` forms after every submit, wiping what people typed when there's a validation error. |
 | Demo reset keeps products, photos and settings | Her edited prices survive "Reset demo data". |
 | Navigation: wordmark is not a link, no header account icon, Back buttons go one step back (`BackButton`) | Her notes: the bottom bar already has Account; clients arrive deep-linked from Instagram. |
@@ -149,7 +150,7 @@ cp .env.example .env.local    # fill in the local keys printed by `supabase star
 npm run dev                   # http://localhost:3000
 npm run typecheck && npm run lint
 PW_CHROMIUM=/opt/pw-browsers/chromium npm run test:e2e   # booking, cancel, waitlist, admin access
-npm run test:engine          # 42 booking-engine tests (local Supabase)
+npm run test:engine          # 44 booking-engine tests (local Supabase)
 # Stripe webhooks (signature, credits once, expired): start the app with test-only keys, then
 STRIPE_SECRET_KEY=sk_test_dummy STRIPE_WEBHOOK_SECRET=whsec_test_dummy npx next start -p 3002 &
 npm run test:webhook
@@ -175,7 +176,7 @@ npm run db:types              # after schema changes
   - Her round-1 client notes (`docs/feedback/elysia-client-notes-1.md`): her logo, real prices, cash/Revolut choice, trials and drop-ins, weekly repeat bookings, 3-state colours, new My classes with package progress, new Account, Studio / Events / Rules pages, Back buttons, Photos manager.
   - Admin: Today (awaiting payment with chosen method, roster flags), classes, timetable, closures, clients (profile, health behind a tap, student verification, holiday return, ledger), Outbox, stats, import, settings (price grid, booking window, studio sections), photos, compliance.
   - PWA manifest and icons, Open Graph previews.
-  - 42 engine tests + 3 webhook tests + 6 Playwright flows green on a production build.
+  - 44 engine tests + 3 webhook tests + 6 Playwright flows green on a production build.
   - Her studio notes, round 1: back buttons, Classes day strip, repeating timetable, Active/Not active clients with birthdays, new client page with package adjustments and health history, new Stats.
   - Polish: "To pay" on unpaid classes, trials matched by phone, photo captions/reordering.
 - **Waiting on the owner (questions in the brief):**
