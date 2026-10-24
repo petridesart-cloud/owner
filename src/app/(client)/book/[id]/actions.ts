@@ -8,6 +8,7 @@ async function onboardedProfile() {
   const viewer = await getViewer();
   if (!viewer) return { error: "Please sign in first." } as const;
   if (!viewer.profile.onboarded_at) return { error: "Please complete your details first." } as const;
+  if (!viewer.profile.date_of_birth) return { error: "Please add your date of birth in Account first." } as const;
   return { profile: viewer.profile } as const;
 }
 

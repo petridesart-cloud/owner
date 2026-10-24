@@ -14,7 +14,7 @@ export function BottomNav() {
   const path = usePathname();
   const activeIndex = tabs.findIndex(({ href }) => (href === "/" ? path === "/" : path.startsWith(href)));
   return (
-    <nav aria-label="Main" className="glass pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-line/80">
+    <nav aria-label="Main" className="glass pb-safe print:hidden fixed inset-x-0 bottom-0 z-40 border-t border-line/80">
       <ul className="relative mx-auto grid max-w-xl grid-cols-4">
         {/* Indicator glides between tabs */}
         {activeIndex >= 0 && (

@@ -1,6 +1,6 @@
 "use client";
 import { useState, useTransition } from "react";
-import { markPaid, renewMembership, setMembershipState } from "./actions";
+import { cancelPaymentRequest, markPaid, renewMembership, setMembershipState } from "./actions";
 
 const btn = "min-h-10 rounded-full border px-3 text-xs font-medium transition active:scale-[0.97] disabled:opacity-50";
 
@@ -20,6 +20,20 @@ export function MarkPaid({ paymentId, label, prefer }: { paymentId: string; labe
         <button key={m} disabled={pending} onClick={() => go(m)} className={`${btn} ${i === 0 ? "border-ink bg-ink text-paper" : "border-line bg-white text-ink"}`}>{text}</button>
       ))}
     </span>
+  );
+}
+
+/** Remove an unpaid request (not coming / not charging). */
+export function RemoveRequest({ paymentId, label }: { paymentId: string; label: string }) {
+  const [pending, start] = useTransition();
+  const [msg, setMsg] = useState<string | null>(null);
+  if (msg) return <span role="status" className="text-xs font-medium text-ink-soft">{msg}</span>;
+  return (
+    <button disabled={pending} aria-label={`Remove request: ${label}`}
+      onClick={() => confirm(`Remove this unpaid request?\n${label}`) && start(async () => { const r = await cancelPaymentRequest(paymentId); setMsg(r.ok ? "Removed" : r.error); })}
+      className="min-h-10 rounded-full px-2 text-xs font-medium text-burgundy underline-offset-4 hover:underline disabled:opacity-50">
+      Remove
+    </button>
   );
 }
 

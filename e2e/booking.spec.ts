@@ -18,7 +18,7 @@ test("returning client books with a package class, adds to calendar, cancels and
   const cancel = page.getByRole("button", { name: /^Cancel .*Pilates/ }).last();
   await cancel.click();
   await page.getByRole("button", { name: "Yes, cancel" }).click();
-  await expect(page.getByRole("button", { name: "Yes, cancel" })).toHaveCount(0);
+  await expect(page.getByRole("group", { name: "Confirm cancellation" })).toHaveCount(0, { timeout: 15_000 });
   await page.goto("/bookings");
   await expect(left).toHaveText(String(before));
 });

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Logo } from "@/components/Logo";
 import { BackButton } from "@/components/BackButton";
+import { PrintButton } from "@/components/PrintButton";
 import { logoSrc } from "@/lib/media";
 import { receiptLabel } from "@/lib/receipts";
 import { getSettings, requireViewer } from "@/lib/auth";
@@ -28,7 +29,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
     : pay.description ?? receiptLabel(pay);
   return (
     <div className="px-5 pt-3">
-      <div className="print:hidden"><BackButton href="/account" /></div>
+      <div className="flex items-center justify-between print:hidden"><BackButton href="/account" /><PrintButton /></div>
       <article className="card mx-auto mt-2 max-w-md px-6 py-7 print:shadow-none">
         <div className="flex items-center justify-between">
           <Logo size={56} src={logo} decorative />

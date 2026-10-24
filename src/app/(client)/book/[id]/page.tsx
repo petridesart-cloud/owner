@@ -70,7 +70,18 @@ export default async function BookPage({ params, searchParams }: { params: Promi
     ]);
     trialOk = !classesOfType && !trials;
   }
-  const singles = c.kind === "event"
+  // Say up front what would otherwise only fail on tap: one unpaid class at a time; a package already requested.
+  const [{ data: unpaid }, { data: requestedPack }] = profile && creditCount === 0
+    ? await Promise.all([
+        db().from("bookings").select("id, class_sessions!inner(starts_at, title, class_types(name))").eq("profile_id", profile.id)
+          .eq("status", "confirmed").eq("paid_with", "pay_at_studio").gt("class_sessions.starts_at", new Date().toISOString()).limit(1).maybeSingle(),
+        c.credit_kind
+          ? db().from("payments").select("id, products!inner(credit_kind)").eq("profile_id", profile.id).eq("status", "pending")
+              .is("booking_id", null).eq("products.credit_kind", c.credit_kind).limit(1).maybeSingle()
+          : Promise.resolve({ data: null }),
+      ])
+    : [{ data: null }, { data: null }];
+  const singles = unpaid ? [] : c.kind === "event"
     ? [{ mode: "drop_in" as const, label: "Reserve your spot", price: eur(c.price_cents) }]
     : (singleProducts ?? []).filter((p) => p.tag === "drop_in" || trialOk)
         .map((p) => ({ mode: p.tag as "trial" | "drop_in", label: p.tag === "trial" ? "Book your trial" : "Drop-in", price: eur(p.price_cents) }));
@@ -138,6 +149,11 @@ export default async function BookPage({ params, searchParams }: { params: Promi
             </div>
           ) : !profile?.onboarded_at ? (
             <ButtonLink href={`/welcome?next=${encodeURIComponent(next)}`} className="w-full">Add your details to book</ButtonLink>
+          ) : !profile.date_of_birth ? (
+            <div className="space-y-3">
+              <Notice>One more detail: please add your date of birth before booking.</Notice>
+              <ButtonLink href="/account?dob=1" className="w-full">Add date of birth</ButtonLink>
+            </div>
           ) : entry?.status === "waiting" ? (
             <div className="space-y-3">
               <Notice>You&apos;re <strong>#{position}</strong> on the waitlist. If a spot opens, we&apos;ll email you and hold it for you for {Math.round(settings.waitlist_window_minutes / 60)}h.</Notice>
@@ -154,15 +170,24 @@ export default async function BookPage({ params, searchParams }: { params: Promi
               {blockedByExpiry && (
                 <Notice>Your package is valid until {longDate(new Date(new Date(usable!.latest_expiry!).getTime() - 1))}, so this class is after it. A new package will cover it.</Notice>
               )}
-              {creditCount === 0 && !singles.length && <PriceSummary price={c.price_cents} settings={settings} />}
+              {requestedPack && <Notice>Your package request is awaiting payment. As soon as it&apos;s confirmed you can book this class with it.</Notice>}
+              {unpaid && (
+                <Notice>
+                  You have a class waiting for payment ({unpaid.class_sessions.title ?? unpaid.class_sessions.class_types?.name}, {longDate(unpaid.class_sessions.starts_at)}).
+                  Once it&apos;s paid you can reserve another, or get a package.
+                </Notice>
+              )}
+              {creditCount === 0 && !singles.length && !unpaid && !requestedPack && <PriceSummary price={c.price_cents} settings={settings} />}
               {creditCount === 0 && singles.length > 0 && <p className="text-sm text-ink-soft">Free cancellation up to {settings.cancellation_cutoff_hours}h before class. <Link href="/policy" className="underline underline-offset-4">Policies</Link></p>}
               {creditCount > 0 && <p className="text-sm text-ink-soft">Free cancellation up to {settings.cancellation_cutoff_hours}h before class.</p>}
-              <BookActions
-                mode="book" sessionId={id} priceLabel={eur(c.price_cents)} credits={creditCount}
-                creditKind={c.credit_kind} creditCost={ctype?.credit_cost ?? 1} offered={offered}
-                online={settings.online_payments_enabled} payLater={settings.allow_pay_later} singles={singles}
-              />
-              {c.credit_kind && creditCount === 0 && (
+              {(creditCount > 0 || singles.length > 0 || settings.online_payments_enabled || settings.allow_pay_later) && (
+                <BookActions
+                  mode="book" sessionId={id} priceLabel={eur(c.price_cents)} credits={creditCount}
+                  creditKind={c.credit_kind} creditCost={ctype?.credit_cost ?? 1} offered={offered}
+                  online={settings.online_payments_enabled} payLater={settings.allow_pay_later} singles={singles}
+                />
+              )}
+              {c.credit_kind && creditCount === 0 && !requestedPack && (
                 <ButtonLink href={c.credit_kind === "mat" ? "/packs?type=mat" : "/packs"} variant={singles.length ? "soft" : "primary"} className="w-full">Secure your package</ButtonLink>
               )}
             </div>

@@ -421,4 +421,41 @@ describe("client notes, round 1", () => {
     assert.ifError((await book(p, await session(2 * D))).error);
     assert.equal((await book(p, await session(3 * D), "trial")).error?.message, "trial_used");
   });
+
+  test("cancelling an unpaid trial in time cancels its payment, so the trial is free again; a late cancel keeps it", async () => {
+    const p = await client("trialcancel");
+    const r = await book(p, await session(3 * D), "trial", "online", "cash");
+    const bid = (r.data as { booking_id: string }).booking_id;
+    assert.ifError((await db.rpc("cancel_booking", { p_booking: bid, p_profile: p })).error);
+    const { data: pay } = await db.from("payments").select("id, status").eq("booking_id", bid).single();
+    assert.equal(pay?.status, "cancelled");
+    // Marking that request paid can't silently re-book the cancelled class.
+    assert.equal((await db.rpc("confirm_payment", { p_payment: pay!.id, p_provider_ref: undefined as unknown as string, p_method: "cash" })).error?.message, "payment_cancelled");
+    assert.ifError((await book(p, await session(4 * D), "trial", "online", "cash")).error);
+
+    const q = await client("latecancel");
+    const late = await book(q, await session(2 * 3_600_000), "drop_in", "online", "cash");
+    const lid = (late.data as { booking_id: string }).booking_id;
+    await db.rpc("cancel_booking", { p_booking: lid, p_profile: q });
+    assert.equal((await db.from("payments").select("status").eq("booking_id", lid).single()).data?.status, "pending");
+  });
+
+  test("a studio-cancelled class cancels its unpaid drop-in payment", async () => {
+    const p = await client("studiocancel");
+    const sid = await session(5 * D);
+    const r = await book(p, sid, "drop_in", "online", "revolut");
+    const bid = (r.data as { booking_id: string }).booking_id;
+    assert.ifError((await db.rpc("cancel_session", { p_session: sid, p_reason: "test" })).error);
+    assert.equal((await db.from("payments").select("status").eq("booking_id", bid).single()).data?.status, "cancelled");
+  });
+
+  test("erasing a profile clears the round-1 personal fields and weekly rules", async () => {
+    const p = await client("erase");
+    await db.from("profiles").update({ first_name: "A", last_name: "B", date_of_birth: "1990-01-01", goal: "x", emergency_contact_name: "C", emergency_contact_phone: "+357 99 000000", photo_consent: "face" }).eq("id", p);
+    await db.from("recurring_rules").insert({ profile_id: p, class_type_id: reformer, weekday: 1, start_time: "18:00" });
+    assert.ifError((await db.rpc("erase_profile", { p_profile: p })).error);
+    const { data: row } = await db.from("profiles").select("first_name, last_name, date_of_birth, goal, emergency_contact_name, emergency_contact_phone, photo_consent").eq("id", p).single();
+    assert.deepEqual(Object.values(row!).filter((v) => v !== null), []);
+    assert.equal((await db.from("recurring_rules").select("id", { count: "exact", head: true }).eq("profile_id", p)).count, 0);
+  });
 });

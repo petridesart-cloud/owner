@@ -18,7 +18,7 @@ const CONSENT_LABEL: Record<string, string> = {
   health_data: "Health data", marketing_email: "News by email", marketing_sms: "News by SMS", photos: "Photos for social media",
 };
 
-export default async function AccountPage({ searchParams }: { searchParams: Promise<{ delete?: string }> }) {
+export default async function AccountPage({ searchParams }: { searchParams: Promise<{ delete?: string; dob?: string }> }) {
   const { delete: del } = await searchParams;
   const viewer = await requireViewer("/account");
   const p = viewer.profile;
@@ -35,6 +35,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
       <PageTitle eyebrow={viewer.email} title="Account" />
       <div className="space-y-8">
         <Section title="Your details">
+          {!p.date_of_birth && <div className="mb-3"><Notice>Please add your date of birth to keep booking classes.</Notice></div>}
           <Card className="px-5 py-5">
             <ProfileForm p={{
               first: p.first_name ?? p.full_name?.split(" ")[0] ?? "", last: p.last_name ?? "", phone: p.phone ?? "", email: viewer.email,

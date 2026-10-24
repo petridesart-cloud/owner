@@ -10,6 +10,7 @@ export async function buyPackAction(productId: string, acceptedTerms: boolean, m
   const viewer = await getViewer();
   if (!viewer) return { ok: true, data: { redirect: "/login?next=/packs" } };
   if (!viewer.profile.onboarded_at) return { ok: true, data: { redirect: "/welcome?next=/packs" } };
+  if (!viewer.profile.date_of_birth) return { ok: true, data: { redirect: "/account?dob=1" } };
   if (!acceptedTerms) return { ok: false, error: "Please accept the package terms first." };
   if (!METHODS.includes(method)) return { ok: false, error: "Please choose how you'll pay." };
   return buyProduct(viewer.profile, productId, method);

@@ -4,8 +4,9 @@ import type { PackageView } from "@/lib/packages";
 import { dotDate, lastDay } from "@/lib/time";
 
 export function packageDates(p: Pick<PackageView, "startedAt" | "expiresAt">) {
-  if (!p.startedAt || !p.expiresAt) return "Starts with your first class";
-  return `${dotDate(p.startedAt)} – ${dotDate(lastDay(p.expiresAt))}`;
+  if (p.startedAt && p.expiresAt) return `${dotDate(p.startedAt)} – ${dotDate(lastDay(p.expiresAt))}`;
+  if (p.expiresAt) return `Valid until ${dotDate(lastDay(p.expiresAt))}`; // fixed end date (set by the studio)
+  return "Starts with your first class";
 }
 
 /** "Reformer Package / 2 per week · 1 month / 13.10.2026 – 11.11.2026 / 3 classes left" */

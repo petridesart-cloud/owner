@@ -5,7 +5,7 @@ import { db } from "@/lib/supabase/admin";
 import { addDaysKey, localToUtc, longDate, time, todayKey } from "@/lib/time";
 import { scheduleTick } from "@/lib/tick";
 import { CheckInToggle } from "./RosterControls";
-import { MarkPaid, RenewButtons } from "./PaymentButtons";
+import { MarkPaid, RemoveRequest, RenewButtons } from "./PaymentButtons";
 import { ActionForm } from "@/components/ActionForm";
 import { Field, inputClass } from "@/components/ui";
 import { cancelToday } from "./actions";
@@ -70,7 +70,10 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
                   <p className="truncate text-xs text-ink-soft">{p.description} · {eur(p.amount_cents)}</p>
                   {p.intended_method && <p className="text-xs font-medium text-plum-700">Will pay: {METHOD[p.intended_method] ?? p.intended_method}</p>}
                 </div>
-                <MarkPaid paymentId={p.id} prefer={p.intended_method} label={`${p.profiles?.full_name}: ${p.description}`} />
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <MarkPaid paymentId={p.id} prefer={p.intended_method} label={`${p.profiles?.full_name}: ${p.description}`} />
+                  <RemoveRequest paymentId={p.id} label={`${p.profiles?.full_name}: ${p.description}`} />
+                </div>
               </li>
             ))}
           </ul>
@@ -116,7 +119,9 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
                   <div className="min-w-0 flex-1">
                     <Link href={`/admin/clients/${b.profiles?.id}`} className="block truncate font-medium text-ink hover:underline">{b.profiles?.full_name ?? "Client"}</Link>
                     <p className="text-xs text-ink-soft">
+                      {b.birthday && <span className={`${flag} bg-mauve text-ink`}>Birthday 🎂</span>}
                       {b.firstClass && <span className={`${flag} bg-lilac-300 text-ink`}>First class</span>}
+                      {b.minor && <span className={`${flag} bg-burgundy-soft text-burgundy`}>Under 18</span>}
                       {b.tag === "trial" && <span className={`${flag} bg-mauve text-ink`}>Trial</span>}
                       {b.tag === "drop_in" && <span className={`${flag} bg-lilac-100 text-ink`}>Drop-in</span>}
                       {b.profiles?.photo_consent === "none" && <span className={`${flag} bg-ink text-paper`}>No photos</span>}

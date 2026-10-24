@@ -1,4 +1,5 @@
 "use client";
+import { keepValues } from "@/lib/keep-form";
 import { useActionState, useState } from "react";
 import { Plus, X } from "lucide-react";
 import { Button, Field, Notice, inputClass } from "@/components/ui";
@@ -24,7 +25,7 @@ export function Builder({ types, initial, defaults }: {
   };
 
   return (
-    <form action={action} className="space-y-4">
+    <form onSubmit={keepValues(action)} className="space-y-4">
       <input type="hidden" name="slots" value={JSON.stringify(slots)} />
       <div className="card grid grid-cols-2 gap-3 px-4 py-4">
         <div className="col-span-2"><Field id="name" label="Name"><input id="name" name="name" defaultValue={defaults.name} className={inputClass} /></Field></div>

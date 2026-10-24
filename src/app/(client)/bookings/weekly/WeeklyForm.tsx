@@ -2,13 +2,14 @@
 import { useActionState } from "react";
 import { Button, Notice } from "@/components/ui";
 import { saveWeekly, type WeeklyState } from "./actions";
+import { keepValues } from "@/lib/keep-form";
 
 type Slot = { key: string; day: string; time: string; name: string; disabled: boolean };
 
 export function WeeklyForm({ groups, chosen }: { groups: { day: string; slots: Slot[] }[]; chosen: string[] }) {
   const [state, action, pending] = useActionState<WeeklyState, FormData>(saveWeekly, { ok: false });
   return (
-    <form action={action} className="space-y-5">
+    <form onSubmit={keepValues(action)} className="space-y-5">
       {groups.map((g) => (
         <fieldset key={g.day}>
           <legend className="eyebrow mb-2">{g.day}</legend>

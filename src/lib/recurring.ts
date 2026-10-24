@@ -61,7 +61,7 @@ export async function applyRecurring(profileId?: string) {
   const cfg = await getSettings();
   const until = new Date(Date.now() + cfg.booking_window_days * 86_400_000).toISOString();
   const typeIds = [...new Set(rules.map((r) => r.class_type_id))];
-  const { data: sessions } = await db().from("class_sessions").select("id, starts_at, class_type_id, title, class_types(name)")
+  const { data: sessions } = await db().from("class_sessions").select("id, starts_at, class_type_id, title, class_types(name, credit_kind)")
     .in("class_type_id", typeIds).eq("status", "scheduled")
     .gt("starts_at", new Date(Date.now() + 60 * 60_000).toISOString()).lt("starts_at", until).order("starts_at");
 
@@ -81,8 +81,10 @@ export async function applyRecurring(profileId?: string) {
     ]);
     const skip = new Set([...(had ?? []), ...(waiting ?? [])].map((r) => r.session_id));
     const booked: string[] = [];
+    const usedUp = new Set<string>(); // credit kinds with no usable class left (reformer and mat run separately)
     for (const s of matches) {
-      if (skip.has(s.id)) continue;
+      const kind = s.class_types?.credit_kind ?? "";
+      if (skip.has(s.id) || usedUp.has(kind)) continue;
       const { error } = await db().rpc("book_session", { p_profile: pid, p_session: s.id, p_mode: "credit" });
       const name = s.title ?? s.class_types?.name ?? "Class";
       if (!error) { booked.push(`${spokenDateTime(s.starts_at).split(",")[0].split(" ").slice(0, 3).join(" ")} ${time(s.starts_at)}`); continue; }
@@ -92,7 +94,7 @@ export async function applyRecurring(profileId?: string) {
           { dedupeKey: `weekly-full:${pid}:${s.id}`, sessionId: s.id });
         continue;
       }
-      if (error.message === "no_credits" || error.message === "beyond_expiry") break; // package used up or ends before this class
+      if (error.message === "no_credits") usedUp.add(kind);   // package used up; beyond_expiry just skips this class
     }
     if (booked.length) {
       total += booked.length;

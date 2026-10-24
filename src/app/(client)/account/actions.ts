@@ -30,7 +30,7 @@ export async function saveProfile(_: SaveState, form: FormData): Promise<SaveSta
   const photoConsent = photos in PHOTO_CONSENT ? (photos as PhotoConsent) : p.photo_consent;
   await db().from("profiles").update({
     first_name: d.first_name, last_name: d.last_name, full_name: fullName(d.first_name, d.last_name), phone: d.phone,
-    date_of_birth: d.date_of_birth ?? null, goal: d.goal || null,
+    date_of_birth: d.date_of_birth, goal: d.goal || null,
     emergency_contact_name: d.emergency_contact_name || null, emergency_contact_phone: d.emergency_contact_phone || null,
     photo_consent: photoConsent, marketing_email: me,
   }).eq("id", p.id);

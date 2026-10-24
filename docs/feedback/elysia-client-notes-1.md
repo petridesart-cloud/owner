@@ -111,12 +111,13 @@ Built on 24 Oct 2026 with the defaults below (live on the demo). Not done yet: b
 
 ## Questions for Elysia (our defaults until she answers)
 
-1. **Prices in euro?** She wrote $. *Default: €.*
+1. **Prices in euro?** She wrote $. **Answered: euro.**
 2. **"2 per week"**: a strict limit of 2 classes each week, or 8 classes to use within the month however they like? *Default: 8 classes within the month; "2 per week" is the guide.*
 3. **Trial**: once per person per class type (one reformer trial, one mat trial)? *Default: yes, only if they've never booked that type.*
 4. **Drop-in and trial payment**: the client reserves the spot and pays by cash at the studio or Revolut before class, and you mark it paid. OK? *Default: yes; unpaid ones show on your roster.*
 5. **"The Magic" (about you)** isn't in the new circles. Keep it as a section at the bottom of the Studio page? *Default: yes.*
 6. **Toilet and Bathroom**: separate photo sections, or one? *Default: as she wrote; she can rename or add sections herself.*
 7. **Weekly repeat bookings**: if a class is full that week, should the client join the waitlist automatically? *Default: skip it and offer one-tap waitlist.*
-8. **Date of birth**: required or optional? *Default: optional (less personal data to hold).*
+8. **Date of birth**: required or optional? **Answered: required.** Clients who signed up before are asked for it before their next booking.
 9. **Logo**: please send the original logo file (PNG or PDF, as large as possible).
+10. **Under 18s** (new): do you take clients under 18? If yes, should a parent confirm at sign-up? *Default: allowed from 12; her class list shows an "Under 18" flag.*

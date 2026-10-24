@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button, Checkbox, Field, Notice, inputClass } from "@/components/ui";
 import { completeWelcome, type WelcomeState } from "./actions";
 import { HealthFields, PhotoConsentField } from "@/components/ProfileFields";
+import { keepValues } from "@/lib/keep-form";
 
 export function WelcomeForm({ email, first, last, phone, next }: { email: string; first: string; last: string; phone: string; next: string }) {
   const router = useRouter();
@@ -14,7 +15,7 @@ export function WelcomeForm({ email, first, last, phone, next }: { email: string
   const err = (k: string) => ({ "aria-invalid": !!e[k], "aria-describedby": e[k] ? `${k}-error` : undefined });
 
   return (
-    <form action={action} className="space-y-5" noValidate>
+    <form onSubmit={keepValues(action)} className="space-y-5" noValidate>
       <input type="hidden" name="next" value={next} />
       {Object.keys(e).length > 0 && <Notice tone="error">Please check the highlighted fields below.</Notice>}
       <div className="grid grid-cols-2 gap-3">
@@ -31,8 +32,8 @@ export function WelcomeForm({ email, first, last, phone, next }: { email: string
       <Field id="email" label="Email">
         <input id="email" value={email} readOnly className={`${inputClass} bg-lilac-50 text-ink-soft`} />
       </Field>
-      <Field id="date_of_birth" label="Date of birth (optional)" error={e.date_of_birth}>
-        <input id="date_of_birth" name="date_of_birth" type="date" autoComplete="bday" className={inputClass} {...err("date_of_birth")} />
+      <Field id="date_of_birth" label="Date of birth" error={e.date_of_birth}>
+        <input id="date_of_birth" name="date_of_birth" type="date" autoComplete="bday" required className={inputClass} {...err("date_of_birth")} />
       </Field>
 
       <fieldset className="space-y-3 rounded-[var(--radius-card)] border border-line bg-white/60 p-4">

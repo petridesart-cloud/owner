@@ -7,6 +7,7 @@ import { creditBalance } from "@/lib/data";
 import { dayMonth, dotDate, longDate, time } from "@/lib/time";
 import { HealthInfo } from "../../HealthInfo";
 import { PHOTO_CONSENT, type PhotoConsent } from "@/lib/photo-consent";
+import { ageOn } from "@/lib/profile";
 import { eur } from "@/lib/money";
 import { adjustCredits, changeMembershipProduct, holidayReturn, setStudent, updateClient } from "../../actions";
 import { MarkPaid, MembershipControls, RenewButtons } from "../../PaymentButtons";
@@ -48,7 +49,7 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
 
       <section className="card px-5 py-4 text-sm">
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
-          <dt className="text-ink-soft">Born</dt><dd className="text-ink">{c.date_of_birth ? dotDate(c.date_of_birth) : "–"}</dd>
+          <dt className="text-ink-soft">Born</dt><dd className="text-ink">{c.date_of_birth ? `${dotDate(c.date_of_birth)} (${ageOn(c.date_of_birth)})` : "–"}</dd>
           <dt className="text-ink-soft">Goal</dt><dd className="text-ink">{c.goal ?? "–"}</dd>
           <dt className="text-ink-soft">Emergency</dt><dd className="text-ink">{c.emergency_contact_name ? `${c.emergency_contact_name}${c.emergency_contact_phone ? ` · ${c.emergency_contact_phone}` : ""}` : "–"}</dd>
           <dt className="text-ink-soft">Photos</dt><dd className={c.photo_consent === "none" ? "font-medium text-burgundy" : "text-ink"}>{c.photo_consent ? PHOTO_CONSENT[c.photo_consent as PhotoConsent] : "Not asked yet"}</dd>

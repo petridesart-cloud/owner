@@ -7,7 +7,8 @@ import { ButtonLink, Eyebrow, Section } from "@/components/ui";
 import { getSettings, getViewer } from "@/lib/auth";
 import { availability, creditBalance, nextBooking, viewerSessionState } from "@/lib/data";
 import { dayMonth, longDate, relativeHours, time, weekdayShort } from "@/lib/time";
-import { CalendarPlus, CalendarRange, Repeat } from "lucide-react";
+import { CalendarPlus, CalendarRange, Hourglass, Repeat } from "lucide-react";
+import { db } from "@/lib/supabase/admin";
 import { getMedia, logoSrc } from "@/lib/media";
 import { recurringSummary } from "@/lib/recurring";
 import { eur } from "@/lib/money";
@@ -29,13 +30,14 @@ export default async function Home() {
   const event = open.find((c) => c.kind === "event");
   const firstName = viewer?.profile.full_name?.split(" ")[0];
   const pid = viewer?.profile.id;
-  const [mine, credits, weekly, logo, studioPics, eventPics] = await Promise.all([
+  const [mine, credits, weekly, logo, studioPics, eventPics, requested] = await Promise.all([
     pid ? nextBooking(pid) : null,
     pid ? creditBalance(pid) : null,
     pid ? recurringSummary(pid) : [],
     logoSrc(),
     getMedia("studio:"),
     getMedia("event:"),
+    pid ? db().from("payments").select("id, description, amount_cents").eq("profile_id", pid).eq("status", "pending").eq("provider", "offline").is("booking_id", null).limit(1).maybeSingle().then((r) => r.data) : null,
   ]);
   const hasPackage = !!credits && credits.reformer + credits.mat > 0;
 
@@ -54,8 +56,19 @@ export default async function Home() {
         </ButtonLink>
       </section>
 
-      {(mine || hasPackage) && (
+      {(mine || hasPackage || requested) && (
         <div className="-mt-5 space-y-3 px-5">
+          {requested && (
+            <Link href="/bookings" className="card animate-rise flex items-center gap-4 px-4 py-4 [animation-delay:200ms]">
+              <span className="grid size-11 shrink-0 place-items-center rounded-full bg-mauve-soft text-ink"><Hourglass aria-hidden size={19} /></span>
+              <span className="min-w-0 flex-1">
+                <span className="eyebrow block">Awaiting payment</span>
+                <span className="mt-1 block truncate font-medium text-ink">{requested.description} · {eur(requested.amount_cents)}</span>
+                <span className="block text-sm text-ink-soft">Your classes appear as soon as it&apos;s paid.</span>
+              </span>
+              <ArrowRight aria-hidden size={17} className="shrink-0 text-ink-soft" />
+            </Link>
+          )}
           {mine && (
             <section aria-labelledby="next-class" className="card animate-rise flex items-center gap-4 px-4 py-4 [animation-delay:220ms]">
               <div className="grid w-14 shrink-0 place-items-center rounded-2xl bg-gradient-to-b from-lilac-200 to-lilac-100 py-2 text-center">

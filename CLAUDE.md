@@ -66,7 +66,7 @@ Booking web app for **Re·Form Pilates Studio**, Limassol, Cyprus (Instagram @re
 - **Booking window:** clients book up to 4 weeks ahead (`booking_window_days`, Settings); the studio can add anyone beyond it.
 - **Same days every week:** clients pick weekly slots (`recurring_rules`); `applyRecurring()` books them while the package lasts, inside the window, on save, on Mark as paid, on timetable save and on every tick. Full weeks are skipped with a one-tap waitlist email; classes the client cancelled are never re-booked.
 - **Her photos:** Admin → Settings → Photos uploads to the public Storage bucket `media` (table `media`, slots `logo`, `instructor`, `studio:<section>`, `event:<id>`), resized in the browser to ≤1600px. Studio sections are a setting.
-- **Client profile:** first name, surname, optional DOB and goal, emergency contact, injuries and medication (health data, separate consent, instructor only), photo consent (with face / without face / none, logged in `consents` as `photos`). Her roster flags First class, Trial, Drop-in, No photos / No face.
+- **Client profile:** first name, surname, **date of birth (required, her answer; older clients are asked before their next booking)**, optional goal, emergency contact, injuries and medication (health data, separate consent, instructor only), photo consent (with face / without face / none, logged in `consents` as `photos`). Her roster flags Birthday, First class, Under 18, Trial, Drop-in, No photos / No face.
 - **Her texts** are editable by her (Admin → Settings → Your texts, table `site_content`), falling back to the defaults in `src/lib/policy.ts`. They're reused across the policy pages, the first-class welcome, "What to bring", The Magic and Our Studio.
 - **Studio team:** she adds or removes admins in Admin → Settings → Studio team (`profiles.role`). `ADMIN_EMAILS` is only the bootstrap.
 - **Client navigation:** Home (logo, "Secure your package", next class, Pick classes / Every week, circles Studio · Events · Rules & policies, Next available) · Schedule · My classes (My profile / My progress: current package cards, upcoming, past packages with X/Y) · Account (details, health, photos consent, receipts).
@@ -95,6 +95,9 @@ Booking web app for **Re·Form Pilates Studio**, Limassol, Cyprus (Instagram @re
 | `where true` on bulk deletes in `reset_demo_data` | Supabase's safeupdate rejects unqualified DELETE/UPDATE via the API. |
 | Never edit an applied migration; replace functions in a new one (e.g. `seed_demo` v2 in `20261024000200`) | `scripts/migrate.mjs` runs each file once on the live database; edits to old files never reach it. |
 | Weekly repeat bookings in TypeScript (`src/lib/recurring.ts`) on top of `book_session` | Reuses every engine rule (capacity lock, validity, window) and the notification service; no second booking path. |
+| A trigger cancels the pending payment when an unpaid trial/drop-in booking is released (cancelled in time, studio-cancelled, expired); late cancels and no-shows keep it for her to decide (Remove button) | Otherwise it lingers in "Awaiting payment", blocks the trial, and Mark as paid would re-confirm a cancelled booking. |
+| Forms submit through `keepValues()` (`src/lib/keep-form.ts`) instead of `<form action>` | React 19 resets `<form action>` forms after every submit, wiping what people typed when there's a validation error. |
+| Demo reset keeps products, photos and settings | Her edited prices survive "Reset demo data". |
 | Navigation: wordmark is not a link, no header account icon, Back buttons go one step back (`BackButton`) | Her notes: the bottom bar already has Account; clients arrive deep-linked from Instagram. |
 
 ## Tech
@@ -150,9 +153,9 @@ npm run db:types              # after schema changes
   - Her round-1 client notes (`docs/feedback/elysia-client-notes-1.md`): her logo, real prices, cash/Revolut choice, trials and drop-ins, weekly repeat bookings, 3-state colours, new My classes with package progress, new Account, Studio / Events / Rules pages, Back buttons, Photos manager.
   - Admin: Today (awaiting payment with chosen method, roster flags), classes, timetable, closures, clients (profile, health behind a tap, student verification, holiday return, ledger), Outbox, stats, import, settings (price grid, booking window, studio sections), photos, compliance.
   - PWA manifest and icons, Open Graph previews.
-  - 30 engine tests + 6 Playwright flows green on a production build.
+  - 33 engine tests + 6 Playwright flows green on a production build.
 - **Waiting on the owner (questions in the brief):**
-  - Answers to the 9 questions in `docs/feedback/elysia-client-notes-1.md` (defaults are live).
+  - Answers to the open questions in `docs/feedback/elysia-client-notes-1.md` (euro and DOB required are answered; defaults are live for the rest).
   - Her Revolut link, IBAN, original logo file and photos (she can upload them herself now).
   - Address, her full name, contact details.
 - **Proposed v2:**

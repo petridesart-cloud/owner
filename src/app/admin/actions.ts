@@ -195,9 +195,19 @@ export async function markPaid(paymentId: string, method: "cash" | "card_in_pers
   return { ok: true, message: "Marked as paid." };
 }
 
+/**
+ * Remove an unpaid request: a package request, or a trial/drop-in that was cancelled late or
+ * missed and she chooses not to charge. An upcoming unpaid class is cancelled from its roster instead.
+ */
 export async function cancelPaymentRequest(paymentId: string): Promise<ActionResult> {
   await admin("cancel_payment_request", { paymentId });
-  await db().from("payments").update({ status: "cancelled" }).eq("id", paymentId).eq("status", "pending").is("booking_id", null);
+  const { data: p } = await db().from("payments").select("id, booking_id, bookings!payments_booking_id_fkey(status, class_sessions(starts_at))").eq("id", paymentId).eq("status", "pending").maybeSingle();
+  if (!p) return { ok: false, error: "Already settled." };
+  const b = p.bookings;
+  if (b?.status === "confirmed" && b.class_sessions && new Date(b.class_sessions.starts_at) > new Date()) {
+    return { ok: false, error: "This class is still booked. Remove the client from the class instead." };
+  }
+  await db().from("payments").update({ status: "cancelled" }).eq("id", paymentId).eq("status", "pending");
   revalidatePath("/admin", "layout");
   return { ok: true };
 }

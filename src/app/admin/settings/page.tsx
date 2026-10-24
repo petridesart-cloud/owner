@@ -43,7 +43,7 @@ export default async function SettingsPage() {
       {env.demoMode && (
         <section className="card border-mauve/50 bg-mauve-soft/50 px-5 py-5">
           <h2 className="display mb-1 text-[0.95rem]">Demo data</h2>
-          <p className="mb-4 text-sm text-ink-soft">Wipe all clients, bookings, payments and messages and rebuild fresh demo data. Your settings, class types and admin login are kept. Only available while DEMO_MODE is on.</p>
+          <p className="mb-4 text-sm text-ink-soft">Wipe all clients, bookings, payments and messages and rebuild fresh demo data. Your settings, prices, photos, class types and admin login are kept. Only available while DEMO_MODE is on.</p>
           <ActionForm action={resetDemoData} submit="Reset demo data" variant="ghost" confirm="Reset all demo clients and bookings?" />
         </section>
       )}

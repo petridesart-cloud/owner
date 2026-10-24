@@ -16,7 +16,7 @@ export async function completeWelcome(_: WelcomeState, form: FormData): Promise<
     first_name: form.get("first_name"), last_name: form.get("last_name"), phone: form.get("phone"), date_of_birth: form.get("date_of_birth") ?? "",
   });
   const errors: Record<string, string> = {};
-  if (!parsed.success) for (const i of parsed.error.issues) errors[String(i.path[0])] = i.message;
+  if (!parsed.success) for (const i of parsed.error.issues) errors[String(i.path[0])] ??= i.message;
 
   const policy = form.get("policy") === "on";
   const fitness = form.get("fitness") === "on";
@@ -34,7 +34,7 @@ export async function completeWelcome(_: WelcomeState, form: FormData): Promise<
   const photoConsent: PhotoConsent | null = photos in PHOTO_CONSENT ? (photos as PhotoConsent) : null;
   await db().from("profiles").update({
     first_name: parsed.data.first_name, last_name: parsed.data.last_name, full_name: fullName(parsed.data.first_name, parsed.data.last_name),
-    phone: parsed.data.phone, date_of_birth: parsed.data.date_of_birth ?? null, email: viewer.email.toLowerCase(), photo_consent: photoConsent,
+    phone: parsed.data.phone, date_of_birth: parsed.data.date_of_birth, email: viewer.email.toLowerCase(), photo_consent: photoConsent,
     marketing_email: marketingEmail, marketing_sms: false, onboarded_at: new Date().toISOString(),
   }).eq("id", p.id);
 

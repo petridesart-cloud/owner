@@ -46,14 +46,13 @@ Tip: in your browser menu choose **Add to Home Screen** to use it like an app.
 Reply with as much as you can (voice notes and screenshots are perfect):
 
 **Quick questions** (we used the answer in brackets for now)
-- [ ] Prices are in euro, right? (yes, €)
 - [ ] "2 per week": a strict 2 each week, or 8 classes to use in the month as they like? (8 in the month)
 - [ ] Trial: once per person for reformer and once for mat? (yes)
 - [ ] Drop-ins and trials: reserve now, pay cash or Revolut before class, you mark it paid? (yes)
 - [ ] "The Magic" (about you) now sits at the bottom of the Studio page. OK? (yes)
 - [ ] Toilet and Bathroom: two photo sections or one? (two; rename them in Settings)
 - [ ] Weekly bookings: if a class is full that week, join the waitlist automatically? (no: we skip it and send a one-tap waitlist link)
-- [ ] Date of birth: required or optional? (optional)
+- [ ] Do you take clients under 18? If yes, should a parent confirm at sign-up? (allowed from 12, flagged "Under 18" on your list)
 - [ ] Your original logo file (PNG or PDF, as big as possible)
 
 **Your classes**

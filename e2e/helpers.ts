@@ -18,6 +18,7 @@ export async function completeWelcome(page: Page, name = "Test Client") {
   await page.getByLabel("First name").fill(first);
   await page.getByLabel("Surname").fill(rest.join(" ") || "Client");
   await page.getByLabel("Mobile number").fill("+357 99 123456");
+  await page.getByLabel("Date of birth").fill("1994-05-17");
   await page.locator("#policy").check();
   await page.locator("#fitness").check();
   await page.getByRole("button", { name: "Continue" }).click();

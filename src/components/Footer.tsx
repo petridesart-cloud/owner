@@ -11,7 +11,7 @@ const legal = [
 export async function Footer() {
   const s = await getSettings();
   return (
-    <footer className="mx-5 mb-28 mt-14 border-t border-line pt-6 text-xs leading-relaxed text-ink-soft">
+    <footer className="print:hidden mx-5 mb-28 mt-14 border-t border-line pt-6 text-xs leading-relaxed text-ink-soft">
       <nav aria-label="Legal">
         <ul className="flex flex-wrap gap-x-4 gap-y-1">
           {legal.map((l) => (

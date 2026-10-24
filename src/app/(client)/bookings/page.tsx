@@ -50,6 +50,17 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
         {current.length > 0 ? (
           <section aria-label="Current package" className="space-y-3 px-5">
             {current.map((x) => <PackageCard key={x.id} p={x} />)}
+            {(() => {
+              // Nearly done: 1 class left, or it ends within a week.
+              const ending = current.find((x) => x.remaining <= 1 || (x.expiresAt && new Date(x.expiresAt).getTime() - now < 7 * 86_400_000));
+              if (!ending || (pending ?? []).some((x) => !x.booking_id)) return null;
+              return (
+                <div className="flex items-center justify-between gap-3 rounded-2xl bg-mauve-soft px-4 py-3">
+                  <p className="text-sm text-ink">{ending.remaining <= 1 ? `${ending.remaining ? "1 class" : "No classes"} left` : "Your package ends soon"}. Keep your rhythm going.</p>
+                  <ButtonLink href={ending.kind === "mat" ? "/packs?type=mat" : "/packs"} variant="primary" className="min-h-11 shrink-0 px-4 text-[0.7rem]">Renew</ButtonLink>
+                </div>
+              );
+            })()}
             <Link href="/bookings/weekly" className="flex min-h-11 items-center gap-2 text-sm font-medium text-ink underline-offset-4 hover:underline">
               <Repeat aria-hidden size={16} /> {weekly.length ? `Every week: ${weekly.join(", ")}` : "Book the same days every week"}
             </Link>
