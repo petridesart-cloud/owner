@@ -2,7 +2,7 @@
 
 | | Demo / staging | Real studio app (production) |
 |---|---|---|
-| Address | https://reform-pilates-seven.vercel.app | https://reform-studio-pink.vercel.app (until her own domain) |
+| Address | https://reform-pilates-seven.vercel.app | https://book.reformpilatescy.com (domain on Cloudflare; reform-studio-pink.vercel.app also works) |
 | Vercel project | `reform-pilates` | `reform-studio` |
 | Database | Supabase `reform-db` (demo clients, resettable) | Supabase `reform-prod` (real clients only, never reset) |
 | Mode | `DEMO_MODE=true`: codes on screen, nothing emailed | `APP_ENV=production`: demo impossible, real emails |
@@ -14,7 +14,7 @@ database migrations first. Try changes on the demo before telling clients about 
 ## What's set on the real app (Vercel → reform-studio → Settings → Environment Variables)
 - `APP_ENV=production`, `DEMO_MODE=false`
 - `ADMIN_EMAILS` (bootstrap admins), `CRON_SECRET` (random, used by the 5-minute scheduler)
-- `NEXT_PUBLIC_SITE_URL` (change it when the domain is connected, then redeploy)
+- `NEXT_PUBLIC_SITE_URL=https://book.reformpilatescy.com` (CNAME `book` → Vercel in Cloudflare, DNS only)
 - Supabase variables (added automatically by the integration)
 - Still to add: `RESEND_API_KEY`, `EMAIL_FROM` (see 1-email.md). Until then nobody, admins
   included, can sign in to the real app; it says sign-in isn't switched on yet.

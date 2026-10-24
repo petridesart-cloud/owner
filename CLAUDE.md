@@ -118,7 +118,7 @@ Booking web app for **Re·Form Pilates Studio**, Limassol, Cyprus (Instagram @re
 
 ## Deployment
 Two apps from the same branch (details in `docs/launch/2-production.md`):
-- **Real studio app (production):** https://reform-studio-pink.vercel.app, Vercel project `reform-studio`, Supabase **reform-prod** (Frankfurt, free). `APP_ENV=production`, `DEMO_MODE=false`. Needs `RESEND_API_KEY` + `EMAIL_FROM` before anyone can sign in. Only the baseline (settings, class types, packages) is seeded; never reset.
+- **Real studio app (production):** https://book.reformpilatescy.com (domain `reformpilatescy.com` on Cloudflare; CNAME `book` → Vercel, DNS only; email will come from `mail.reformpilatescy.com` via Resend), Vercel project `reform-studio`, Supabase **reform-prod** (Frankfurt, free). `APP_ENV=production`, `DEMO_MODE=false`. Needs `RESEND_API_KEY` + `EMAIL_FROM` before anyone can sign in. Only the baseline (settings, class types, packages) is seeded; never reset.
 - **Demo / staging:** the live demo below.
 
 ### Demo / staging

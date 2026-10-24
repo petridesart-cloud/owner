@@ -6,7 +6,7 @@ In order. The app's **Settings → "Before your first client"** list shows what'
    add the DNS records, put `RESEND_API_KEY` and `EMAIL_FROM` into Vercel → `reform-studio`
    → Environment Variables, redeploy. Steps: `1-email.md`. Check: Settings → Messages →
    "Send me a test email" lands in the inbox; Gmail "Show original" says SPF/DKIM/DMARC PASS.
-2. **Her details.** Sign in to the real app (https://reform-studio-pink.vercel.app/admin) and fill
+2. **Her details.** Sign in to the real app (https://book.reformpilatescy.com/admin) and fill
    in Settings: her full name, studio address, contact email and phone, Revolut link and/or IBAN.
 3. **Her timetable and texts.** Classes → Monthly timetable; check package prices, Your texts
    (rules, policy, about her), Photos (logo, studio, her portrait).
