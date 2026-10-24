@@ -6,11 +6,13 @@ import { BackButton } from "@/components/BackButton";
 import { Badge, ButtonLink, Eyebrow, Notice } from "@/components/ui";
 import { spotsLabel } from "@/components/ClassRow";
 import { getSettings, getViewer } from "@/lib/auth";
-import { availability, eventExtras, isStudioClient } from "@/lib/data";
+import { availability, eventExtras, lockedEventIds } from "@/lib/data";
+import { Lock } from "lucide-react";
 import { db } from "@/lib/supabase/admin";
 import { eur, vatLine } from "@/lib/money";
 import { longDate, nowMs, relativeHours, time } from "@/lib/time";
 import { BookActions } from "./BookActions";
+import { EVENT_POLICY } from "@/lib/booking";
 import { getTexts } from "@/lib/content";
 import { Flower } from "@/components/Flower";
 
@@ -32,7 +34,22 @@ export default async function BookPage({ params, searchParams }: { params: Promi
   const profile = viewer?.profile;
   const ev = c.kind === "event" ? extrasMap.get(id) : undefined;
   const bring = ev ? (ev.what_to_bring ?? "").split("\n").map((l) => l.trim()).filter(Boolean) : texts.what_to_bring;
-  const policy = ev?.event_policy ?? null;
+  // Clients-only event this person can't open: no details at all, just "Clients only".
+  if (ev?.clients_only && (await lockedEventIds([id], profile?.id)).has(id)) {
+    return (
+      <div className="px-5 pt-3">
+        <BackButton href="/events" />
+        <div className="mt-4 grid h-64 place-items-center rounded-[var(--radius-card)] bg-gradient-to-br from-[#d9ecf3] via-lilac-100 to-mauve-soft p-6 text-center shadow-[var(--shadow-soft)]">
+          <div className="rounded-[18px] bg-white/90 px-5 py-4 shadow-[var(--shadow-soft)] backdrop-blur">
+            <h1 className="flex items-center justify-center gap-1.5 text-sm font-medium text-ink"><Lock aria-hidden size={15} />Clients only</h1>
+            <p className="mt-1 text-xs leading-relaxed text-ink-soft">A special event for clients with a Re·Form package.</p>
+            {!viewer && <ButtonLink href={`/login?next=${encodeURIComponent(`/book/${id}`)}`} variant="soft" className="mt-3 w-full">Already a client? Sign in</ButtonLink>}
+          </div>
+        </div>
+      </div>
+    );
+  }
+  const policy = c.kind === "event" ? ev?.event_policy ?? EVENT_POLICY : null; // events: no cancellations or refunds in the app
   const [booking, entry] = profile
     ? await Promise.all([
         db().from("bookings").select("id, status").eq("session_id", id).eq("profile_id", profile.id).eq("status", "confirmed").maybeSingle().then((r) => r.data),
@@ -48,7 +65,6 @@ export default async function BookPage({ params, searchParams }: { params: Promi
   }
 
   const past = start <= new Date();
-  const lockedOut = !!ev?.clients_only && !booking && !(await isStudioClient(profile?.id));
   const offered = entry?.status === "offered" && new Date(entry.offer_expires_at!) > new Date();
   const full = c.spots_left === 0 && !offered;
   const usable = profile && c.credit_kind
@@ -147,11 +163,6 @@ export default async function BookPage({ params, searchParams }: { params: Promi
               <Badge tone="booked">You&apos;re booked</Badge>
               <p className="text-sm text-ink-soft">See you on the reformer. Manage or cancel in My classes.</p>
               <ButtonLink href="/bookings" variant="soft" className="w-full">My classes</ButtonLink>
-            </div>
-          ) : lockedOut ? (
-            <div className="space-y-3">
-              <Notice>This event is for Re·Form clients. Come to a class or get a package to join the next one.</Notice>
-              {!viewer && <ButtonLink href={`/login?next=${encodeURIComponent(next)}`} variant="soft" className="w-full">Already a client? Sign in</ButtonLink>}
             </div>
           ) : !viewer ? (
             <div className="space-y-3">

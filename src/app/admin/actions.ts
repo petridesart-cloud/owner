@@ -140,6 +140,24 @@ export async function cancelSessionAction(sessionId: string, _: ActionResult, fo
   return { ok: true, message: `Class cancelled. ${n} client${n === 1 ? "" : "s"} notified and credited.` };
 }
 
+/** Clients-only events: let someone without an active package see and book this event. */
+export async function allowEventAccess(sessionId: string, _: ActionResult, form: FormData): Promise<ActionResult> {
+  await admin("event_access_add", { sessionId });
+  const profileId = String(form.get("profile_id") ?? "");
+  if (!/^[0-9a-f-]{36}$/.test(profileId)) return { ok: false, error: "Choose a client." };
+  const { error } = await db().from("event_access").upsert({ session_id: sessionId, profile_id: profileId });
+  if (error) return { ok: false, error: "Couldn't add them." };
+  revalidatePath(`/admin/classes/${sessionId}`);
+  return { ok: true, message: "Added. They can now see and book this event." };
+}
+
+export async function removeEventAccess(sessionId: string, profileId: string): Promise<ActionResult> {
+  await admin("event_access_remove", { sessionId, profileId });
+  await db().from("event_access").delete().eq("session_id", sessionId).eq("profile_id", profileId);
+  revalidatePath(`/admin/classes/${sessionId}`);
+  return { ok: true, message: "Removed." };
+}
+
 // ── Timetable ──────────────────────────────────────────────────────────
 const Slot = z.object({ weekday: z.number().int().min(1).max(7), time: z.string().regex(/^\d{2}:\d{2}$/), class_type_id: z.string().uuid(), capacity: z.number().int().min(1).max(100).nullable().optional() });
 

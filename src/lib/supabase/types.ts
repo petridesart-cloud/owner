@@ -491,6 +491,40 @@ export type Database = {
           },
         ];
       };
+      event_access: {
+        Row: {
+          created_at: string;
+          profile_id: string;
+          session_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          profile_id: string;
+          session_id: string;
+        };
+        Update: {
+          created_at?: string;
+          profile_id?: string;
+          session_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "event_access_profile_id_fkey";
+            columns: ["profile_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "event_access_session_id_fkey";
+            columns: ["session_id"];
+            isOneToOne: false;
+            referencedRelation: "class_sessions";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       health_history: {
         Row: {
           bp_meds: boolean | null;
@@ -1414,6 +1448,7 @@ export type Database = {
         };
         Returns: Json;
       };
+      can_access_event: { Args: { p_profile: string; p_session: string }; Returns: boolean };
       cancel_booking: { Args: { p_admin?: boolean; p_booking: string; p_profile: string }; Returns: Json };
       cancel_session: {
         Args: { p_reason: string; p_session: string };

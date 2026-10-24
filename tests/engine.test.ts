@@ -607,3 +607,22 @@ describe("studio notes, round 1", () => {
     assert.equal((await db.from("timetable_templates").select("repeats").eq("id", a).single()).data!.repeats, false);
   });
 });
+
+describe("clients-only events: who can see them", () => {
+  test("an active package counts, a trial or an ended package doesn't; the studio can add someone", async () => {
+    const s = await session(72 * H, 5);
+    await db.from("class_sessions").update({ clients_only: true }).eq("id", s);
+    const can = async (p: string) => (await db.rpc("can_access_event", { p_profile: p, p_session: s })).data;
+    const active = await client("acc-active"); await grant(active, 2, 20 * 24 * H);
+    const ended = await client("acc-ended"); const lot = await grant(ended, 1, 20 * 24 * H);
+    await db.rpc("admin_adjust_lot", { p_lot: lot, p_action: "remove", p_days: 0, p_date: null as unknown as string, p_credits: 1, p_reason: "test", p_actor: null as unknown as string });
+    const trial = await client("acc-trial");
+    assert.ifError((await book(trial, await session(30 * H), "trial", "online", "cash")).error);
+    assert.equal(await can(active), true);
+    assert.equal(await can(ended), false);
+    assert.equal(await can(trial), false);
+    await db.from("event_access").insert({ session_id: s, profile_id: trial });
+    assert.equal(await can(trial), true);
+    assert.equal((await book(ended, s, "trial", "online", "cash")).error?.message, "clients_only");
+  });
+});

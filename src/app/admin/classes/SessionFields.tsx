@@ -26,7 +26,7 @@ export function SessionFields({ types, d = {}, event = false }: { types: Type[];
         <summary className="min-h-11 cursor-pointer content-center text-sm font-medium text-ink">Event options</summary>
         <div className="space-y-4 pb-3 pt-2">
           <Checkbox id="clients_only" name="clients_only" defaultChecked={d.clients_only}>
-            Clients only: others see it blurred and can&apos;t sign up. Clients are people who have bought a package or class, or come to a class.
+            Clients only: only clients with an active package (and people you add on the event page) can see and book it. Everyone else sees it blurred.
           </Checkbox>
           <Field id="what_to_bring" label="What to bring (optional)" hint="One item per line. Leave empty to hide the section.">
             <textarea id="what_to_bring" name="what_to_bring" rows={3} defaultValue={d.what_to_bring ?? ""} className={`${inputClass} py-3`} />

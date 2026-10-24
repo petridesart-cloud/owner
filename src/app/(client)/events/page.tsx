@@ -6,7 +6,7 @@ import { PhotoStrip } from "@/components/PhotoStrip";
 import { Badge, Card, Eyebrow, PageTitle, Section } from "@/components/ui";
 import { getViewer } from "@/lib/auth";
 import { getTexts } from "@/lib/content";
-import { availability, eventExtras, isStudioClient, viewerSessionState, type Availability } from "@/lib/data";
+import { availability, eventExtras, lockedEventIds, viewerSessionState, type Availability } from "@/lib/data";
 import { getMedia, type MediaItem } from "@/lib/media";
 import { db } from "@/lib/supabase/admin";
 import { eur } from "@/lib/money";
@@ -28,10 +28,10 @@ export default async function EventsPage() {
       .order("starts_at", { ascending: false }).limit(12),
   ]);
   const upcoming = upcomingAll.filter((c) => c.kind === "event" && c.status === "scheduled");
-  const [state, extras, client] = await Promise.all([
+  const [state, extras, lockedIds] = await Promise.all([
     viewerSessionState(viewer?.profile.id),
     eventExtras(upcoming.map((e) => e.id)),
-    isStudioClient(viewer?.profile.id),
+    lockedEventIds(upcoming.map((e) => e.id), viewer?.profile.id),
   ]);
   // The archive shows the events she has added photos or a few words to.
   const archive = (past ?? []).filter((e) => e.recap || photos.some((p) => p.slot === `event:${e.id}`));
@@ -39,17 +39,17 @@ export default async function EventsPage() {
   return (
     <div>
       <div className="px-5 pt-3"><BackButton href="/" /></div>
-      <PageTitle title="Events" script="Special">{texts.events_intro || undefined}</PageTitle>
+      <PageTitle title="Events">{texts.events_intro || undefined}</PageTitle>
 
       <Section title="Upcoming events">
         {upcoming.length ? (
           <ul className="space-y-3">
             {upcoming.map((e) => {
               const cover = covers.find((p) => p.slot === `event-cover:${e.id}`);
-              const locked = !!extras.get(e.id)?.clients_only && !client && !state.booked.has(e.id);
+              const locked = lockedIds.has(e.id);
               return (
                 <li key={e.id}>
-                  {locked ? <LockedEvent e={e} cover={cover} signedIn={!!viewer} /> : (
+                  {locked ? <LockedEvent cover={cover} signedIn={!!viewer} /> : (
                     <Link href={`/book/${e.id}`} className="block rounded-[var(--radius-card)] shadow-[var(--shadow-soft)] transition hover:shadow-[var(--shadow-lift)]">
                       <EventCard e={e} cover={cover} clientsOnly={!!extras.get(e.id)?.clients_only} booked={state.booked.has(e.id)} />
                     </Link>
@@ -108,19 +108,20 @@ function EventCard({ e, cover, booked, clientsOnly }: { e: Availability; cover?:
   );
 }
 
-/** Clients-only event seen by someone who isn't a client yet: blurred, nothing to tap. */
-function LockedEvent({ e, cover, signedIn }: { e: Availability; cover?: MediaItem; signedIn: boolean }) {
+/** Clients-only event for someone who can't see it: blurred, no details on the page at all, nothing to tap. */
+function LockedEvent({ cover, signedIn }: { cover?: MediaItem; signedIn: boolean }) {
   return (
-    <div className="relative overflow-hidden rounded-[var(--radius-card)] shadow-[var(--shadow-soft)]">
-      <div aria-hidden className="pointer-events-none select-none blur-md">
-        <EventCard e={e} cover={cover} booked={false} clientsOnly={false} />
+    <div className="relative h-56 overflow-hidden rounded-[var(--radius-card)] bg-gradient-to-br from-[#d9ecf3] via-lilac-100 to-mauve-soft shadow-[var(--shadow-soft)]">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      {cover && <img src={cover.url} alt="" loading="lazy" className="absolute inset-0 size-full scale-110 object-cover blur-xl" />}
+      <div aria-hidden className="absolute inset-x-6 bottom-6 space-y-2 blur-sm">
+        <div className="h-3 w-1/3 rounded-full bg-white/70" /><div className="h-7 w-2/3 rounded-full bg-white/70" /><div className="h-3 w-1/2 rounded-full bg-white/70" />
       </div>
-      <p className="sr-only">Clients-only event, {longDate(e.starts_at)}.</p>
-      <div className="absolute inset-0 grid place-items-center bg-paper/40 p-6 text-center">
+      <div className="absolute inset-0 grid place-items-center p-6 text-center">
         <div className="rounded-[18px] bg-white/90 px-5 py-4 shadow-[var(--shadow-soft)] backdrop-blur">
-          <p className="flex items-center justify-center gap-1.5 text-sm font-medium text-ink"><Lock aria-hidden size={15} />For Re·Form clients</p>
-          <p className="mt-1 text-xs leading-relaxed text-ink-soft">A special event for our clients. Come to a class or get a package to join the next one.</p>
-          {!signedIn && <Link href={`/login?next=${encodeURIComponent(`/book/${e.id}`)}`} className="mt-2 inline-flex min-h-11 items-center text-sm font-medium text-ink underline underline-offset-4">Already a client? Sign in</Link>}
+          <p className="flex items-center justify-center gap-1.5 text-sm font-medium text-ink"><Lock aria-hidden size={15} />Clients only</p>
+          <p className="mt-1 text-xs leading-relaxed text-ink-soft">A special event for clients with a Re·Form package.</p>
+          {!signedIn && <Link href="/login?next=/events" className="mt-2 inline-flex min-h-11 items-center text-sm font-medium text-ink underline underline-offset-4">Already a client? Sign in</Link>}
         </div>
       </div>
     </div>

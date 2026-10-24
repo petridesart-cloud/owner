@@ -27,7 +27,7 @@ export function ClassRow({ c, state, showDate = false, locked = false }: { c: Av
       </div>
       <div className="min-w-0 flex-1">
         <p className="truncate font-medium text-ink">
-          {c.kind === "reformer" ? (
+          {locked ? "Special event" : c.kind === "reformer" ? (
             <><span className="font-script text-[1.35rem] font-normal leading-none text-plum-700">Reformer</span> Pilates</>
           ) : (
             c.title
@@ -37,7 +37,7 @@ export function ClassRow({ c, state, showDate = false, locked = false }: { c: Av
           {cancelled ? (
             <Badge tone="full">Cancelled</Badge>
           ) : locked ? (
-            <Badge tone="plain">For Re·Form clients</Badge>
+            <Badge tone="plain">Clients only</Badge>
           ) : state === "booked" ? (
             <Badge tone="booked">You&apos;re booked</Badge>
           ) : state === "offered" ? (

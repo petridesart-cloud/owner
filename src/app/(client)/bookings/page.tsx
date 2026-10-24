@@ -130,12 +130,16 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
                         </div>
                       </div>
                       <div className="border-t border-line bg-paper/60 px-4 py-3">
+                        {b.s.class_types?.kind === "event" ? (
+                          <p className="text-xs leading-relaxed text-ink-soft">Events can&apos;t be cancelled or refunded in the app. Can&apos;t make it? Message the studio.</p>
+                        ) : <>
                         {late && (
                           <p className="mb-2 text-xs leading-relaxed text-ink-soft">
                             Free cancellation closed {relativeHours(new Date(start - cutoffMs))} ago ({settings.cancellation_cutoff_hours}h before class).
                           </p>
                         )}
                         <CancelButton bookingId={b.id} late={late} label={label} warning={warning} />
+                        </>}
                       </div>
                     </Card>
                   </li>

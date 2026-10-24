@@ -32,13 +32,16 @@ export async function sessionInfo(sessionId: string) {
 }
 export type SessionInfo = Awaited<ReturnType<typeof sessionInfo>>;
 
+export const EVENT_POLICY = "Events can't be cancelled or refunded in the app. If you can't make it, message the studio.";
+
 /** The cancellation policy, stated in every booking email. */
 export const policyLine = (cancelBy: Date, cutoff: number) =>
   `Free cancellation until ${spokenDateTime(cancelBy)} (${cutoff}h before class). Later cancellations and no-shows aren't refunded.`;
 
 const tmpl = (s: SessionInfo) => ({
   className: s.name, when: spokenDateTime(s.starts_at), location: s.where,
-  policy: s.type.kind === "event" && s.event_policy ? s.event_policy : policyLine(s.cancelBy, s.cutoff), // events carry her own terms
+  // Events carry her own terms; they can't be cancelled or refunded in the app.
+  policy: s.type.kind === "event" ? s.event_policy ?? EVENT_POLICY : policyLine(s.cancelBy, s.cutoff),
 });
 
 async function profileById(id: string) {
@@ -272,6 +275,11 @@ export async function notifyOffers(rows: OfferRow[]) {
 // Cancellation
 // ---------------------------------------------------------------------------
 export async function cancelBooking(profile: Profile, bookingId: string, asAdmin = false): Promise<ActionResult<{ status: string }>> {
+  // Events: no cancellations or refunds for clients; the studio can still remove someone.
+  if (!asAdmin) {
+    const { data: ev } = await db().from("bookings").select("class_sessions!inner(class_types!inner(kind))").eq("id", bookingId).maybeSingle();
+    if (ev?.class_sessions?.class_types?.kind === "event") return { ok: false, error: friendlyError({ message: "event_no_cancel" }) };
+  }
   const { data, error } = await db().rpc("cancel_booking", { p_booking: bookingId, p_profile: profile.id, p_admin: asAdmin });
   if (error) return { ok: false, error: friendlyError(error) };
   const res = data as { status: string; session_id: string };

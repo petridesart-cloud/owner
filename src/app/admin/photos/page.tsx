@@ -46,8 +46,7 @@ export default async function PhotosPage() {
     <div className="space-y-4">
       <AdminTitle back="/admin/settings" title="Photos" sub="Only your own photos, and only with permission from anyone in them. They're resized automatically." />
       <Slot title="Logo" hint="Shown on the home page, sign-in and receipts. A square PNG works best." slot="logo" photos={of("logo")} single fallback={DEFAULT_LOGO} />
-      <Slot title="You (The Magic)" hint="Shown with your story at the bottom of the Studio page." slot="instructor" photos={of("instructor")} />
-      <Slot title="The Studio" hint="Photos of the space. They slide one after another on the Studio page. Add a few words in Settings → Your texts." slot={STUDIO_SLOT} photos={all.filter((m) => m.slot.startsWith("studio:"))} />
+      <Slot title="The Studio" hint="Photos of the space. They slide one after another on the Studio page, with your words underneath (Settings → Your texts)." slot={STUDIO_SLOT} photos={all.filter((m) => m.slot.startsWith("studio:"))} />
       <h2 className="display pt-2 text-[0.95rem]">Events</h2>
       {(events ?? []).map((e) => <Slot key={e.id} title={`${e.title ?? "Event"} · ${dotDate(e.starts_at)}`} slot={`event:${e.id}`} photos={of(`event:${e.id}`)} />)}
       {!(events ?? []).length && <p className="text-sm text-ink-soft">Create an event in Classes first, then add its photos here.</p>}

@@ -5,7 +5,8 @@ import { ActionForm } from "@/components/ActionForm";
 import { Badge, Checkbox, Field, inputClass } from "@/components/ui";
 import { db } from "@/lib/supabase/admin";
 import { dayKey, longDate, time } from "@/lib/time";
-import { cancelSessionAction, manualBook, updateSession } from "../../actions";
+import { allowEventAccess, cancelSessionAction, manualBook, updateSession } from "../../actions";
+import { AccessRemove } from "./AccessRemove";
 import { CheckInToggle } from "../../RosterControls";
 import { AdminTitle } from "../../ui";
 import { SessionFields } from "../SessionFields";
@@ -26,6 +27,9 @@ export default async function SessionAdmin({ params }: { params: Promise<{ id: s
     db().from("class_types").select("*").order("sort_order"),
     db().from("profiles").select("id, full_name, email").is("deleted_at", null).eq("role", "client").order("full_name").limit(1000),
   ]);
+  const { data: access } = s.clients_only
+    ? await db().from("event_access").select("profile_id, profiles(full_name, email)").eq("session_id", s.id)
+    : { data: [] };
   const [cover, photos] = s.class_types?.kind === "event" ? await Promise.all([getMedia(`event-cover:${s.id}`), getMedia(`event:${s.id}`)]) : [[], []];
   const roster = s.bookings.filter((b) => ["confirmed", "no_show"].includes(b.status));
   const other = s.bookings.filter((b) => ["cancelled", "late_cancelled", "studio_cancelled"].includes(b.status));
@@ -111,6 +115,30 @@ export default async function SessionAdmin({ params }: { params: Promise<{ id: s
           }} event={s.class_types?.kind === "event"} />
         </ActionForm>
       </section>
+
+      {s.clients_only && (
+        <section className="card px-5 py-5">
+          <h2 className="display mb-1 text-[0.95rem]">Who can see this event</h2>
+          <p className="mb-3 text-sm text-ink-soft">Clients with an active package, anyone already booked, and the people you add here. Everyone else sees it blurred as &quot;Clients only&quot;.</p>
+          <ul className="mb-3 divide-y divide-line rounded-2xl border border-line text-sm">
+            {(access ?? []).map((a) => (
+              <li key={a.profile_id} className="flex items-center justify-between gap-3 px-3 py-2">
+                <span className="text-ink">{a.profiles?.full_name ?? a.profiles?.email ?? "Client"}</span>
+                <AccessRemove sessionId={s.id} profileId={a.profile_id} name={a.profiles?.full_name ?? "client"} />
+              </li>
+            ))}
+            {(access ?? []).length === 0 && <li className="px-3 py-2 text-ink-soft">Nobody added yet.</li>}
+          </ul>
+          <ActionForm action={allowEventAccess.bind(null, s.id)} submit="Let them see this event" variant="soft">
+            <Field id="access_profile" label="Add a client">
+              <select id="access_profile" name="profile_id" className={inputClass} defaultValue="">
+                <option value="" disabled>Choose…</option>
+                {(clients ?? []).map((cl) => <option key={cl.id} value={cl.id}>{cl.full_name ?? cl.email}</option>)}
+              </select>
+            </Field>
+          </ActionForm>
+        </section>
+      )}
 
       {s.class_types?.kind === "event" && (
         <section className="card px-5 py-5">

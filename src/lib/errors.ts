@@ -19,6 +19,7 @@ const MESSAGES: Record<string, string> = {
   trial_not_available: "There's no trial for this class.",
   unpaid_limit: "You already have a class waiting for payment. Once it's settled you can reserve another, or get a package.",
   pay_later_off: "Please get a package first.",
+  event_no_cancel: "Events can't be cancelled or refunded in the app. Please message the studio.",
   clients_only: "This event is for Re·Form clients. Come to a class or get a package to join the next one.",
 };
 

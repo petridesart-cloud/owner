@@ -1,47 +1,26 @@
 import type { Metadata } from "next";
 import { BackButton } from "@/components/BackButton";
-import { ClickToLoadMap } from "@/components/ClickToLoadMap";
 import { PhotoStrip } from "@/components/PhotoStrip";
 import { Prose } from "@/components/Prose";
-import { ButtonLink, PageTitle, Section } from "@/components/ui";
-import { getSettings } from "@/lib/auth";
+import { ButtonLink, PageTitle } from "@/components/ui";
 import { getTexts } from "@/lib/content";
 import { getMedia } from "@/lib/media";
-import { business } from "@/lib/business";
 
-export const metadata: Metadata = { title: "Studio" };
+export const metadata: Metadata = { title: "The Studio" };
 export const dynamic = "force-dynamic";
 
+// Her notes: the title, her photos, then her own words (optional). Nothing else.
 export default async function StudioPage() {
-  const [s, t, photos, portrait] = await Promise.all([getSettings(), getTexts(), getMedia("studio:"), getMedia("instructor")]);
+  const [t, photos] = await Promise.all([getTexts(), getMedia("studio:")]);
   return (
     <div>
       <div className="px-5 pt-3"><BackButton href="/" /></div>
-      <PageTitle title="Studio" script="The">{t.studio_text || undefined}</PageTitle>
-
+      <PageTitle title="Studio" script="The" />
       <section aria-label="Photos of the studio">
         <PhotoStrip photos={photos} label="The studio" slides />
       </section>
-
-      <Section title="What to bring" className="mt-8">
-        <ul className="card space-y-2 px-5 py-5 text-[0.95rem] leading-relaxed text-ink">
-          {t.what_to_bring.map((w) => <li key={w}>{w}</li>)}
-        </ul>
-      </Section>
-
-      <section aria-labelledby="magic" className="mt-10">
-        <header className="px-5">
-          <p className="eyebrow">About your instructor</p>
-          <h2 id="magic" className="display mt-2 text-[1.6rem] text-ink"><span className="mr-2 font-script text-[2rem] normal-case tracking-normal text-plum-700">The</span>Magic</h2>
-        </header>
-        <div className="mt-4"><PhotoStrip photos={portrait} label="Your instructor" tall /></div>
-        <div className="mt-2"><Prose>{t.magic_text.split(/\n\s*\n/).map((para, i) => <p key={i}>{para}</p>)}</Prose></div>
-      </section>
-
-      <Section title="Find us" className="mt-8">
-        <ClickToLoadMap query={business(s).address ?? "Limassol, Cyprus"} address={business(s).address ?? "Limassol, Cyprus"} />
-      </Section>
-      <div className="mt-6 px-5"><ButtonLink href="/packs" className="w-full">Secure your package</ButtonLink></div>
+      {t.studio_text && <div className="mt-4"><Prose>{t.studio_text.split(/\n\s*\n/).map((para, i) => <p key={i}>{para}</p>)}</Prose></div>}
+      <div className="mt-8 px-5"><ButtonLink href="/packs" className="w-full">Secure your package</ButtonLink></div>
     </div>
   );
 }

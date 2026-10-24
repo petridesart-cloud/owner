@@ -25,8 +25,7 @@ export default async function TextsPage() {
           {area("studio_rules", "Studio Rules", t.studio_rules.join("\n"), "One rule per line. Shown with the little flower.", 7)}
           {area("payments_policy", "Payments, Cancellation & Membership Policy", t.payments_policy.join("\n"), "One point per line. Keep the rules in Settings (cutoff hours, discount) matching what you write here.", 12)}
           {area("what_to_bring", "What to bring", t.what_to_bring.join("\n"), "One item per line. Shown on every class.", 4)}
-          {area("magic_text", "The Magic (about you, on the Studio page)", t.magic_text, "Leave an empty line between paragraphs.", 8)}
-          {area("studio_text", "The Studio (optional)", t.studio_text, "A few words above your studio photos. Leave empty to show only the photos.", 3)}
+          {area("studio_text", "The Studio (optional)", t.studio_text, "A few words under your studio photos. Leave an empty line between paragraphs; leave it all empty to show only the photos.", 3)}
           {area("events_intro", "Events intro (optional)", t.events_intro, "One line under the Events title. Leave empty to hide.", 2)}
         </ActionForm>
       </div>
