@@ -3,7 +3,7 @@ import { getMedia, DEFAULT_LOGO, type MediaItem } from "@/lib/media";
 import { db } from "@/lib/supabase/admin";
 import { dotDate, nowMs } from "@/lib/time";
 import { AdminTitle } from "../ui";
-import { DeletePhoto, Uploader } from "./Uploader";
+import { DeletePhoto, PhotoControls, Uploader } from "./Uploader";
 
 export const dynamic = "force-dynamic";
 
@@ -13,11 +13,14 @@ function Slot({ title, hint, slot, photos, single = false, fallback }: { title: 
       <h2 className="font-medium text-ink">{title}</h2>
       {hint && <p className="text-xs text-ink-soft">{hint}</p>}
       <div className="mt-3 flex flex-wrap gap-2">
-        {photos.map((p) => (
-          <div key={p.id} className="relative size-24 overflow-hidden rounded-2xl bg-lilac-100">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={p.url} alt={p.caption ?? title} className="size-full object-cover" loading="lazy" />
-            <DeletePhoto id={p.id} />
+        {photos.map((p, i) => (
+          <div key={p.id}>
+            <div className="relative size-24 overflow-hidden rounded-2xl bg-lilac-100">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={p.url} alt={p.caption ?? title} className="size-full object-cover" loading="lazy" />
+              <DeletePhoto id={p.id} />
+            </div>
+            {!single && <PhotoControls id={p.id} caption={p.caption ?? ""} first={i === 0} last={i === photos.length - 1} />}
           </div>
         ))}
         {!photos.length && fallback && (

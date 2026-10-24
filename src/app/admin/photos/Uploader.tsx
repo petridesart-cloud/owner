@@ -1,8 +1,8 @@
 "use client";
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ImagePlus, Trash2 } from "lucide-react";
-import { deletePhoto, uploadPhoto } from "./actions";
+import { ChevronLeft, ChevronRight, ImagePlus, Trash2 } from "lucide-react";
+import { deletePhoto, movePhoto, setCaption, uploadPhoto } from "./actions";
 
 /** Shrink to ≤1600px and re-encode as JPEG in the browser (also strips location metadata). */
 async function compress(file: File): Promise<Blob> {
@@ -59,5 +59,26 @@ export function DeletePhoto({ id }: { id: string }) {
       className="absolute right-1 top-1 grid size-8 place-items-center rounded-full bg-white/90 text-burgundy shadow">
       <Trash2 aria-hidden size={15} />
     </button>
+  );
+}
+
+/** Caption (saved when she leaves the box) and ← → to reorder within the section. */
+export function PhotoControls({ id, caption, first, last }: { id: string; caption: string; first: boolean; last: boolean }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [saved, setSaved] = useState(false);
+  const move = (dir: -1 | 1) => start(async () => { await movePhoto(id, dir); router.refresh(); });
+  const btn = "grid size-8 place-items-center rounded-full bg-lilac-50 text-ink disabled:opacity-30";
+  return (
+    <div className="mt-1 w-24 space-y-1">
+      <input aria-label="Caption" placeholder="Caption" defaultValue={caption} maxLength={80}
+        onBlur={(e) => { if (e.target.value !== caption) start(async () => { await setCaption(id, e.target.value); setSaved(true); router.refresh(); }); }}
+        className="block w-full rounded-lg border border-line bg-white px-2 py-1 text-xs text-ink" />
+      <div className="flex items-center justify-between">
+        <button type="button" aria-label="Move earlier" disabled={first || pending} onClick={() => move(-1)} className={btn}><ChevronLeft aria-hidden size={15} /></button>
+        {saved && <span role="status" className="text-[0.65rem] text-plum-700">Saved</span>}
+        <button type="button" aria-label="Move later" disabled={last || pending} onClick={() => move(1)} className={btn}><ChevronRight aria-hidden size={15} /></button>
+      </div>
+    </div>
   );
 }

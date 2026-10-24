@@ -59,3 +59,26 @@ export async function deletePhoto(id: string): Promise<ActionResult> {
   revalidatePath("/", "layout");
   return { ok: true };
 }
+
+export async function setCaption(id: string, caption: string): Promise<ActionResult> {
+  await requireAdmin();
+  const { error } = await db().from("media").update({ caption: caption.trim().slice(0, 80) || null }).eq("id", id);
+  if (error) return { ok: false, error: "Couldn't save the caption." };
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+/** Move a photo one place earlier (-1) or later (1) within its section. */
+export async function movePhoto(id: string, dir: -1 | 1): Promise<ActionResult> {
+  await requireAdmin();
+  const { data: m } = await db().from("media").select("slot").eq("id", id).maybeSingle();
+  if (!m) return { ok: false, error: "Photo not found." };
+  const { data: list } = await db().from("media").select("id").eq("slot", m.slot).order("sort").order("created_at");
+  const ids = (list ?? []).map((x) => x.id);
+  const i = ids.indexOf(id), j = i + dir;
+  if (i < 0 || j < 0 || j >= ids.length) return { ok: true };
+  [ids[i], ids[j]] = [ids[j], ids[i]];
+  await Promise.all(ids.map((pid, sort) => db().from("media").update({ sort }).eq("id", pid)));
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
