@@ -6,7 +6,7 @@ export default function ImportPage() {
   const t = todayKey();
   return (
     <div className="space-y-6">
-      <AdminTitle title="Import" sub="Bring in your existing clients and timetable from a spreadsheet." />
+      <AdminTitle back="/admin/settings" title="Import" sub="Bring in your existing clients and timetable from a spreadsheet." />
       <section className="card px-5 py-5">
         <h2 className="display mb-3 text-[0.95rem]">Clients &amp; credit balances</h2>
         <Importer kind="clients" />

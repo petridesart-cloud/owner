@@ -9,7 +9,7 @@ export default async function NewClassPage() {
   const { data: types } = await db().from("class_types").select("*").eq("active", true).order("sort_order");
   return (
     <div>
-      <AdminTitle title="New class" sub="One-off class or special event. For the weekly schedule use Timetable." />
+      <AdminTitle back="/admin/classes" title="New class" sub="One-off class or special event. For the weekly schedule use Timetable." />
       <div className="card px-5 py-5">
         <ActionForm action={createSession} submit="Create class">
           <SessionFields types={types ?? []} d={{ date: todayKey(), time: "08:00" }} />

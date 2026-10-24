@@ -10,7 +10,7 @@ type Slot = { weekday: number; time: string; class_type_id: string };
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
 export function Builder({ types, initial, defaults }: {
-  types: { id: string; name: string }[]; initial: Slot[]; defaults: { name: string; from: string; to: string };
+  types: { id: string; name: string }[]; initial: Slot[]; defaults: { name: string; from: string };
 }) {
   const [slots, setSlots] = useState<Slot[]>(initial);
   const [draft, setDraft] = useState<Record<number, { time: string; type: string }>>({});
@@ -28,9 +28,8 @@ export function Builder({ types, initial, defaults }: {
     <form onSubmit={keepValues(action)} className="space-y-4">
       <input type="hidden" name="slots" value={JSON.stringify(slots)} />
       <div className="card grid grid-cols-2 gap-3 px-4 py-4">
-        <div className="col-span-2"><Field id="name" label="Name"><input id="name" name="name" defaultValue={defaults.name} className={inputClass} /></Field></div>
-        <Field id="valid_from" label="From"><input id="valid_from" name="valid_from" type="date" defaultValue={defaults.from} className={inputClass} /></Field>
-        <Field id="valid_to" label="To"><input id="valid_to" name="valid_to" type="date" defaultValue={defaults.to} className={inputClass} /></Field>
+        <div className="col-span-2"><Field id="valid_from" label="Starts on" hint="Repeats every week from this date, month after month, until you save a new one."><input id="valid_from" name="valid_from" type="date" defaultValue={defaults.from} className={inputClass} /></Field></div>
+        <input type="hidden" name="name" value={defaults.name} />
       </div>
 
       {DAYS.map((label, i) => {
@@ -73,7 +72,7 @@ export function Builder({ types, initial, defaults }: {
 
       {!state.ok && <Notice tone="error">{state.error}</Notice>}
       {state.ok && state.message && <Notice tone="success">{state.message}</Notice>}
-      <Button type="submit" disabled={pending} className="w-full">{pending ? "Creating classes…" : `Save & create ${slots.length} weekly classes`}</Button>
+      <Button type="submit" disabled={pending} className="w-full">{pending ? "Creating classes…" : `Save · ${slots.length} classes every week`}</Button>
     </form>
   );
 }

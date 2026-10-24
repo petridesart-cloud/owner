@@ -65,6 +65,7 @@ Booking web app for **Re·Form Pilates Studio**, Limassol, Cyprus (Instagram @re
 - **Waitlist (auto-book, owner's decision):** when a spot opens more than the cutoff (6h) before class, the first in line is booked automatically with a usable package class and emailed (`waitlist_booked`), so they can still cancel free. Otherwise (no usable class, events, inside 6h) they get an offer: 2h, or until the cutoff, or until class time if already inside it. A live offer reserves the spot.
 - **Booking window:** clients book up to 4 weeks ahead (`booking_window_days`, Settings); the studio can add anyone beyond it.
 - **Same days every week:** clients pick weekly slots (`recurring_rules`); `applyRecurring()` books them while the package lasts, inside the window, on save, on Mark as paid, on timetable save and on every tick. Full weeks are skipped with a one-tap waitlist email; classes the client cancelled are never re-booked.
+- **Emergency contact** has an optional relation (`profiles.emergency_contact_relation`).
 - **Her photos:** Admin → Settings → Photos uploads to the public Storage bucket `media` (table `media`, slots `logo`, `instructor`, `studio:space` (the Studio page shows every `studio:*` slot), `event:<id>` (archive), `event-cover:<id>` (one background picture, set on the event's admin page)), resized in the browser to ≤1600px.
 - **Events (her round-2 notes):** per event she sets title, date, location, description, price, spots, plus `clients_only`, `what_to_bring` (empty = hidden), `event_policy` (shown and emailed instead of the studio policy; the app's cancellation mechanics still follow the cutoff) and `recap` (archive text). Clients-only: `is_studio_client()` (paid payment, any credit lot, or a past attended booking); non-clients see the card blurred, the Schedule row unbookable, and the trigger `guard_clients_only` refuses online bookings/waitlist joins (`clients_only` error); manual adds by the studio are allowed. Previous events show only events with photos or a recap. Optional Events intro (`site_content.events_intro`) and Studio text: saved empty = hidden.
 - **Client profile:** first name, surname, **date of birth (required, her answer; older clients are asked before their next booking)**, optional goal, emergency contact, photo consent (with face / without face / none, logged in `consents` as `photos`).
@@ -72,7 +73,13 @@ Booking web app for **Re·Form Pilates Studio**, Limassol, Cyprus (Instagram @re
 - **Her texts** are editable by her (Admin → Settings → Your texts, table `site_content`), falling back to the defaults in `src/lib/policy.ts`. They're reused across the policy pages, the first-class welcome, "What to bring", The Magic and Our Studio.
 - **Studio team:** she adds or removes admins in Admin → Settings → Studio team (`profiles.role`). `ADMIN_EMAILS` is only the bootstrap.
 - **Client navigation:** Home (logo, "Secure your package", next class, Pick classes / Every week, circles Studio · Events · Rules & policies, Next available) · Schedule · My classes (My profile / My progress: current package cards, upcoming, past packages with X/Y) · Account (drop-down sections: Your details, Health, Receipts, Privacy & data).
-- **Keep it simple:** 5 admin tabs (Today, Classes, Clients, Stats, Settings); less-used tools sit inside Classes and Settings. Settings shows the essentials first, with technical options under "Advanced".
+- **Keep it simple:** 5 admin tabs (Today, Classes, Clients, Stats, Settings); less-used tools sit inside Classes and Settings. Settings shows the essentials first, with technical options under "Advanced". Every admin page but Today has a Back button (`AdminTitle back=`).
+- **Studio notes, round 1** (`docs/feedback/elysia-studio-notes-1.md`):
+  - Classes: swipeable `DayStrip` (shared with the client Schedule), opens on the next day with classes; class page lists "Clients".
+  - Timetable repeats: the newest template (`timetable_templates.repeats`) is topped up ~9 weeks ahead by `extend_timetable()` on every tick; saving a new one calls `replace_timetable_from()` (older templates stop; their empty future classes from that date are deleted, booked ones kept). `generate_sessions` skips confirmed closure days.
+  - Clients: Active (live package classes or an upcoming booking) / Not active, alphabetical, name + phone, birthday cake + `sendBirthday` (template `birthday`, once a year per client).
+  - Client page (`src/lib/client-history.ts`): Packages / Attended / No-shows boxes (no-show = `no_show` + `late_cancelled`), current package card, details & notes, health history (`health_history`, a copy on every save; studio only; erased with the account; in the data export), student, Adjust package (`admin_adjust_lot`: extend / freeze / end / add / remove, all ledger entries; `giveClasses` for classes with their own end date), History grouped by package, Payments and Ledger as drop-downs.
+  - Stats: this week, this month (revenue, new clients), Reformer vs Mat, fill rate by day, package classes used/expired, payments by method. "Monthly recurring" removed (memberships are off).
 
 ## Decisions (and why)
 | Decision | Why |
@@ -142,7 +149,7 @@ cp .env.example .env.local    # fill in the local keys printed by `supabase star
 npm run dev                   # http://localhost:3000
 npm run typecheck && npm run lint
 PW_CHROMIUM=/opt/pw-browsers/chromium npm run test:e2e   # booking, cancel, waitlist, admin access
-npm run test:engine          # 39 booking-engine tests (local Supabase)
+npm run test:engine          # 41 booking-engine tests (local Supabase)
 # Stripe webhooks (signature, credits once, expired): start the app with test-only keys, then
 STRIPE_SECRET_KEY=sk_test_dummy STRIPE_WEBHOOK_SECRET=whsec_test_dummy npx next start -p 3002 &
 npm run test:webhook
@@ -168,10 +175,11 @@ npm run db:types              # after schema changes
   - Her round-1 client notes (`docs/feedback/elysia-client-notes-1.md`): her logo, real prices, cash/Revolut choice, trials and drop-ins, weekly repeat bookings, 3-state colours, new My classes with package progress, new Account, Studio / Events / Rules pages, Back buttons, Photos manager.
   - Admin: Today (awaiting payment with chosen method, roster flags), classes, timetable, closures, clients (profile, health behind a tap, student verification, holiday return, ledger), Outbox, stats, import, settings (price grid, booking window, studio sections), photos, compliance.
   - PWA manifest and icons, Open Graph previews.
-  - 39 engine tests + 3 webhook tests + 6 Playwright flows green on a production build.
+  - 41 engine tests + 3 webhook tests + 6 Playwright flows green on a production build.
+  - Her studio notes, round 1: back buttons, Classes day strip, repeating timetable, Active/Not active clients with birthdays, new client page with package adjustments and health history, new Stats.
   - Polish: "To pay" on unpaid classes, trials matched by phone, photo captions/reordering.
 - **Waiting on the owner (questions in the brief):**
-  - Answers to the open questions in `docs/feedback/elysia-client-notes-1.md` (euro and DOB required are answered; defaults are live for the rest) and `elysia-client-notes-2.md` (who counts as a client, event cancellation cutoff).
+  - Answers to the open questions in `docs/feedback/elysia-client-notes-1.md` (euro and DOB required are answered; defaults are live for the rest) and `elysia-client-notes-2.md` (who counts as a client, event cancellation cutoff), and `elysia-studio-notes-1.md` (unpaid trial = active?, freeze blocking bookings, birthday wording, auto-attended).
   - Her Revolut link, IBAN, original logo file and photos (she can upload them herself now).
   - Address, her full name, contact details.
 - **Hosting plan (owner's decision):** Vercel Hobby during the soft launch; upgrade `reform-studio` to Pro before the link goes in her Instagram bio (`docs/launch/0-checklist.md` step 6).

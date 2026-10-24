@@ -44,7 +44,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
 
   return (
     <div>
-      <AdminTitle
+      <AdminTitle back={false}
         title={key === todayKey() ? "Today" : longDate(`${key}T12:00:00Z`)}
         sub={key === todayKey() ? longDate(`${key}T12:00:00Z`) : undefined}
         action={

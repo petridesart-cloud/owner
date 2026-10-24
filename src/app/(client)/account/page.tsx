@@ -41,7 +41,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
           {!p.date_of_birth && <div className="mb-3"><Notice>Please add your date of birth to keep booking classes.</Notice></div>}
           <ProfileForm p={{
             first: p.first_name ?? p.full_name?.split(" ")[0] ?? "", last: p.last_name ?? "", phone: p.phone ?? "", email: viewer.email,
-            dob: p.date_of_birth ?? "", goal: p.goal ?? "", ecName: p.emergency_contact_name ?? "", ecPhone: p.emergency_contact_phone ?? "",
+            dob: p.date_of_birth ?? "", goal: p.goal ?? "", ecName: p.emergency_contact_name ?? "", ecPhone: p.emergency_contact_phone ?? "", ecRelation: p.emergency_contact_relation ?? "",
             photos: p.photo_consent, me: p.marketing_email, reminders: p.reminder_emails,
           }} />
         </Accordion>

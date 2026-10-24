@@ -20,7 +20,7 @@ export default async function OutboxPage() {
   const schedulerOk = schedulerHealthy(s.last_cron_tick_at);
   return (
     <div>
-      <AdminTitle title="Outbox" sub={notificationsMode() === "outbox" ? "Demo mode: messages are logged here, not sent." : "Live: messages are sent via Resend / Twilio and logged here."} />
+      <AdminTitle back="/admin/settings" title="Outbox" sub={notificationsMode() === "outbox" ? "Demo mode: messages are logged here, not sent." : "Live: messages are sent via Resend / Twilio and logged here."} />
       <section className="card mb-4 space-y-3 px-4 py-4 text-sm" aria-label="Email status">
         <p className="flex items-center justify-between gap-3">
           <span className="font-medium text-ink">Email</span>

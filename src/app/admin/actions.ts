@@ -145,19 +145,23 @@ const Slot = z.object({ weekday: z.number().int().min(1).max(7), time: z.string(
 
 export async function saveTimetable(_: ActionResult, form: FormData): Promise<ActionResult> {
   await admin("save_timetable");
-  const name = String(form.get("name") ?? "").trim() || "Timetable";
-  const from = String(form.get("valid_from")); const to = String(form.get("valid_to"));
+  const from = String(form.get("valid_from"));
   const slots = z.array(Slot).safeParse(JSON.parse(String(form.get("slots") ?? "[]")));
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || to < from) return { ok: false, error: "Pick a valid date range." };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from)) return { ok: false, error: "Pick the date it starts." };
   if (!slots.success || slots.data.length === 0) return { ok: false, error: "Add at least one class time." };
-  const { data: t, error } = await db().from("timetable_templates").insert({ name, valid_from: from, valid_to: to }).select("id").single();
+  const name = String(form.get("name") ?? "").trim() || `Timetable from ${from}`;
+  // It repeats every week from the start date; each tick tops it up to ~9 weeks ahead (extend_timetable).
+  const { data: t, error } = await db().from("timetable_templates").insert({ name, valid_from: from, valid_to: addDaysKey(from, 62), repeats: true }).select("id").single();
   if (error) return { ok: false, error: "Couldn't save the timetable." };
   const unique = new Map(slots.data.map((s) => [`${s.weekday}-${s.time}`, s]));
   await db().from("template_slots").insert([...unique.values()].map((s) => ({ template_id: t.id, weekday: s.weekday, start_time: s.time, class_type_id: s.class_type_id, capacity: s.capacity ?? null })));
-  const { data: n } = await db().rpc("generate_sessions", { p_template: t.id });
+  const { data: kept } = await db().rpc("replace_timetable_from", { p_template: t.id });
+  await db().rpc("generate_sessions", { p_template: t.id });
+  await db().rpc("extend_timetable", {});
   await applyRecurring();
   revalidatePath("/admin/timetable");
-  return { ok: true, message: `Timetable saved. ${n} new classes created (existing classes were kept).` };
+  revalidatePath("/admin/classes");
+  return { ok: true, message: `Saved. Your classes now repeat every week from ${from}.${kept ? ` ${kept} class${kept === 1 ? "" : "es"} from the old timetable already ${kept === 1 ? "has" : "have"} bookings and ${kept === 1 ? "was" : "were"} kept: check them in Classes.` : ""}` };
 }
 
 // ── Clients ────────────────────────────────────────────────────────────
@@ -172,32 +176,90 @@ export async function clearanceReceived(profileId: string): Promise<ActionResult
 
 export async function updateClient(profileId: string, _: ActionResult, form: FormData): Promise<ActionResult> {
   await admin("update_client", { profileId });
-  const email = String(form.get("email") ?? "").trim().toLowerCase() || null;
-  if (email && !z.string().email().safeParse(email).success) return { ok: false, error: "Invalid email." };
-  const name = String(form.get("full_name") ?? "").trim();
-  const { error } = await db().from("profiles").update({
-    full_name: name || null, first_name: name.split(" ")[0] || null, last_name: name.split(" ").slice(1).join(" ") || null,
-    phone: String(form.get("phone") ?? "").trim() || null,
-    email,
-    admin_notes: String(form.get("admin_notes") ?? "").trim() || null,
-  }).eq("id", profileId);
+  // Two forms post here (contact details, and notes): only what was sent is changed.
+  const row: { full_name?: string | null; first_name?: string | null; last_name?: string | null; phone?: string | null; email?: string | null; admin_notes?: string | null } = {};
+  if (form.has("email")) {
+    const email = String(form.get("email") ?? "").trim().toLowerCase() || null;
+    if (email && !z.string().email().safeParse(email).success) return { ok: false, error: "Invalid email." };
+    row.email = email;
+  }
+  if (form.has("full_name")) {
+    const name = String(form.get("full_name") ?? "").trim();
+    Object.assign(row, { full_name: name || null, first_name: name.split(" ")[0] || null, last_name: name.split(" ").slice(1).join(" ") || null });
+  }
+  if (form.has("phone")) row.phone = String(form.get("phone") ?? "").trim() || null;
+  if (form.has("admin_notes")) row.admin_notes = String(form.get("admin_notes") ?? "").trim() || null;
+  const { error } = await db().from("profiles").update(row).eq("id", profileId);
   if (error) return { ok: false, error: error.code === "23505" ? "Another client already uses that email." : "Couldn't save." };
   revalidatePath(`/admin/clients/${profileId}`);
   return { ok: true, message: "Saved." };
 }
 
-export async function adjustCredits(profileId: string, _: ActionResult, form: FormData): Promise<ActionResult> {
-  const viewer = await admin("adjust_credits", { profileId });
+const LOT_ERRORS: Record<string, string> = {
+  reason_required: "Please add a reason (it's kept in the client's history).",
+  bad_days: "Enter a number of days between 1 and 365.",
+  bad_date: "Pick a date from today on.",
+  booked_after: "They're booked into classes after that date with this package. Cancel those first.",
+  bad_credits: "Enter between 1 and 50 classes.",
+  not_enough_credits: "They don't have that many classes left in this package.",
+};
+
+/** Extend, freeze, end earlier, add or remove classes on one package. */
+export async function adjustLot(profileId: string, _: ActionResult, form: FormData): Promise<ActionResult> {
+  const viewer = await admin("adjust_lot", { profileId, action: form.get("action"), lot: form.get("lot") });
+  const action = String(form.get("action") ?? "");
+  const lot = String(form.get("lot") ?? "");
+  const n = Number(form.get("amount") || 0);
+  const date = String(form.get("date") ?? "");
+  const reason = String(form.get("reason") ?? "").trim();
+  if (!["extend", "freeze", "end", "add", "remove"].includes(action) || !/^[0-9a-f-]{36}$/.test(lot)) return { ok: false, error: "Choose a package and what to change." };
+  const { data: owned } = await db().from("credit_lots").select("id").eq("id", lot).eq("profile_id", profileId).maybeSingle();
+  if (!owned) return { ok: false, error: "Choose one of this client's packages." };
+  const { error } = await db().rpc("admin_adjust_lot", {
+    p_lot: lot, p_action: action, p_days: action === "extend" || action === "freeze" ? n : 0, p_date: /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : (null as unknown as string),
+    p_credits: action === "add" || action === "remove" ? n : 0, p_reason: reason, p_actor: viewer.profile.id,
+  });
+  if (error) return { ok: false, error: LOT_ERRORS[error.message] ?? "Couldn't change the package." };
+  revalidatePath(`/admin/clients/${profileId}`);
+  const done: Record<string, string> = {
+    extend: `Extended by ${n} day${n === 1 ? "" : "s"}.`, freeze: `Frozen for ${n} day${n === 1 ? "" : "s"}: the end date moved by the same.`,
+    end: "The package now ends on that date.", add: `Added ${n} class${n === 1 ? "" : "es"}.`, remove: `Removed ${n} class${n === 1 ? "" : "es"}.`,
+  };
+  return { ok: true, message: done[action] };
+}
+
+/** Her own happy-birthday email, one client at a time. */
+export async function sendBirthday(profileId: string, _: ActionResult, form: FormData): Promise<ActionResult> {
+  await admin("send_birthday", { profileId });
+  const message = String(form.get("message") ?? "").trim().slice(0, 1500);
+  if (!message) return { ok: false, error: "Write a message first." };
+  const { data: p } = await db().from("profiles").select("id, email, full_name").eq("id", profileId).is("deleted_at", null).maybeSingle();
+  if (!p?.email) return { ok: false, error: "This client has no email address." };
+  const year = todayKey().slice(0, 4);
+  const r = await notify({ profileId: p.id, email: p.email }, "birthday", { name: p.full_name ?? undefined, note: message }, { dedupeKey: `birthday:${year}:${p.id}` });
+  if (r.email === "duplicate") return { ok: false, error: "You already sent them a birthday message this year." };
+  if (r.email === "failed") return { ok: false, error: "The email couldn't be sent. Check Settings → Messages." };
+  revalidatePath(`/admin/clients/${profileId}`);
+  return { ok: true, message: r.email === "sent" ? "Sent. 🎂" : "Saved to Messages (demo: not emailed)." };
+}
+
+/** Classes outside their packages (goodwill, a missed holiday class) with their own end date. */
+export async function giveClasses(profileId: string, _: ActionResult, form: FormData): Promise<ActionResult> {
+  const viewer = await admin("give_classes", { profileId });
   const kind = form.get("kind") === "mat" ? "mat" : "reformer";
   const amount = Number(form.get("amount"));
-  const days = Number(form.get("days") || 0);
+  const until = String(form.get("date") ?? "");
   const reason = String(form.get("reason") ?? "").trim();
-  if (!Number.isInteger(amount) || amount === 0 || Math.abs(amount) > 50) return { ok: false, error: "Enter between -50 and 50 classes (not 0)." };
+  if (!Number.isInteger(amount) || amount < 1 || amount > 50) return { ok: false, error: "Enter between 1 and 50 classes." };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(until) || until < todayKey()) return { ok: false, error: "Pick the last day they can use them (today or later)." };
   if (!reason) return { ok: false, error: "Please add a reason (it's kept in the client's history)." };
-  const { error } = await db().rpc("admin_adjust_credits", { p_profile: profileId, p_kind: kind, p_delta: amount, p_days: days, p_reason: reason, p_actor: viewer.profile.id });
-  if (error) return { ok: false, error: error.message === "not_enough_credits" ? "They don't have that many classes to remove." : "Couldn't adjust classes." };
+  const { error } = await db().rpc("grant_lot", {
+    p_profile: profileId, p_kind: kind, p_credits: amount, p_expires: localToUtc(addDaysKey(until, 1), "00:00"), p_note: reason,
+    p_entry: "admin_adjustment", p_actor: viewer.profile.id,
+  });
+  if (error) return { ok: false, error: "Couldn't add the classes." };
   revalidatePath(`/admin/clients/${profileId}`);
-  return { ok: true, message: `${amount > 0 ? "Added" : "Removed"} ${Math.abs(amount)} ${kind} class${Math.abs(amount) === 1 ? "" : "es"}.` };
+  return { ok: true, message: `Gave ${amount} ${kind} class${amount === 1 ? "" : "es"}, usable until ${until.split("-").reverse().join(".")}.` };
 }
 
 // ── Payments (offline "Mark as paid" and memberships) ──────────────────
@@ -288,18 +350,6 @@ export async function setStudent(profileId: string, _: ActionResult, form: FormD
 }
 
 /** "Reschedule missed class (holiday)": gives the class back with a reason. */
-export async function holidayReturn(profileId: string, _: ActionResult, form: FormData): Promise<ActionResult> {
-  const viewer = await admin("holiday_return", { profileId });
-  const kind = form.get("kind") === "mat" ? "mat" : "reformer";
-  const date = String(form.get("date") ?? "").trim();
-  const { error } = await db().rpc("admin_adjust_credits", {
-    p_profile: profileId, p_kind: kind, p_delta: 1, p_days: 30, p_reason: `Missed class: public holiday${date ? ` (${date})` : ""}`, p_actor: viewer.profile.id,
-  });
-  if (error) return { ok: false, error: "Couldn't return the class." };
-  revalidatePath(`/admin/clients/${profileId}`);
-  return { ok: true, message: "Class returned (valid 30 days). They can rebook any time." };
-}
-
 // ── Closures ───────────────────────────────────────────────────────────
 export async function createClosure(_: ActionResult, form: FormData): Promise<ActionResult> {
   await admin("create_closure");

@@ -551,3 +551,59 @@ describe("clients-only events", () => {
     assert.notEqual((await book(stranger, s, "credit", "manual")).error?.message, "clients_only"); // refused only for lack of credits
   });
 });
+
+describe("studio notes, round 1", () => {
+  const ledgerSum = async (lot: string) =>
+    ((await db.from("credit_ledger").select("delta").eq("lot_id", lot)).data ?? []).reduce((n, e) => n + e.delta, 0);
+  const adjust = (lot: string, action: string, o: { days?: number; date?: string; credits?: number } = {}) =>
+    db.rpc("admin_adjust_lot", { p_lot: lot, p_action: action, p_days: o.days ?? 0, p_date: (o.date ?? null) as string, p_credits: o.credits ?? 0, p_reason: "test", p_actor: null as unknown as string });
+
+  test("adjust a package: extend, freeze, add, remove, end earlier; the ledger stays in step", async () => {
+    const p = await client("adjust");
+    const lot = await grant(p, 4, 10 * 24 * H);
+    const exp0 = new Date((await db.from("credit_lots").select("expires_at").eq("id", lot).single()).data!.expires_at!).getTime();
+    assert.ifError((await adjust(lot, "extend", { days: 5 })).error);
+    assert.ifError((await adjust(lot, "freeze", { days: 2 })).error);
+    const exp1 = new Date((await db.from("credit_lots").select("expires_at").eq("id", lot).single()).data!.expires_at!).getTime();
+    assert.equal(Math.round((exp1 - exp0) / 86_400_000), 7);
+    assert.ifError((await adjust(lot, "add", { credits: 2 })).error);
+    assert.ifError((await adjust(lot, "remove", { credits: 1 })).error);
+    assert.equal(await lotRemaining(lot), 5);
+    assert.equal(await ledgerSum(lot), 5);
+    assert.equal((await adjust(lot, "remove", { credits: 9 })).error?.message, "not_enough_credits");
+    // A class booked in 3 days blocks ending the package tomorrow.
+    assert.ifError((await book(p, await session(3 * 24 * H))).error);
+    assert.equal((await adjust(lot, "end", { date: addDaysKey(todayKey(), 1) })).error?.message, "booked_after");
+    assert.ifError((await adjust(lot, "end", { date: addDaysKey(todayKey(), 5) })).error);
+    assert.equal(await ledgerSum(lot), await lotRemaining(lot));
+  });
+
+  test("the timetable repeats by itself, and a new one takes over from its start date", async () => {
+    const t0 = todayKey();
+    const mk = async (from: string, to: string, time: string) => {
+      const { data } = await db.from("timetable_templates").insert({ name: `test ${time}`, valid_from: from, valid_to: to, repeats: true }).select("id").single();
+      await db.from("template_slots").insert([1, 2, 3, 4, 5, 6, 7].map((weekday) => ({ template_id: data!.id, weekday, start_time: time, class_type_id: reformer })));
+      return data!.id;
+    };
+    const a = await mk(t0, addDaysKey(t0, 3), "05:05");
+    await db.rpc("generate_sessions", { p_template: a });
+    await db.rpc("extend_timetable", {});
+    const tA = (await db.from("timetable_templates").select("valid_to").eq("id", a).single()).data!;
+    assert.ok(tA.valid_to >= addDaysKey(t0, 62), `extended to ${tA.valid_to}`);
+    const far = await db.from("class_sessions").select("id", { count: "exact", head: true }).eq("template_id", a).gte("starts_at", localToUtc(addDaysKey(t0, 50), "00:00"));
+    assert.ok((far.count ?? 0) >= 7);
+
+    // Someone books a class from the old timetable after the switch date: it's kept.
+    const start = addDaysKey(t0, 45);
+    const { data: keep } = await db.from("class_sessions").select("id").eq("template_id", a).gte("starts_at", localToUtc(addDaysKey(start, 1), "00:00")).order("starts_at").limit(1).single();
+    const p = await client("tt");
+    await grant(p, 2, null);
+    assert.ifError((await bookFar(p, keep!.id)).error);
+    const b = await mk(start, addDaysKey(start, 62), "05:35");
+    const { data: kept } = await db.rpc("replace_timetable_from", { p_template: b });
+    assert.equal(kept, 1);
+    const left = await db.from("class_sessions").select("id").eq("template_id", a).gte("starts_at", localToUtc(start, "00:00"));
+    assert.deepEqual((left.data ?? []).map((s) => s.id), [keep!.id]);
+    assert.equal((await db.from("timetable_templates").select("repeats").eq("id", a).single()).data!.repeats, false);
+  });
+});

@@ -36,11 +36,11 @@ export default async function SessionAdmin({ params }: { params: Promise<{ id: s
 
   return (
     <div className="space-y-6">
-      <AdminTitle title={`${time(s.starts_at)} ${name}`} sub={<>{longDate(s.starts_at)} · {roster.length}/{s.capacity} booked {s.status === "cancelled" && <Badge tone="full">Cancelled</Badge>}</>}
+      <AdminTitle back="/admin/classes" title={`${time(s.starts_at)} ${name}`} sub={<>{longDate(s.starts_at)} · {roster.length}/{s.capacity} booked {s.status === "cancelled" && <Badge tone="full">Cancelled</Badge>}</>}
         action={<Link href={`/book/${s.id}`} className="text-sm underline underline-offset-4">Client view</Link>} />
 
       <section className="card overflow-hidden">
-        <h2 className="display border-b border-line px-4 py-3 text-[0.95rem]">Roster</h2>
+        <h2 className="display border-b border-line px-4 py-3 text-[0.95rem]">Clients</h2>
         <ul className="divide-y divide-line">
           {roster.map((b) => (
             <li key={b.id} className="flex items-center gap-3 px-4 py-3">
@@ -48,10 +48,10 @@ export default async function SessionAdmin({ params }: { params: Promise<{ id: s
               <div className="min-w-0 flex-1">
                 <Link href={`/admin/clients/${b.profiles?.id}`} className="block truncate font-medium text-ink hover:underline">{b.profiles?.full_name ?? "Client"}</Link>
                 <p className="text-xs text-ink-soft">
-                  {b.profiles?.photo_consent === "none" && <span className="mr-1 rounded-full bg-ink px-2 py-0.5 font-medium text-paper">No photos</span>}
-                  {b.profiles?.photo_consent === "no_face" && <span className="mr-1 rounded-full bg-ink/80 px-2 py-0.5 font-medium text-paper">No face</span>}
-                  {b.paid_with === "pay_at_studio" && <span className="mr-1 rounded-full bg-burgundy-soft px-2 py-0.5 font-medium text-burgundy">Unpaid</span>}
                   {b.status === "no_show" ? "No-show · " : ""}{b.paid_with === "credit" ? "Class credit" : b.paid_with === "payment" ? "Paid" : b.paid_with === "pay_at_studio" ? "Pay at studio" : "Manual"}{b.source === "manual" ? " · added by studio" : ""}
+                  {b.paid_with === "pay_at_studio" && <span className="ml-1 rounded-full bg-burgundy-soft px-2 py-0.5 font-medium text-burgundy">Unpaid</span>}
+                  {b.profiles?.photo_consent === "none" && <span className="ml-1 rounded-full bg-ink px-2 py-0.5 font-medium text-paper">No photos</span>}
+                  {b.profiles?.photo_consent === "no_face" && <span className="ml-1 rounded-full bg-ink/80 px-2 py-0.5 font-medium text-paper">No face</span>}
                 </p>
                 {b.paid_with === "pay_at_studio" && b.payment_id && <div className="mt-1.5"><MarkPaid paymentId={b.payment_id} label={b.profiles?.full_name ?? "booking"} /></div>}
                 <HealthInfo h={b.profiles?.health_notes} />

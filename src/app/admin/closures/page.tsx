@@ -1,3 +1,4 @@
+import { Plus } from "lucide-react";
 import { ActionForm } from "@/components/ActionForm";
 import { Field, inputClass } from "@/components/ui";
 import { db } from "@/lib/supabase/admin";
@@ -16,17 +17,19 @@ export default async function ClosuresPage() {
   const range = (r: { starts_on: string; ends_on: string }) => r.starts_on === r.ends_on ? dayMonth(`${r.starts_on}T12:00:00Z`) : `${dayMonth(`${r.starts_on}T12:00:00Z`)} – ${dayMonth(`${r.ends_on}T12:00:00Z`)}`;
   return (
     <div className="space-y-6">
-      <AdminTitle title="Closures" sub="Christmas, Easter, Summer and public holidays. Active packages freeze: their expiry moves by the closed days." />
-      <section className="card px-5 py-5">
-        <h2 className="display mb-4 text-[0.95rem]">Add a closure</h2>
-        <ActionForm action={createClosure} submit="Close the studio for these dates" confirm="This cancels any classes in these dates and notifies booked clients. Continue?">
+      <AdminTitle back="/admin/classes" title="Closures" sub="Christmas, Easter, Summer and public holidays. Active packages freeze: their expiry moves by the closed days." />
+      <details className="card px-5 py-2">
+        <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between font-medium text-ink [&::-webkit-details-marker]:hidden">
+          Add a closure <Plus aria-hidden size={18} className="text-plum-700" />
+        </summary>
+        <div className="pb-4 pt-2"><ActionForm action={createClosure} submit="Close the studio for these dates" confirm="This cancels any classes in these dates and notifies booked clients. Continue?">
           <Field id="name" label="Name"><input id="name" name="name" placeholder="Christmas break" className={inputClass} /></Field>
           <div className="grid grid-cols-2 gap-3">
             <Field id="starts_on" label="From"><input id="starts_on" name="starts_on" type="date" className={inputClass} /></Field>
             <Field id="ends_on" label="To (inclusive)"><input id="ends_on" name="ends_on" type="date" className={inputClass} /></Field>
           </div>
-        </ActionForm>
-      </section>
+        </ActionForm></div>
+      </details>
       <section className="card overflow-hidden">
         <h2 className="display border-b border-line px-4 py-3 text-[0.95rem]">Confirmed</h2>
         <ul className="divide-y divide-line text-sm">

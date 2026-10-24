@@ -6,8 +6,9 @@ export async function GET() {
   const viewer = await getViewer();
   if (!viewer) return new Response("Unauthorized", { status: 401 });
   const id = viewer.profile.id;
-  const [health, consents, bookings, waitlist, credits, ledger, payments, notifications, weekly] = await Promise.all([
+  const [health, healthHistory, consents, bookings, waitlist, credits, ledger, payments, notifications, weekly] = await Promise.all([
     db().from("health_notes").select("note, injuries, medication, parq_yes, conditions, details, pregnancy, pregnancy_weeks, postpartum_months, bp_meds, clearance_needed, clearance_received_at, consent_at, updated_at").eq("profile_id", id).maybeSingle(),
+    db().from("health_history").select("conditions, details, pregnancy, pregnancy_weeks, postpartum_months, bp_meds, medication, clearance_needed, created_at").eq("profile_id", id).order("created_at"),
     db().from("consents").select("type, granted, version, created_at").eq("profile_id", id).order("created_at"),
     db().from("bookings").select("status, source, paid_with, created_at, cancelled_at, checked_in_at, class_sessions(starts_at, title, class_types(name))").eq("profile_id", id),
     db().from("waitlist_entries").select("status, created_at, offered_at, class_sessions(starts_at)").eq("profile_id", id),
@@ -25,6 +26,7 @@ export async function GET() {
     controller: "Re·Form Pilates Studio",
     profile,
     health_info: health.data,
+    health_info_history: healthHistory.data,
     weekly_bookings: weekly.data,
     consents: consents.data, bookings: bookings.data, waitlist: waitlist.data,
     credit_lots: credits.data, credit_history: ledger.data, payments: payments.data, messages: notifications.data,

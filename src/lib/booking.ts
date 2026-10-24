@@ -345,6 +345,7 @@ export async function runTick(source: "cron" | "page" | "admin" = "page") {
     }
   }
   sent += await creditAndRenewalNotices();
+  await db().rpc("extend_timetable", {}); // the timetable repeats by itself, ~9 weeks ahead
   const weekly = await applyRecurring();
   return { offers: (offers ?? []).length, reminders: sent, weekly: weekly.booked };
 }

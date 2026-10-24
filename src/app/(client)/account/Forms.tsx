@@ -7,7 +7,7 @@ import { keepValues } from "@/lib/keep-form";
 
 type P = {
   first: string; last: string; phone: string; email: string; dob: string; goal: string;
-  ecName: string; ecPhone: string; photos: string | null; me: boolean; reminders: boolean;
+  ecName: string; ecPhone: string; ecRelation: string; photos: string | null; me: boolean; reminders: boolean;
 };
 
 export function ProfileForm({ p }: { p: P }) {
@@ -31,6 +31,7 @@ export function ProfileForm({ p }: { p: P }) {
           <Field id="emergency_contact_name" label="Name"><input id="emergency_contact_name" name="emergency_contact_name" defaultValue={p.ecName} className={inputClass} /></Field>
           <Field id="emergency_contact_phone" label="Phone"><input id="emergency_contact_phone" name="emergency_contact_phone" type="tel" defaultValue={p.ecPhone} className={inputClass} /></Field>
         </div>
+        <Field id="emergency_contact_relation" label="Relation (optional)"><input id="emergency_contact_relation" name="emergency_contact_relation" maxLength={40} placeholder="e.g. Partner, Mum, Friend" defaultValue={p.ecRelation} className={inputClass} /></Field>
       </fieldset>
 
       <div className="border-t border-line pt-4"><PhotoConsentField value={p.photos} /></div>

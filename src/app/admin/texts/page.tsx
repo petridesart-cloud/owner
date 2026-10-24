@@ -16,7 +16,7 @@ export default async function TextsPage() {
   );
   return (
     <div>
-      <AdminTitle title="Your texts" sub="Edit the words clients see. Changes go live when you save." />
+      <AdminTitle back="/admin/settings" title="Your texts" sub="Edit the words clients see. Changes go live when you save." />
       <div className="card px-5 py-5">
         <ActionForm action={saveTexts} submit="Save texts">
           <Field id="intro_line" label="Home page intro" hint="One short sentence under your logo.">

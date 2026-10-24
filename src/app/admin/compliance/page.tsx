@@ -64,7 +64,7 @@ export default async function CompliancePage() {
   const complete = GROUPS.reduce((n, g) => n + g.items.filter(([k]) => done.get(k)).length, 0);
   return (
     <div>
-      <AdminTitle title="Launch checklist" sub={`${complete} of ${total} done. Tick items off before taking real bookings.`} />
+      <AdminTitle back="/admin/settings" title="Launch checklist" sub={`${complete} of ${total} done. Tick items off before taking real bookings.`} />
       <div className="mb-5 h-2 overflow-hidden rounded-full bg-lilac-50" role="progressbar" aria-valuenow={complete} aria-valuemin={0} aria-valuemax={total} aria-label="Checklist progress">
         <div className="h-full rounded-full bg-lilac-300" style={{ width: `${(complete / total) * 100}%` }} />
       </div>

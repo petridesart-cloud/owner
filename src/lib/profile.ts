@@ -49,6 +49,7 @@ export async function saveHealthAnswers(profileId: string, a: HealthAnswers, con
   await db().from("profiles").update({ parq_completed_at: now }).eq("id", profileId);
   if (!anything) {
     await db().from("health_notes").delete().eq("profile_id", profileId);
+    await db().from("health_history").insert({ profile_id: profileId }); // "no injuries or conditions" on this date
     return { ok: true as const };
   }
   const { data: prev } = await db().from("health_notes").select("clearance_received_at").eq("profile_id", profileId).maybeSingle();
@@ -60,5 +61,10 @@ export async function saveHealthAnswers(profileId: string, a: HealthAnswers, con
     note: null, injuries: null, parq_yes: null, consent_at: now, updated_at: now,
   });
   await db().from("consents").insert({ profile_id: profileId, type: "health_data", granted: true, version } satisfies Consent);
+  // A copy of each version, so the studio sees what changed and when.
+  await db().from("health_history").insert({
+    profile_id: profileId, conditions: a.conditions, details: a.details, pregnancy: a.pregnancy, pregnancy_weeks: a.pregnancyWeeks,
+    postpartum_months: a.postpartumMonths, bp_meds: a.bpMeds, medication: a.medication, clearance_needed: clearance,
+  });
   return { ok: true as const, clearance };
 }

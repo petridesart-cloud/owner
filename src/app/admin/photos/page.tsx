@@ -44,7 +44,7 @@ export default async function PhotosPage() {
 
   return (
     <div className="space-y-4">
-      <AdminTitle title="Photos" sub="Only your own photos, and only with permission from anyone in them. They're resized automatically." />
+      <AdminTitle back="/admin/settings" title="Photos" sub="Only your own photos, and only with permission from anyone in them. They're resized automatically." />
       <Slot title="Logo" hint="Shown on the home page, sign-in and receipts. A square PNG works best." slot="logo" photos={of("logo")} single fallback={DEFAULT_LOGO} />
       <Slot title="You (The Magic)" hint="Shown with your story at the bottom of the Studio page." slot="instructor" photos={of("instructor")} />
       <Slot title="The Studio" hint="Photos of the space. They slide one after another on the Studio page. Add a few words in Settings → Your texts." slot={STUDIO_SLOT} photos={all.filter((m) => m.slot.startsWith("studio:"))} />

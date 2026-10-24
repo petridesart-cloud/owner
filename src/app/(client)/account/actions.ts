@@ -17,9 +17,11 @@ export async function saveProfile(_: SaveState, form: FormData): Promise<SaveSta
     goal: z.string().trim().max(200).optional(),
     emergency_contact_name: z.string().trim().max(80).optional(),
     emergency_contact_phone: phoneSchema.optional().or(z.literal("")),
+    emergency_contact_relation: z.string().trim().max(40).optional(),
   }).safeParse({
     first_name: form.get("first_name"), last_name: form.get("last_name"), phone: form.get("phone"), date_of_birth: form.get("date_of_birth") ?? "",
     goal: form.get("goal") ?? "", emergency_contact_name: form.get("emergency_contact_name") ?? "", emergency_contact_phone: form.get("emergency_contact_phone") ?? "",
+    emergency_contact_relation: form.get("emergency_contact_relation") ?? "",
   });
   if (!parsed.success) return { ok: false, error: `Please check: ${[...new Set(parsed.error.issues.map((i) => LABEL[String(i.path[0])] ?? String(i.path[0])))].join(", ")}.` };
 
@@ -33,6 +35,7 @@ export async function saveProfile(_: SaveState, form: FormData): Promise<SaveSta
     first_name: d.first_name, last_name: d.last_name, full_name: fullName(d.first_name, d.last_name), phone: d.phone,
     date_of_birth: d.date_of_birth, goal: d.goal || null,
     emergency_contact_name: d.emergency_contact_name || null, emergency_contact_phone: d.emergency_contact_phone || null,
+    emergency_contact_relation: d.emergency_contact_relation || null,
     photo_consent: photoConsent, marketing_email: me, reminder_emails: reminders,
   }).eq("id", p.id);
   const changes: { profile_id: string; type: "marketing_email" | "photos"; granted: boolean; version: string }[] = [];

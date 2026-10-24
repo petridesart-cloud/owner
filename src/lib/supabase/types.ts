@@ -491,6 +491,57 @@ export type Database = {
           },
         ];
       };
+      health_history: {
+        Row: {
+          bp_meds: boolean | null;
+          clearance_needed: boolean;
+          conditions: string[];
+          created_at: string;
+          details: string | null;
+          id: string;
+          medication: string | null;
+          postpartum_months: number | null;
+          pregnancy: string | null;
+          pregnancy_weeks: number | null;
+          profile_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          bp_meds?: boolean | null;
+          clearance_needed?: boolean;
+          conditions?: string[];
+          created_at?: string;
+          details?: string | null;
+          id?: string;
+          medication?: string | null;
+          postpartum_months?: number | null;
+          pregnancy?: string | null;
+          pregnancy_weeks?: number | null;
+          profile_id: string;
+        };
+        Update: {
+          bp_meds?: boolean | null;
+          clearance_needed?: boolean;
+          conditions?: string[];
+          created_at?: string;
+          details?: string | null;
+          id?: string;
+          medication?: string | null;
+          postpartum_months?: number | null;
+          pregnancy?: string | null;
+          pregnancy_weeks?: number | null;
+          profile_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "health_history_profile_id_fkey";
+            columns: ["profile_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       health_notes: {
         Row: {
           bp_meds: boolean | null;
@@ -919,6 +970,7 @@ export type Database = {
           email: string | null;
           emergency_contact_name: string | null;
           emergency_contact_phone: string | null;
+          emergency_contact_relation: string | null;
           first_name: string | null;
           full_name: string | null;
           goal: string | null;
@@ -945,6 +997,7 @@ export type Database = {
           email?: string | null;
           emergency_contact_name?: string | null;
           emergency_contact_phone?: string | null;
+          emergency_contact_relation?: string | null;
           first_name?: string | null;
           full_name?: string | null;
           goal?: string | null;
@@ -970,6 +1023,7 @@ export type Database = {
           email?: string | null;
           emergency_contact_name?: string | null;
           emergency_contact_phone?: string | null;
+          emergency_contact_relation?: string | null;
           first_name?: string | null;
           full_name?: string | null;
           goal?: string | null;
@@ -1251,6 +1305,7 @@ export type Database = {
           created_at: string;
           id: string;
           name: string;
+          repeats: boolean;
           valid_from: string;
           valid_to: string;
         };
@@ -1259,6 +1314,7 @@ export type Database = {
           created_at?: string;
           id?: string;
           name: string;
+          repeats?: boolean;
           valid_from: string;
           valid_to: string;
         };
@@ -1266,6 +1322,7 @@ export type Database = {
           created_at?: string;
           id?: string;
           name?: string;
+          repeats?: boolean;
           valid_from?: string;
           valid_to?: string;
         };
@@ -1333,6 +1390,18 @@ export type Database = {
         };
         Returns: undefined;
       };
+      admin_adjust_lot: {
+        Args: {
+          p_action: string;
+          p_actor: string;
+          p_credits: number;
+          p_date: string;
+          p_days: number;
+          p_lot: string;
+          p_reason: string;
+        };
+        Returns: undefined;
+      };
       apply_closure: { Args: { p_closure: string }; Returns: number };
       apply_late_fill_refund: { Args: { p_session: string }; Returns: string };
       book_session: {
@@ -1367,6 +1436,7 @@ export type Database = {
       erase_profile: { Args: { p_profile: string }; Returns: string };
       expire_credits: { Args: Record<PropertyKey, never>; Returns: number };
       expire_unpaid_requests: { Args: Record<PropertyKey, never>; Returns: string[] };
+      extend_timetable: { Args: { p_days?: number }; Returns: number };
       generate_sessions: { Args: { p_template: string }; Returns: number };
       grant_lot: {
         Args: {
@@ -1427,6 +1497,7 @@ export type Database = {
         Returns: boolean;
       };
       recalc_lot_expiry: { Args: { p_lot: string }; Returns: undefined };
+      replace_timetable_from: { Args: { p_template: string }; Returns: number };
       reset_demo_data: { Args: Record<PropertyKey, never>; Returns: undefined };
       resume_membership: { Args: { p_membership: string }; Returns: string };
       return_credit: { Args: { p_booking: string; p_reason: string }; Returns: undefined };

@@ -13,7 +13,7 @@ export default async function TeamPage() {
   const { data: team } = await db().from("profiles").select("id, full_name, email, user_id").eq("role", "admin").is("deleted_at", null).order("created_at");
   return (
     <div className="space-y-6">
-      <AdminTitle title="Studio team" sub="People who can open this admin. They sign in with their email." />
+      <AdminTitle back="/admin/settings" title="Studio team" sub="People who can open this admin. They sign in with their email." />
       <ul className="card divide-y divide-line">
         {(team ?? []).map((m) => (
           <li key={m.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">

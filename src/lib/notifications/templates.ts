@@ -17,7 +17,8 @@ export type TemplateName =
   | "test_email"
   | "waitlist_booked"
   | "weekly_booked"
-  | "weekly_full";
+  | "weekly_full"
+  | "birthday";
 
 export type TemplateData = {
   name?: string;
@@ -165,6 +166,14 @@ export function render(t: TemplateName, raw: TemplateData): Rendered {
         lines: [`Hi ${first(d.name)}, we booked your usual classes: ${d.when}.`, d.note ?? ""],
         cta: { label: "My classes", href: `${link}/bookings` },
         sms: `Re·Form: booked your weekly classes: ${d.when}. ${link}/bookings`,
+      };
+    case "birthday":
+      // Her own words (already escaped above); line breaks kept.
+      return {
+        subject: `Happy birthday, ${first(d.name)}!`,
+        heading: "Happy birthday",
+        lines: (d.note ?? "").split(/\n+/).filter(Boolean),
+        sms: `Re·Form: happy birthday, ${first(d.name)}!`,
       };
     case "weekly_full":
       return {
