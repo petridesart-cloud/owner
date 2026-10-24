@@ -115,7 +115,12 @@ Booking web app for **Re·Form Pilates Studio**, Limassol, Cyprus (Instagram @re
   - `src/app/(client)/*`: client app.
   - `src/app/admin/*`: admin. Every server action calls `requireAdmin()` through `admin()` and writes `audit_log`.
 
-## Deployment (live demo)
+## Deployment
+Two apps from the same branch (details in `docs/launch/2-production.md`):
+- **Real studio app (production):** https://reform-studio-pink.vercel.app, Vercel project `reform-studio`, Supabase **reform-prod** (Frankfurt, free). `APP_ENV=production`, `DEMO_MODE=false`. Needs `RESEND_API_KEY` + `EMAIL_FROM` before anyone can sign in. Only the baseline (settings, class types, packages) is seeded; never reset.
+- **Demo / staging:** the live demo below.
+
+### Demo / staging
 - **URL:** https://reform-pilates-seven.vercel.app (Vercel project `reform-pilates`, account petridesart-cloud).
 - **Database:** Supabase **reform-db**, free plan, Frankfurt, created through the Vercel Marketplace. Its env vars are injected automatically.
 - **App env vars set in Vercel:** `DEMO_MODE=true`, `ADMIN_EMAILS`, `DEMO_ADMIN_CODE`, `CRON_SECRET`, `NEXT_PUBLIC_SITE_URL`.

@@ -1,0 +1,25 @@
+# Two apps: demo (staging) and the real studio app
+
+| | Demo / staging | Real studio app (production) |
+|---|---|---|
+| Address | https://reform-pilates-seven.vercel.app | https://reform-studio-pink.vercel.app (until her own domain) |
+| Vercel project | `reform-pilates` | `reform-studio` |
+| Database | Supabase `reform-db` (demo clients, resettable) | Supabase `reform-prod` (real clients only, never reset) |
+| Mode | `DEMO_MODE=true`: codes on screen, nothing emailed | `APP_ENV=production`: demo impossible, real emails |
+| Use it for | trying changes, showing Elysia, tests | real bookings |
+
+Both deploy automatically on every push to `claude/pilates-booking-app-sk3trx`, and run the
+database migrations first. Try changes on the demo before telling clients about them.
+
+## What's set on the real app (Vercel → reform-studio → Settings → Environment Variables)
+- `APP_ENV=production`, `DEMO_MODE=false`
+- `ADMIN_EMAILS` (bootstrap admins), `CRON_SECRET` (random, used by the 5-minute scheduler)
+- `NEXT_PUBLIC_SITE_URL` (change it when the domain is connected, then redeploy)
+- Supabase variables (added automatically by the integration)
+- Still to add: `RESEND_API_KEY`, `EMAIL_FROM` (see 1-email.md). Until then nobody, admins
+  included, can sign in to the real app; it says sign-in isn't switched on yet.
+
+## Never
+- Never press "Reset demo data" thinking it's the real app: it only exists on the demo.
+- Never copy demo clients into the real app.
+- Never put live Stripe keys anywhere until the payments checklist is done.
