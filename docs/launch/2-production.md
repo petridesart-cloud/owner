@@ -16,8 +16,7 @@ database migrations first. Try changes on the demo before telling clients about 
 - `ADMIN_EMAILS` (bootstrap admins), `CRON_SECRET` (random, used by the 5-minute scheduler)
 - `NEXT_PUBLIC_SITE_URL=https://book.reformpilatescy.com` (CNAME `book` → Vercel in Cloudflare, DNS only)
 - Supabase variables (added automatically by the integration)
-- Still to add: `RESEND_API_KEY`, `EMAIL_FROM` (see 1-email.md). Until then nobody, admins
-  included, can sign in to the real app; it says sign-in isn't switched on yet.
+- `RESEND_API_KEY` (send-only, domain-restricted) and `EMAIL_FROM` = `Re·Form Pilates <hello@mail.reformpilatescy.com>`: email is live.
 
 ## Never
 - Never press "Reset demo data" thinking it's the real app: it only exists on the demo.

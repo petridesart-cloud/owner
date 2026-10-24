@@ -2,7 +2,7 @@
 
 In order. The app's **Settings → "Before your first client"** list shows what's still missing.
 
-1. **Email (blocks sign-in).** Buy a domain in Elysia's name, create a Resend account (EU),
+1. ✅ **Email (done 24 Oct: mail.reformpilatescy.com via Resend).** Buy a domain in Elysia's name, create a Resend account (EU),
    add the DNS records, put `RESEND_API_KEY` and `EMAIL_FROM` into Vercel → `reform-studio`
    → Environment Variables, redeploy. Steps: `1-email.md`. Check: Settings → Messages →
    "Send me a test email" lands in the inbox; Gmail "Show original" says SPF/DKIM/DMARC PASS.
