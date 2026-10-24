@@ -52,7 +52,7 @@ export function render(t: TemplateName, raw: TemplateData): Rendered {
       return {
         subject: `You're in: ${d.className}, ${d.when}`,
         heading: "Your spot is secured",
-        lines: [`Hi ${first(d.name)}, see you at <strong>${d.className}</strong> on ${d.when}.`, d.location ? `Where: ${d.location}` : "", "Arrive 5–10 minutes early, grip socks on.", d.note ?? "", d.policy ?? ""],
+        lines: [`Hi ${first(d.name)}, see you at <strong>${d.className}</strong> on ${d.when}.`, d.location ? `Where: ${d.location}` : "", d.note ?? "", d.policy ?? ""],
         cta: { label: "View my bookings", href: `${link}/bookings` },
         sms: `Re·Form: you're booked for ${d.className}, ${d.when}. See you there!`,
       };

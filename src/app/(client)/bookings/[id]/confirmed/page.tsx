@@ -49,9 +49,7 @@ export default async function Confirmed({ params }: { params: Promise<{ id: stri
                 ))}
               </ul>
             </section>
-          ) : (
-            <p className="mx-auto mt-2 max-w-xs text-sm text-ink-soft">Arrive 5–10 minutes early, grip socks on.</p>
-          )}
+          ) : null}
           <div className="mx-auto mt-7 flex max-w-xs animate-rise flex-col gap-2.5 [animation-delay:700ms]">
             <a href={`/api/ics/${b.id}`} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-ink px-6 text-[0.8rem] font-medium uppercase tracking-[0.18em] text-paper">
               <CalendarPlus aria-hidden size={18} /> Add to calendar

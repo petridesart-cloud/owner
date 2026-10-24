@@ -10,7 +10,7 @@ test("client requests a pack, studio marks it paid, client books with a class cr
   const client = await (await browser.newContext()).newPage();
   await signIn(client, email, "/packs");
   await completeWelcome(client, name);
-  await client.getByRole("group", { name: "Reformer, 1 month" }).getByText("1 per week").click();
+  await client.getByRole("group", { name: "Reformer packages, valid 30 days" }).getByText("4 classes", { exact: true }).click();
   await client.getByText("Cash", { exact: true }).click();
   await client.locator("#accept").check();
   await client.getByRole("button", { name: "Request package" }).click();

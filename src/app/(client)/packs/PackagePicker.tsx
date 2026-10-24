@@ -11,7 +11,7 @@ const eur = (c: number) => `€${(c / 100).toFixed(c % 100 ? 2 : 0)}`;
 const METHOD_LABEL: Record<PayMethod, string> = { cash: "Cash", revolut: "Revolut", bank_transfer: "Bank transfer" };
 
 /** Pick a package (per week × months), choose cash or Revolut, accept the terms, request it. */
-export function PackagePicker({ kind, groups, methods, online }: { kind: string; groups: Group[]; methods: PayMethod[]; online: boolean }) {
+export function PackagePicker({ kind, groups, methods, online, cutoff }: { kind: string; groups: Group[]; methods: PayMethod[]; online: boolean; cutoff: number }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Option | null>(null);
   const [method, setMethod] = useState<PayMethod>("cash");
@@ -23,25 +23,25 @@ export function PackagePicker({ kind, groups, methods, online }: { kind: string;
     <div className="space-y-5">
       {groups.map((g) => (
         <fieldset key={g.months} className="card px-4 py-4">
-          <legend className="sr-only">{kind}, {g.months} month{g.months === 1 ? "" : "s"}</legend>
+          <legend className="sr-only">{kind} packages, valid {g.options[0]?.validityDays} days</legend>
           <div className="px-1">
-            <p className="display text-[1.05rem] text-ink">{g.months} month{g.months === 1 ? "" : "s"}</p>
-            <p className="text-xs text-ink-soft">Valid {g.options[0]?.validityDays} days from your first class</p>
+            <p className="display text-[1.05rem] text-ink">{kind} packages</p>
+            <p className="text-sm text-ink-soft">Valid {g.options[0]?.validityDays} days from your first class</p>
           </div>
-          <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="mt-3 space-y-2">
             {g.options.map((o) => {
               const on = selected?.id === o.id;
               return (
                 <label key={o.id} className="cursor-pointer">
                   <input type="radio" name="package" value={o.id} checked={on} onChange={() => { setSelected(o); setError(null); }} className="peer sr-only" />
-                  <span className="flex min-h-[84px] flex-col justify-between rounded-2xl border border-line bg-white px-3.5 py-3 text-ink transition peer-checked:border-plum-700 peer-checked:bg-lilac-100 peer-focus-visible:ring-2 peer-focus-visible:ring-lilac-300">
-                    <span className="text-sm font-medium">{o.perWeek} per week</span>
-                    <span className="flex items-end justify-between gap-1">
-                      <span className="whitespace-nowrap text-xs text-ink-soft">{o.credits} classes</span>
-                      <span className="text-right">
-                        {o.student && <span className="block text-[0.7rem] text-ink-soft line-through">{eur(o.listCents)}</span>}
-                        <span className="font-serif text-[1.45rem] leading-none">{eur(o.cents)}</span>
-                      </span>
+                  <span className="flex min-h-16 items-center justify-between gap-3 rounded-2xl border border-line bg-white px-4 py-3 text-ink transition peer-checked:border-plum-700 peer-checked:bg-lilac-100 peer-focus-visible:ring-2 peer-focus-visible:ring-lilac-300">
+                    <span>
+                      <span className="block text-base font-medium">{o.credits} classes</span>
+                      <span className="block text-xs text-ink-soft">{o.credits} credits</span>
+                    </span>
+                    <span className="text-right">
+                      {o.student && <span className="block text-[0.7rem] text-ink-soft line-through">{eur(o.listCents)}</span>}
+                      <span className="font-serif text-[1.6rem] leading-none">{eur(o.cents)}</span>
                     </span>
                   </span>
                 </label>
@@ -54,7 +54,7 @@ export function PackagePicker({ kind, groups, methods, online }: { kind: string;
       {selected && (
         <div className="card animate-rise space-y-4 px-5 py-5" aria-live="polite">
           <div className="flex items-baseline justify-between gap-3">
-            <p className="font-medium text-ink">{kind} · {selected.perWeek} per week · {selected.validityDays / 30} month{selected.validityDays > 30 ? "s" : ""}</p>
+            <p className="font-medium text-ink">{kind} · {selected.credits} classes · valid {selected.validityDays} days</p>
             <p className="font-serif text-2xl text-ink">{eur(selected.cents)}</p>
           </div>
           {selected.student && <p className="-mt-2 text-xs font-medium text-plum-700">Student price</p>}
@@ -72,7 +72,8 @@ export function PackagePicker({ kind, groups, methods, online }: { kind: string;
             </fieldset>
           )}
           <ul className="list-disc space-y-1 rounded-2xl bg-lilac-50 py-3 pl-8 pr-4 text-sm leading-relaxed text-ink">
-            <li>{selected.credits} {kind.toLowerCase()} classes, valid {selected.validityDays} days from the date of your first class. &ldquo;{selected.perWeek} per week&rdquo; is a guide: use them as you like within that time.</li>
+            <li>{selected.credits} {kind.toLowerCase()} classes ({selected.credits} credits), valid {selected.validityDays} days from the date of your first class. Use them whenever you like within that time.</li>
+            <li>Cancel at least {cutoff} hours before class and the credit goes straight back into your package. Cancellations within {cutoff} hours, and missed classes, use the credit and can&apos;t be refunded.</li>
             <li>Classes can&apos;t be booked after the expiry date; unused classes expire and are non-refundable.</li>
             <li>{online ? "Paid now by secure checkout." : "Paid in advance. Your classes appear as soon as your instructor confirms the payment."}</li>
             <li>Personal: packages can&apos;t be shared or transferred.</li>

@@ -54,7 +54,7 @@ export default async function PacksPage({ searchParams }: { searchParams: Promis
 
       <div className="space-y-8">
         <div className="px-5">
-          {groups.length ? <PackagePicker key={kind} kind={label} groups={groups} methods={methods} online={s.online_payments_enabled} />
+          {groups.length ? <PackagePicker key={kind} kind={label} groups={groups} methods={methods} online={s.online_payments_enabled} cutoff={s.cancellation_cutoff_hours} />
             : <Card className="px-5 py-6 text-sm text-ink-soft">{label} packages are coming soon.</Card>}
           {s.student_discount_pct > 0 && <p className="mt-3 text-xs leading-relaxed text-ink-soft">Students get {s.student_discount_pct}% off group packages: show your student card at the studio once and it&apos;s applied automatically.</p>}
         </div>
