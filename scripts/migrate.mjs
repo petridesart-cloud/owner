@@ -33,8 +33,9 @@ try {
     console.warn("[migrate] DEMO_MODE is ignored because APP_ENV=production");
   }
   if (process.env.DEMO_MODE === "true" && process.env.APP_ENV !== "production") {
-    const [{ n }] = await sql`select count(*)::int as n from public.class_types`;
-    if (n === 0) {
+    // Fresh = no classes and no clients yet (class types now come from the baseline migration).
+    const [{ n }] = await sql`select (select count(*) from public.class_sessions) + (select count(*) from public.profiles where role = 'client') as n`;
+    if (Number(n) === 0) {
       console.log("[migrate] fresh database: seeding demo data");
       await sql.unsafe(fs.readFileSync(path.join(process.cwd(), "supabase/seed.sql"), "utf8"));
     }
