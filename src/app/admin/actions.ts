@@ -5,7 +5,7 @@ import { z } from "zod";
 import { requireAdmin } from "@/lib/auth";
 import { env } from "@/lib/env";
 import { db } from "@/lib/supabase/admin";
-import { cancelBooking, cancelSession, notifyOffers, onPaymentPaid, runTick, sessionInfo } from "@/lib/booking";
+import { cancelBooking, cancelSession, notifyOffers, onPaymentPaid, policyLine, runTick, sessionInfo } from "@/lib/booking";
 import { notify } from "@/lib/notifications";
 import { applyRecurring } from "@/lib/recurring";
 import { friendlyError, type ActionResult } from "@/lib/errors";
@@ -65,7 +65,7 @@ export async function manualBook(sessionId: string, _: ActionResult, form: FormD
   if (form.get("notify") === "on") {
     const [{ data: p }, s] = await Promise.all([db().from("profiles").select("*").eq("id", profileId).single(), sessionInfo(sessionId)]);
     if (p) await notify({ profileId: p.id, email: p.email, phone: p.phone }, "booking_confirmed",
-      { name: p.full_name ?? undefined, className: s.name, when: spokenDateTime(s.starts_at), location: s.where },
+      { name: p.full_name ?? undefined, className: s.name, when: spokenDateTime(s.starts_at), location: s.where, policy: policyLine(s.cancelBy, s.cutoff) },
       { bookingId: (data as { booking_id: string }).booking_id, sessionId });
   }
   revalidatePath(`/admin/classes/${sessionId}`);

@@ -19,7 +19,10 @@ export async function sessionInfo(sessionId: string) {
     .single();
   if (!data) throw new Error("not_found");
   const type = data.class_types!;
+  const cutoff = (await getSettings()).cancellation_cutoff_hours;
   return {
+    cutoff,
+    cancelBy: new Date(new Date(data.starts_at).getTime() - cutoff * 3_600_000),
     ...data,
     type,
     name: data.title ?? type.name,
@@ -29,7 +32,11 @@ export async function sessionInfo(sessionId: string) {
 }
 export type SessionInfo = Awaited<ReturnType<typeof sessionInfo>>;
 
-const tmpl = (s: SessionInfo) => ({ className: s.name, when: spokenDateTime(s.starts_at), location: s.where });
+/** The cancellation policy, stated in every booking email. */
+export const policyLine = (cancelBy: Date, cutoff: number) =>
+  `Free cancellation until ${spokenDateTime(cancelBy)} (${cutoff}h before class). Later cancellations and no-shows aren't refunded.`;
+
+const tmpl = (s: SessionInfo) => ({ className: s.name, when: spokenDateTime(s.starts_at), location: s.where, policy: policyLine(s.cancelBy, s.cutoff) });
 
 async function profileById(id: string) {
   const { data } = await db().from("profiles").select("*").eq("id", id).single();
@@ -246,11 +253,9 @@ export async function notifyOffers(rows: OfferRow[]) {
     const [s, p] = await Promise.all([sessionInfo(w.session_id), profileById(r.profile_id)]);
     if (!r.offer_expires_at) {
       // Auto-booked from the waitlist with a class from their package.
-      const cfg = await getSettings();
       const { data: b } = await db().from("bookings").select("id").eq("session_id", s.id).eq("profile_id", p.id).eq("status", "confirmed").maybeSingle();
-      const freeUntil = new Date(new Date(s.starts_at).getTime() - cfg.cancellation_cutoff_hours * 3_600_000);
       await notify({ profileId: p.id, email: p.email, phone: p.phone }, "waitlist_booked",
-        { name: p.full_name ?? undefined, ...tmpl(s), note: `1 class from your package was used. Can't make it? Cancel free until ${spokenDateTime(freeUntil)}.` },
+        { name: p.full_name ?? undefined, ...tmpl(s), note: "1 class from your package was used." },
         { sms: true, sessionId: s.id, bookingId: b?.id, dedupeKey: `waitlist-booked:${r.entry_id}` });
       continue;
     }
@@ -324,13 +329,14 @@ export async function runTick(source: "cron" | "page" | "admin" = "page") {
       .lte("class_sessions.starts_at", new Date(now + offset * 60_000).toISOString());
     for (const b of rows ?? []) {
       const start = new Date(b.class_sessions.starts_at).getTime();
+      if (!(await profileById(b.profile_id)).reminder_emails) continue; // turned off in Account
       // Booked after this reminder would have gone out: the confirmation is enough.
       if (b.confirmed_at && new Date(b.confirmed_at).getTime() > start - offset * 60_000) continue;
       const [s, p] = await Promise.all([sessionInfo(b.session_id), profileById(b.profile_id)]);
       const template = offset <= 180 ? "reminder_2h" : "reminder_24h";
       await notify({ profileId: p.id, email: p.email, phone: p.phone }, template,
         { name: p.full_name ?? undefined, ...tmpl(s), when: offset <= 180 ? time(s.starts_at) : spokenDateTime(s.starts_at),
-          note: `Remember your grip socks · arrive 5–10 minutes early. Need to cancel or reschedule? You can until ${cfg.cancellation_cutoff_hours}h before class.` },
+          note: "Remember your grip socks · arrive 5–10 minutes early." },
         { sms: offset <= 180, bookingId: b.id, sessionId: s.id, dedupeKey: `reminder:${offset}:${b.id}` });
       sent++;
     }

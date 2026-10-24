@@ -2771,6 +2771,12 @@ revoke execute on function public.process_waitlist(uuid) from public, anon, auth
 grant execute on function public.process_waitlist(uuid) to service_role;
 
 
+-- ===== 20261025000500_notification_prefs.sql =====
+-- Clients can turn class reminders off (Account → Notifications). Confirmations, cancellations,
+-- waitlist and sign-in codes are always sent (they're the service itself).
+alter table public.profiles add column reminder_emails boolean not null default true;
+
+
 -- ===== seed.sql =====
 -- Demo data lives in public.seed_demo() (migration 20261011000400) so the admin
 -- "Reset demo data" button can rebuild it. Dates are relative to now().

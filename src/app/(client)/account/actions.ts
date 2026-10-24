@@ -26,13 +26,14 @@ export async function saveProfile(_: SaveState, form: FormData): Promise<SaveSta
   const p = viewer.profile;
   const d = parsed.data;
   const me = form.get("marketing_email") === "on";
+  const reminders = form.get("reminder_emails") === "on";
   const photos = String(form.get("photo_consent") ?? "");
   const photoConsent = photos in PHOTO_CONSENT ? (photos as PhotoConsent) : p.photo_consent;
   await db().from("profiles").update({
     first_name: d.first_name, last_name: d.last_name, full_name: fullName(d.first_name, d.last_name), phone: d.phone,
     date_of_birth: d.date_of_birth, goal: d.goal || null,
     emergency_contact_name: d.emergency_contact_name || null, emergency_contact_phone: d.emergency_contact_phone || null,
-    photo_consent: photoConsent, marketing_email: me,
+    photo_consent: photoConsent, marketing_email: me, reminder_emails: reminders,
   }).eq("id", p.id);
   const changes: { profile_id: string; type: "marketing_email" | "photos"; granted: boolean; version: string }[] = [];
   if (me !== p.marketing_email) changes.push({ profile_id: p.id, type: "marketing_email", granted: me, version: settings.policy_version });

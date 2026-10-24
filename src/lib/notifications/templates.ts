@@ -26,6 +26,7 @@ export type TemplateData = {
   when?: string;      // "Monday 13 October, 08:00"
   location?: string | null;
   note?: string;      // extra sentence (refund info, offer expiry, ...)
+  policy?: string;    // cancellation policy line for booking emails
   link?: string;
 };
 
@@ -51,7 +52,7 @@ export function render(t: TemplateName, raw: TemplateData): Rendered {
       return {
         subject: `You're in: ${d.className}, ${d.when}`,
         heading: "Your spot is secured",
-        lines: [`Hi ${first(d.name)}, see you at <strong>${d.className}</strong> on ${d.when}.`, d.location ? `Where: ${d.location}` : "", "Arrive 5–10 minutes early, grip socks on.", d.note ?? ""],
+        lines: [`Hi ${first(d.name)}, see you at <strong>${d.className}</strong> on ${d.when}.`, d.location ? `Where: ${d.location}` : "", "Arrive 5–10 minutes early, grip socks on.", d.note ?? "", d.policy ?? ""],
         cta: { label: "View my bookings", href: `${link}/bookings` },
         sms: `Re·Form: you're booked for ${d.className}, ${d.when}. See you there!`,
       };
@@ -59,7 +60,7 @@ export function render(t: TemplateName, raw: TemplateData): Rendered {
       return {
         subject: `Tomorrow: ${d.className}, ${d.when}`,
         heading: "See you tomorrow",
-        lines: [`Hi ${first(d.name)}, a little reminder: <strong>${d.className}</strong>, ${d.when}.`, d.note ?? "Remember your grip socks · arrive 5–10 minutes early."],
+        lines: [`Hi ${first(d.name)}, a little reminder: <strong>${d.className}</strong>, ${d.when}.`, d.note ?? "Remember your grip socks · arrive 5–10 minutes early.", d.policy ?? ""],
         cta: { label: "Manage booking", href: `${link}/bookings` },
         sms: `Re·Form reminder: ${d.className} tomorrow, ${d.when}.`,
       };
@@ -146,7 +147,7 @@ export function render(t: TemplateName, raw: TemplateData): Rendered {
       return {
         subject: `You're in: ${d.className}, ${d.when}`,
         heading: "A spot opened up for you",
-        lines: [`Hi ${first(d.name)}, good news: a spot opened in <strong>${d.className}</strong> on ${d.when}, and you were first on the waitlist, so we booked you in.`, d.note ?? ""],
+        lines: [`Hi ${first(d.name)}, good news: a spot opened in <strong>${d.className}</strong> on ${d.when}, and you were first on the waitlist, so we booked you in.`, d.note ?? "", d.policy ?? ""],
         cta: { label: "My classes", href: `${link}/bookings` },
         sms: `Re·Form: a spot opened and you're booked for ${d.className}, ${d.when}. Can't make it? Cancel in the app.`,
       };
@@ -188,6 +189,6 @@ export function emailHtml(r: Rendered) {
 <p style="margin:0 0 22px;font-family:Georgia,serif;font-size:30px;font-weight:300;color:#5B4470">Re·Form</p>
 <h1 style="margin:0 0 18px;font-family:Georgia,serif;font-weight:400;font-size:22px;letter-spacing:3px;text-transform:uppercase;color:#2E2238">${r.heading}</h1>
 ${body}${cta}
-<p style="margin:28px 0 0;font-size:12px;line-height:1.5;color:#5E5566">Re·Form Pilates Studio · Limassol, Cyprus<br>This is a service message about your booking.</p>
+<p style="margin:28px 0 0;font-size:12px;line-height:1.5;color:#5E5566">Re·Form Pilates Studio · Limassol, Cyprus<br>This is a service message about your booking. <a href="${env.siteUrl}/account#notifications" style="color:#5E5566">Notification settings</a> (turn class reminders off).</p>
 </td></tr></table></td></tr></table></body></html>`;
 }

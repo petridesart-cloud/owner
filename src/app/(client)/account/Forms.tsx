@@ -7,7 +7,7 @@ import { keepValues } from "@/lib/keep-form";
 
 type P = {
   first: string; last: string; phone: string; email: string; dob: string; goal: string;
-  ecName: string; ecPhone: string; photos: string | null; me: boolean;
+  ecName: string; ecPhone: string; photos: string | null; me: boolean; reminders: boolean;
 };
 
 export function ProfileForm({ p }: { p: P }) {
@@ -35,9 +35,11 @@ export function ProfileForm({ p }: { p: P }) {
 
       <div className="border-t border-line pt-4"><PhotoConsentField value={p.photos} /></div>
 
-      <fieldset className="border-t border-line pt-4">
-        <legend className="pt-4 text-sm font-medium text-ink">News &amp; offers</legend>
+      <fieldset id="notifications" className="scroll-mt-24 border-t border-line pt-4">
+        <legend className="pt-4 text-sm font-medium text-ink">Notifications</legend>
+        <Checkbox id="reminder_emails" name="reminder_emails" defaultChecked={p.reminders}>Remind me the day before each class</Checkbox>
         <Checkbox id="marketing_email" name="marketing_email" defaultChecked={p.me}>Email me about new schedules and events</Checkbox>
+        <p className="mt-1 text-xs leading-relaxed text-ink-soft">Booking confirmations, cancellations and waitlist news are always sent.</p>
       </fieldset>
       {state.error && <Notice tone="error">{state.error}</Notice>}
       {state.message && <Notice tone="success">{state.message}</Notice>}

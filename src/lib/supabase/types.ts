@@ -20,22 +20,6 @@ export type Database = {
   };
   public: {
     Tables: {
-      _app_migrations: {
-        Row: {
-          applied_at: string;
-          name: string;
-        };
-        ComputedFields: never;
-        Insert: {
-          applied_at?: string;
-          name: string;
-        };
-        Update: {
-          applied_at?: string;
-          name?: string;
-        };
-        Relationships: [];
-      };
       audit_log: {
         Row: {
           action: string;
@@ -906,6 +890,7 @@ export type Database = {
           onboarded_at: string | null;
           phone: string | null;
           photo_consent: string | null;
+          reminder_emails: boolean;
           role: Database["public"]["Enums"]["user_role"];
           stripe_customer_id: string | null;
           student_verified_until: string | null;
@@ -930,6 +915,7 @@ export type Database = {
           onboarded_at?: string | null;
           phone?: string | null;
           photo_consent?: string | null;
+          reminder_emails?: boolean;
           role?: Database["public"]["Enums"]["user_role"];
           stripe_customer_id?: string | null;
           student_verified_until?: string | null;
@@ -953,6 +939,7 @@ export type Database = {
           onboarded_at?: string | null;
           phone?: string | null;
           photo_consent?: string | null;
+          reminder_emails?: boolean;
           role?: Database["public"]["Enums"]["user_role"];
           stripe_customer_id?: string | null;
           student_verified_until?: string | null;
@@ -1334,6 +1321,7 @@ export type Database = {
         Returns: string;
       };
       grant_membership_period: { Args: { p_membership: string; p_payment?: string; p_start: string }; Returns: string };
+      install_baseline: { Args: Record<PropertyKey, never>; Returns: undefined };
       install_catalogue: { Args: Record<PropertyKey, never>; Returns: undefined };
       is_admin: { Args: Record<PropertyKey, never>; Returns: boolean };
       is_closed_on: { Args: { p_at: string }; Returns: boolean };

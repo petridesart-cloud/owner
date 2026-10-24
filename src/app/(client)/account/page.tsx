@@ -40,7 +40,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
             <ProfileForm p={{
               first: p.first_name ?? p.full_name?.split(" ")[0] ?? "", last: p.last_name ?? "", phone: p.phone ?? "", email: viewer.email,
               dob: p.date_of_birth ?? "", goal: p.goal ?? "", ecName: p.emergency_contact_name ?? "", ecPhone: p.emergency_contact_phone ?? "",
-              photos: p.photo_consent, me: p.marketing_email,
+              photos: p.photo_consent, me: p.marketing_email, reminders: p.reminder_emails,
             }} />
           </Card>
         </Section>
