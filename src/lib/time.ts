@@ -65,3 +65,12 @@ export function localToUtc(dateKey: string, hhmm: string) {
   return new Date(guess.getTime() - (asLocal - guess.getTime())).toISOString();
 }
 export const nowMs = () => Date.now();
+
+/** "13.10.2026" (how she writes dates). */
+export function dotDate(v: string | Date) {
+  const [yyyy, mm, dd] = dayKey(v).split("-");
+  return `${dd}.${mm}.${yyyy}`;
+}
+
+/** Last valid day of something that expires at the start of a day. */
+export const lastDay = (expiresAt: string) => new Date(new Date(expiresAt).getTime() - 1);

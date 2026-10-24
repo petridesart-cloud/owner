@@ -5,7 +5,11 @@ import { Button, Notice } from "@/components/ui";
 import { bookAction, joinWaitlistAction, leaveWaitlistAction } from "./actions";
 
 type Props =
-  | { mode: "book"; sessionId: string; priceLabel: string; credits: number; creditKind: string | null; creditCost: number; online: boolean; payLater: boolean; offered?: boolean }
+  | {
+      mode: "book"; sessionId: string; priceLabel: string; credits: number; creditKind: string | null; creditCost: number; online: boolean; payLater: boolean; offered?: boolean;
+      /** Reserve now, pay by cash or Revolut: trial (first class of this type), drop-in, or a paid event. */
+      singles?: { mode: "trial" | "drop_in"; label: string; price: string }[];
+    }
   | { mode: "waitlist"; sessionId: string }
   | { mode: "leave"; sessionId: string; entryId: string };
 
@@ -17,10 +21,11 @@ export function BookActions(props: Props) {
 
   const go = (url: string) => (url.startsWith("http") ? window.location.assign(url) : router.push(url));
 
-  const book = (method: "credit" | "pay" | "studio") =>
+  const [payBy, setPayBy] = useState<"cash" | "revolut">("cash");
+  const book = (method: "credit" | "pay" | "studio" | "trial" | "drop_in") =>
     start(async () => {
       setError(null);
-      const res = await bookAction(props.sessionId, method);
+      const res = await bookAction(props.sessionId, method, payBy);
       if (!res.ok) { setError(res.error); router.refresh(); return; }
       go(res.data!.redirect);
     });
@@ -56,6 +61,33 @@ export function BookActions(props: Props) {
 
   const canUseCredit = !!props.creditKind && props.credits >= props.creditCost;
   const classes = (n: number) => `${n} ${props.creditKind} class${n === 1 ? "" : "es"}`;
+  const singles = !canUseCredit && !props.online ? props.singles ?? [] : [];
+  if (singles.length) {
+    return (
+      <div className="space-y-3">
+        {error && <Notice tone="error">{error}</Notice>}
+        <fieldset>
+          <legend className="mb-2 text-sm font-medium text-ink">How will you pay?</legend>
+          <div className="grid grid-cols-2 gap-2">
+            {(["cash", "revolut"] as const).map((m) => (
+              <label key={m} className="cursor-pointer">
+                <input type="radio" name="payBy" value={m} checked={payBy === m} onChange={() => setPayBy(m)} className="peer sr-only" />
+                <span className="flex min-h-12 items-center justify-center rounded-full border border-line bg-white px-4 text-sm font-medium text-ink transition peer-checked:border-plum-700 peer-checked:bg-lilac-100 peer-focus-visible:ring-2 peer-focus-visible:ring-lilac-300">
+                  {m === "cash" ? "Cash" : "Revolut"}
+                </span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+        {singles.map((o, i) => (
+          <Button key={o.mode} variant={i === 0 ? "primary" : "ghost"} className="w-full" disabled={pending} onClick={() => book(o.mode)}>
+            {pending ? "Reserving…" : `${o.label} · ${o.price}`}
+          </Button>
+        ))}
+        <p className="text-center text-sm text-ink-soft">Your spot is reserved now. Pay {payBy === "cash" ? "in cash at the studio" : "by Revolut"} before class.</p>
+      </div>
+    );
+  }
   return (
     <div className="space-y-3">
       {error && <Notice tone="error">{error}</Notice>}

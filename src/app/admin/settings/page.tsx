@@ -3,7 +3,7 @@ import { ActionForm } from "@/components/ActionForm";
 import { Checkbox, Field, inputClass } from "@/components/ui";
 import { getSettings } from "@/lib/auth";
 import { db } from "@/lib/supabase/admin";
-import { paymentsUnlocked, resetDemoData, saveClassType, saveProduct, saveSettings } from "../actions";
+import { paymentsUnlocked, resetDemoData, saveClassType, savePrices, saveProduct, saveSettings } from "../actions";
 import { env } from "@/lib/env";
 import { AdminTitle } from "../ui";
 
@@ -29,6 +29,7 @@ export default async function SettingsPage() {
 
       <nav aria-label="More tools" className="grid grid-cols-2 gap-2">
         {[
+          ["/admin/photos", "Photos", "Logo, studio, events"],
           ["/admin/texts", "Your texts", "Rules, policy, about you"],
           ["/admin/team", "Studio team", "Who can open this admin"],
           ["/admin/outbox", "Messages", "Emails & texts sent"],
@@ -73,11 +74,15 @@ export default async function SettingsPage() {
             {n("unpaid_request_expiry_hours", "Unpaid requests expire (hours)", s.unpaid_request_expiry_hours)}
           </div>
 
-          <h3 className="display pt-3 text-[0.85rem]">Cancellations</h3>
+          <h3 className="display pt-3 text-[0.85rem]">Booking &amp; cancellations</h3>
           <div className="grid grid-cols-2 gap-3">
+            {n("booking_window_weeks", "Clients can book (weeks ahead)", Math.round(s.booking_window_days / 7))}
             {n("cancellation_cutoff_hours", "Free cancellation until (hours before)", s.cancellation_cutoff_hours)}
             {n("expiry_reminder_days", "Remind before package expires (days)", s.expiry_reminder_days)}
           </div>
+          <Field id="studio_sections" label="Studio page sections" hint="One per line, in order. Add photos to each in Photos.">
+            <textarea id="studio_sections" name="studio_sections" rows={4} defaultValue={s.studio_sections.join("\n")} className={`${inputClass} py-3`} />
+          </Field>
 
           <h3 className="display pt-3 text-[0.85rem]">Message on every page</h3>
           {t("status_banner", "Status banner (optional)", s.status_banner, "e.g. “Studio closed this week, see you Monday!” Leave empty to hide.")}
@@ -143,8 +148,45 @@ export default async function SettingsPage() {
         </div>
       </section>
 
+      <section className="card px-5 py-5">
+        <h2 className="display mb-1 text-[0.95rem]">Package prices</h2>
+        <p className="mb-4 text-sm text-ink-soft">Your prices in euro. Clients see them on the Packages page straight away.</p>
+        <ActionForm action={savePrices} submit="Save prices">
+          {(["reformer", "mat"] as const).map((k) => (
+            <div key={k} className="space-y-3">
+              {[1, 2].map((m) => {
+                const row = (products ?? []).filter((p) => p.tag === "package" && p.credit_kind === k && p.months === m);
+                if (!row.length) return null;
+                return (
+                  <fieldset key={m}>
+                    <legend className="mb-1.5 text-sm font-medium capitalize text-ink">{k} · {m} month{m > 1 ? "s" : ""}</legend>
+                    <div className="grid grid-cols-4 gap-2">
+                      {row.map((p) => (
+                        <Field key={p.id} id={`price_${p.id}`} label={`${p.per_week}/wk`}>
+                          <input id={`price_${p.id}`} name={`price_${p.id}`} inputMode="decimal" defaultValue={(p.price_cents / 100).toFixed(0)} className={`${inputClass} px-3`} />
+                        </Field>
+                      ))}
+                    </div>
+                  </fieldset>
+                );
+              })}
+            </div>
+          ))}
+          <fieldset>
+            <legend className="mb-1.5 text-sm font-medium text-ink">Trials &amp; drop-ins</legend>
+            <div className="grid grid-cols-2 gap-2">
+              {(products ?? []).filter((p) => p.tag === "trial" || p.tag === "drop_in").map((p) => (
+                <Field key={p.id} id={`price_${p.id}`} label={p.name}>
+                  <input id={`price_${p.id}`} name={`price_${p.id}`} inputMode="decimal" defaultValue={(p.price_cents / 100).toFixed(0)} className={inputClass} />
+                </Field>
+              ))}
+            </div>
+          </fieldset>
+        </ActionForm>
+      </section>
+
       <section>
-        <h2 className="display mb-3 text-[0.95rem]">Packages &amp; packs</h2>
+        <h2 className="display mb-3 text-[0.95rem]">All packages (details)</h2>
         <div className="space-y-3">
           {(products ?? []).map((p) => (
             <details key={p.id} className="card px-5 py-3">
@@ -159,6 +201,12 @@ export default async function SettingsPage() {
                       ? <Field id={`pd-${p.id}`} label="Period days"><input id={`pd-${p.id}`} name="period_days" type="number" min={7} defaultValue={p.period_days ?? 30} className={inputClass} /></Field>
                       : <Field id={`pv-${p.id}`} label="Valid days"><input id={`pv-${p.id}`} name="validity_days" type="number" min={1} defaultValue={p.validity_days ?? ""} className={inputClass} /></Field>}
                   </div>
+                  {p.tag === "package" && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field id={`pw-${p.id}`} label="Per week"><input id={`pw-${p.id}`} name="per_week" type="number" min={1} max={7} defaultValue={p.per_week ?? ""} className={inputClass} /></Field>
+                      <Field id={`pm-${p.id}`} label="Months"><input id={`pm-${p.id}`} name="months" type="number" min={1} max={12} defaultValue={p.months ?? ""} className={inputClass} /></Field>
+                    </div>
+                  )}
                   <Field id={`pdesc-${p.id}`} label="Short description"><input id={`pdesc-${p.id}`} name="description" defaultValue={p.description ?? ""} className={inputClass} /></Field>
                   <Checkbox id={`pa-${p.id}`} name="active" defaultChecked={p.active}>On sale</Checkbox>
                 </ActionForm>

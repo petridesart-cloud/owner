@@ -57,3 +57,4 @@ export const getSettings = cache(async () => {
   const { data } = await db().from("studio_settings").select("*").eq("id", 1).single();
   return data!;
 });
+export type Settings = Awaited<ReturnType<typeof getSettings>>;

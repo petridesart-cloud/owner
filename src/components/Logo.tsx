@@ -1,37 +1,19 @@
-// Re·Form wordmark in a soft lilac-to-white circle (recreated from the studio's
-// Instagram avatar; swap for the original artwork when available).
-export function Logo({ size = 120, className = "", decorative = false }: { size?: number; className?: string; decorative?: boolean }) {
+import Image from "next/image";
+
+// Her round lilac Instagram logo. `src` is her uploaded logo (Admin → Photos) when there is one.
+export function Logo({ size = 120, src = "/logo-instagram.png", className = "", decorative = false, priority = false }: {
+  size?: number; src?: string; className?: string; decorative?: boolean; priority?: boolean;
+}) {
   return (
-    <svg
+    <Image
+      src={src}
       width={size}
       height={size}
-      viewBox="0 0 200 200"
-      className={className}
-      role={decorative ? undefined : "img"}
-      aria-hidden={decorative || undefined}
-      aria-label={decorative ? undefined : "Re·Form Pilates Studio"}
-    >
-      <defs>
-        <radialGradient id="rf-glow" cx="50%" cy="85%" r="80%">
-          <stop offset="0%" stopColor="#FFFFFF" />
-          <stop offset="55%" stopColor="#E9DDF5" />
-          <stop offset="100%" stopColor="#C9A8E6" />
-        </radialGradient>
-      </defs>
-      <circle cx="100" cy="100" r="98" fill="url(#rf-glow)" />
-      <text
-        x="100"
-        y="114"
-        textAnchor="middle"
-        fontFamily="var(--font-cormorant), 'Cormorant Garamond', Georgia, serif"
-        fontWeight={300}
-        fontSize="50"
-        fill="#5B4470"
-        letterSpacing="0.5"
-      >
-        Re·Form
-      </text>
-    </svg>
+      priority={priority}
+      unoptimized={src.startsWith("http")}
+      alt={decorative ? "" : "Re·Form Pilates Studio"}
+      className={`rounded-full ${className}`}
+    />
   );
 }
 

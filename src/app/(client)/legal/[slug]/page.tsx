@@ -107,7 +107,7 @@ const PAGES: Record<string, { title: string; body: (s: Settings) => React.ReactN
           </tbody>
         </table>
         <h2>Optional third-party content</h2>
-        <p>The map on the Our Studio page only loads if you tap &quot;Load map&quot;. Google may then set its own cookies. Stripe sets its own cookies on its checkout page.</p>
+        <p>The map on the Studio page only loads if you tap &quot;Load map&quot;. Google may then set its own cookies. Stripe sets its own cookies on its checkout page.</p>
       </>
     ),
   },

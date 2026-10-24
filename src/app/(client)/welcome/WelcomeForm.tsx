@@ -4,8 +4,9 @@ import { useActionState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Checkbox, Field, Notice, inputClass } from "@/components/ui";
 import { completeWelcome, type WelcomeState } from "./actions";
+import { HealthFields, PhotoConsentField } from "@/components/ProfileFields";
 
-export function WelcomeForm({ email, name, phone, next }: { email: string; name: string; phone: string; next: string }) {
+export function WelcomeForm({ email, first, last, phone, next }: { email: string; first: string; last: string; phone: string; next: string }) {
   const router = useRouter();
   const [state, action, pending] = useActionState<WelcomeState, FormData>(completeWelcome, { ok: false });
   const e = state.errors ?? {};
@@ -16,26 +17,30 @@ export function WelcomeForm({ email, name, phone, next }: { email: string; name:
     <form action={action} className="space-y-5" noValidate>
       <input type="hidden" name="next" value={next} />
       {Object.keys(e).length > 0 && <Notice tone="error">Please check the highlighted fields below.</Notice>}
-      <Field id="full_name" label="Full name" error={e.full_name}>
-        <input id="full_name" name="full_name" autoComplete="name" required defaultValue={name} className={inputClass} {...err("full_name")} />
-      </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field id="first_name" label="First name" error={e.first_name}>
+          <input id="first_name" name="first_name" autoComplete="given-name" required defaultValue={first} className={inputClass} {...err("first_name")} />
+        </Field>
+        <Field id="last_name" label="Surname" error={e.last_name}>
+          <input id="last_name" name="last_name" autoComplete="family-name" required defaultValue={last} className={inputClass} {...err("last_name")} />
+        </Field>
+      </div>
       <Field id="phone" label="Mobile number" error={e.phone} hint="For class reminders and if we need to reach you about a class.">
         <input id="phone" name="phone" type="tel" inputMode="tel" autoComplete="tel" required defaultValue={phone} placeholder="+357 99 123456" className={inputClass} {...err("phone")} />
       </Field>
       <Field id="email" label="Email">
         <input id="email" value={email} readOnly className={`${inputClass} bg-lilac-50 text-ink-soft`} />
       </Field>
+      <Field id="date_of_birth" label="Date of birth (optional)" error={e.date_of_birth}>
+        <input id="date_of_birth" name="date_of_birth" type="date" autoComplete="bday" className={inputClass} {...err("date_of_birth")} />
+      </Field>
 
       <fieldset className="space-y-3 rounded-[var(--radius-card)] border border-line bg-white/60 p-4">
         <legend className="px-1 text-sm font-medium text-ink">Anything your instructor should know? <span className="font-normal text-ink-soft">(optional)</span></legend>
-        <Field id="health_note" label="Injuries, conditions or pregnancy" hint="Only your instructor can see this. You can edit or delete it any time in your account.">
-          <textarea id="health_note" name="health_note" rows={3} className={`${inputClass} py-3`} placeholder="e.g. recovering from a knee injury" />
-        </Field>
-        <Checkbox id="health_consent" name="health_consent" aria-describedby={e.health_consent ? "health_consent-error" : undefined}>
-          I consent to Re·Form storing this health information so my instructor can adapt exercises for me. I can withdraw consent at any time.
-        </Checkbox>
-        {e.health_consent && <p id="health_consent-error" className="text-xs font-medium text-burgundy">{e.health_consent}</p>}
+        <HealthFields error={e.health_consent} />
       </fieldset>
+
+      <PhotoConsentField />
 
       <fieldset className="space-y-1">
         <legend className="sr-only">Agreements</legend>

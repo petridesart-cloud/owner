@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { HeartPulse } from "lucide-react";
 import { Badge } from "@/components/ui";
 import { sessionsWithRoster } from "@/lib/admin-data";
 import { db } from "@/lib/supabase/admin";
@@ -13,8 +12,12 @@ import { cancelToday } from "./actions";
 import { eur } from "@/lib/money";
 import { dayMonth, nowMs } from "@/lib/time";
 import { AdminTitle, Stat } from "./ui";
+import { HealthInfo } from "./HealthInfo";
 
 export const dynamic = "force-dynamic";
+
+const METHOD: Record<string, string> = { cash: "cash", revolut: "Revolut", bank_transfer: "bank transfer", card_in_person: "card" };
+const flag = "mr-1 inline-block rounded-full px-2 py-0.5 font-medium";
 
 export default async function TodayPage({ searchParams }: { searchParams: Promise<{ day?: string }> }) {
   scheduleTick();
@@ -27,7 +30,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const isToday = key === todayKey();
   const [{ count: pendingRefunds }, { data: awaiting }, { data: renewals }] = await Promise.all([
     db().from("payments").select("id", { count: "exact", head: true }).eq("status", "needs_refund"),
-    db().from("payments").select("id, description, amount_cents, created_at, purpose, profiles(id, full_name)").eq("status", "pending").eq("provider", "offline").order("created_at"),
+    db().from("payments").select("id, description, amount_cents, created_at, purpose, intended_method, profiles(id, full_name)").eq("status", "pending").eq("provider", "offline").order("created_at"),
     db().from("memberships").select("id, current_period_end, status, profiles(id, full_name), products!memberships_product_id_fkey(name, price_cents)")
       .eq("provider", "offline").eq("cancel_at_period_end", false).in("status", ["active", "past_due"])
       .lte("current_period_end", new Date(nowMs() + 7 * 86_400_000).toISOString()).order("current_period_end"),
@@ -61,12 +64,13 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
           <h2 id="awaiting" className="display border-b border-line px-4 py-3 text-[0.95rem]">Awaiting payment</h2>
           <ul className="divide-y divide-line">
             {awaiting!.map((p) => (
-              <li key={p.id} className="flex items-center gap-3 px-4 py-2.5">
+              <li key={p.id} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center">
                 <div className="min-w-0 flex-1">
                   <Link href={`/admin/clients/${p.profiles?.id}`} className="block truncate text-sm font-medium text-ink hover:underline">{p.profiles?.full_name}</Link>
                   <p className="truncate text-xs text-ink-soft">{p.description} · {eur(p.amount_cents)}</p>
+                  {p.intended_method && <p className="text-xs font-medium text-plum-700">Will pay: {METHOD[p.intended_method] ?? p.intended_method}</p>}
                 </div>
-                <MarkPaid paymentId={p.id} label={`${p.profiles?.full_name}: ${p.description}`} />
+                <MarkPaid paymentId={p.id} prefer={p.intended_method} label={`${p.profiles?.full_name}: ${p.description}`} />
               </li>
             ))}
           </ul>
@@ -112,15 +116,15 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
                   <div className="min-w-0 flex-1">
                     <Link href={`/admin/clients/${b.profiles?.id}`} className="block truncate font-medium text-ink hover:underline">{b.profiles?.full_name ?? "Client"}</Link>
                     <p className="text-xs text-ink-soft">
-                      {b.paid_with === "pay_at_studio" && <span className="mr-1 rounded-full bg-burgundy-soft px-2 py-0.5 font-medium text-burgundy">Unpaid</span>}
+                      {b.firstClass && <span className={`${flag} bg-lilac-300 text-ink`}>First class</span>}
+                      {b.tag === "trial" && <span className={`${flag} bg-mauve text-ink`}>Trial</span>}
+                      {b.tag === "drop_in" && <span className={`${flag} bg-lilac-100 text-ink`}>Drop-in</span>}
+                      {b.profiles?.photo_consent === "none" && <span className={`${flag} bg-ink text-paper`}>No photos</span>}
+                      {b.profiles?.photo_consent === "no_face" && <span className={`${flag} bg-ink/80 text-paper`}>No face</span>}
+                      {b.paid_with === "pay_at_studio" && b.payment?.status !== "paid" && <span className={`${flag} bg-burgundy-soft text-burgundy`}>Unpaid{b.payment?.intended_method ? ` · ${METHOD[b.payment.intended_method]}` : ""}</span>}
                       {b.status === "no_show" ? "No-show" : b.paid_with === "credit" ? "Class credit" : b.paid_with === "payment" ? "Paid" : b.paid_with === "pay_at_studio" ? "Pay at studio" : "Manual / DM"}{b.profiles?.phone ? ` · ${b.profiles.phone}` : ""}
                     </p>
-                    {b.profiles?.health_notes?.note && (
-                      <details className="mt-1 text-xs text-burgundy">
-                        <summary className="inline-flex min-h-8 cursor-pointer items-center gap-1.5 font-medium"><HeartPulse aria-hidden size={13} /> Health note</summary>
-                        <p className="pb-1 text-ink">{b.profiles.health_notes.note}</p>
-                      </details>
-                    )}
+                    <HealthInfo h={b.profiles?.health_notes} />
                   </div>
                 </li>
               ))}

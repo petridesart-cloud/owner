@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Receipt } from "lucide-react";
 import { Badge, Button, ButtonLink, Card, Notice, PageTitle, Section } from "@/components/ui";
 import { getSettings, requireViewer } from "@/lib/auth";
@@ -22,6 +23,9 @@ export default async function MembershipPage({ searchParams }: { searchParams: P
   const viewer = await requireViewer("/membership");
   const p = viewer.profile;
   const settings = await getSettings();
+  // Packages live in My classes; this page only remains for auto-renewing memberships (behind the online-payments flag).
+  const { count: live } = await db().from("memberships").select("id", { count: "exact", head: true }).eq("profile_id", p.id).in("status", ["active", "paused", "past_due"]);
+  if (!live) redirect(started ? "/bookings?purchased=1" : requested ? "/bookings?requested=1" : "/bookings");
   const { data: lots } = await db().from("credit_lots").select("id, note, credit_kind, remaining, total, started_at, expires_at, validity_days")
     .eq("profile_id", p.id).gt("remaining", 0).or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`).order("created_at");
   const [credits, { data: m }, { data: pending }, { data: ledger }, { data: payments }] = await Promise.all([

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { db } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import { getSettings, requireViewer } from "@/lib/auth";
+import { PHOTO_CONSENT, dobSchema, fullName, nameSchema, phoneSchema, saveHealth, type PhotoConsent } from "@/lib/profile";
 
 export type SaveState = { ok: boolean; message?: string; error?: string };
 
@@ -12,39 +13,47 @@ export async function saveProfile(_: SaveState, form: FormData): Promise<SaveSta
   const viewer = await requireViewer("/account");
   const settings = await getSettings();
   const parsed = z.object({
-    full_name: z.string().trim().min(2).max(80),
-    phone: z.string().trim().regex(/^\+?[0-9 ()-]{8,20}$/),
-  }).safeParse({ full_name: form.get("full_name"), phone: form.get("phone") });
-  if (!parsed.success) return { ok: false, error: "Please check your name and phone number." };
+    first_name: nameSchema, last_name: nameSchema, phone: phoneSchema, date_of_birth: dobSchema,
+    goal: z.string().trim().max(200).optional(),
+    emergency_contact_name: z.string().trim().max(80).optional(),
+    emergency_contact_phone: phoneSchema.optional().or(z.literal("")),
+  }).safeParse({
+    first_name: form.get("first_name"), last_name: form.get("last_name"), phone: form.get("phone"), date_of_birth: form.get("date_of_birth") ?? "",
+    goal: form.get("goal") ?? "", emergency_contact_name: form.get("emergency_contact_name") ?? "", emergency_contact_phone: form.get("emergency_contact_phone") ?? "",
+  });
+  if (!parsed.success) return { ok: false, error: `Please check: ${[...new Set(parsed.error.issues.map((i) => LABEL[String(i.path[0])] ?? String(i.path[0])))].join(", ")}.` };
 
   const p = viewer.profile;
+  const d = parsed.data;
   const me = form.get("marketing_email") === "on";
-  const ms = form.get("marketing_sms") === "on";
-  await db().from("profiles").update({ ...parsed.data, marketing_email: me, marketing_sms: ms }).eq("id", p.id);
-  const changes = [];
-  if (me !== p.marketing_email) changes.push({ profile_id: p.id, type: "marketing_email" as const, granted: me, version: settings.policy_version });
-  if (ms !== p.marketing_sms) changes.push({ profile_id: p.id, type: "marketing_sms" as const, granted: ms, version: settings.policy_version });
+  const photos = String(form.get("photo_consent") ?? "");
+  const photoConsent = photos in PHOTO_CONSENT ? (photos as PhotoConsent) : p.photo_consent;
+  await db().from("profiles").update({
+    first_name: d.first_name, last_name: d.last_name, full_name: fullName(d.first_name, d.last_name), phone: d.phone,
+    date_of_birth: d.date_of_birth ?? null, goal: d.goal || null,
+    emergency_contact_name: d.emergency_contact_name || null, emergency_contact_phone: d.emergency_contact_phone || null,
+    photo_consent: photoConsent, marketing_email: me,
+  }).eq("id", p.id);
+  const changes: { profile_id: string; type: "marketing_email" | "photos"; granted: boolean; version: string }[] = [];
+  if (me !== p.marketing_email) changes.push({ profile_id: p.id, type: "marketing_email", granted: me, version: settings.policy_version });
+  if (photoConsent && photoConsent !== p.photo_consent) changes.push({ profile_id: p.id, type: "photos", granted: photoConsent !== "none", version: `${settings.policy_version}:${photoConsent}` });
   if (changes.length) await db().from("consents").insert(changes);
   revalidatePath("/account");
   return { ok: true, message: "Saved." };
 }
 
-export async function saveHealthNote(_: SaveState, form: FormData): Promise<SaveState> {
+const LABEL: Record<string, string> = {
+  first_name: "first name", last_name: "surname", phone: "mobile number", date_of_birth: "date of birth", emergency_contact_phone: "emergency contact phone",
+};
+
+export async function saveHealthInfo(_: SaveState, form: FormData): Promise<SaveState> {
   const viewer = await requireViewer("/account");
   const settings = await getSettings();
-  const note = String(form.get("note") ?? "").trim().slice(0, 1000);
-  const p = viewer.profile;
-  if (!note) {
-    await db().from("health_notes").delete().eq("profile_id", p.id);
-    await db().from("consents").insert({ profile_id: p.id, type: "health_data", granted: false, version: settings.policy_version });
-    revalidatePath("/account");
-    return { ok: true, message: "Health note deleted and consent withdrawn." };
-  }
-  if (form.get("consent") !== "on") return { ok: false, error: "Please tick the consent box to store a health note." };
-  await db().from("health_notes").upsert({ profile_id: p.id, note, consent_at: new Date().toISOString(), updated_at: new Date().toISOString() });
-  await db().from("consents").insert({ profile_id: p.id, type: "health_data", granted: true, version: settings.policy_version });
+  const res = await saveHealth(viewer.profile.id, { injuries: String(form.get("injuries") ?? ""), medication: String(form.get("medication") ?? "") },
+    form.get("health_consent") === "on", settings.policy_version);
+  if (!res.ok) return { ok: false, error: res.error };
   revalidatePath("/account");
-  return { ok: true, message: "Health note saved. Only your instructor can see it." };
+  return { ok: true, message: res.cleared ? "Health information deleted and consent withdrawn." : "Saved. Only your instructor can see this." };
 }
 
 export async function signOutAction() {

@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Download, LogOut } from "lucide-react";
+import { ChevronRight, Download, LogOut } from "lucide-react";
 import { Button, Card, Notice, PageTitle, Section, inputClass } from "@/components/ui";
 import { requireViewer } from "@/lib/auth";
 import { db } from "@/lib/supabase/admin";
-import { longDate } from "@/lib/time";
+import { dotDate, longDate } from "@/lib/time";
+import { eur } from "@/lib/money";
+import { receiptLabel } from "@/lib/receipts";
 import { deleteAccount, signOutAction } from "./actions";
 import { HealthForm, ProfileForm } from "./Forms";
 
@@ -13,29 +15,53 @@ export const dynamic = "force-dynamic";
 
 const CONSENT_LABEL: Record<string, string> = {
   policy: "Studio Rules", terms: "Terms & Conditions", fitness_declaration: "Health declaration",
-  health_data: "Health data", marketing_email: "News by email", marketing_sms: "News by SMS",
+  health_data: "Health data", marketing_email: "News by email", marketing_sms: "News by SMS", photos: "Photos for social media",
 };
 
 export default async function AccountPage({ searchParams }: { searchParams: Promise<{ delete?: string }> }) {
   const { delete: del } = await searchParams;
   const viewer = await requireViewer("/account");
   const p = viewer.profile;
-  const [{ data: health }, { data: consents }] = await Promise.all([
-    db().from("health_notes").select("note").eq("profile_id", p.id).maybeSingle(),
+  const [{ data: health }, { data: consents }, { data: receipts }] = await Promise.all([
+    db().from("health_notes").select("note, injuries, medication").eq("profile_id", p.id).maybeSingle(),
     db().from("consents").select("type, granted, version, created_at").eq("profile_id", p.id).order("created_at", { ascending: false }).limit(30),
+    db().from("payments").select("id, description, amount_cents, paid_at, products(tag, credit_kind)").eq("profile_id", p.id).eq("status", "paid").order("paid_at", { ascending: false }).limit(24),
   ]);
   const latest = new Map<string, { granted: boolean; created_at: string }>();
   for (const c of consents ?? []) if (!latest.has(c.type)) latest.set(c.type, c);
 
   return (
     <div>
-      <PageTitle eyebrow={p.email ?? ""} title="Account" />
+      <PageTitle eyebrow={viewer.email} title="Account" />
       <div className="space-y-8">
-        <div className="px-5">
-          <Link href="/membership" className="card flex min-h-14 items-center justify-between px-5 py-3 font-medium text-ink">My package, classes &amp; receipts <span aria-hidden>→</span></Link>
-        </div>
-        <Section title="Your details"><Card className="px-5 py-5"><ProfileForm name={p.full_name ?? ""} phone={p.phone ?? ""} email={viewer.email} me={p.marketing_email} ms={p.marketing_sms} /></Card></Section>
-        <Section title="Health"><Card className="px-5 py-5"><HealthForm note={health?.note ?? ""} /></Card></Section>
+        <Section title="Your details">
+          <Card className="px-5 py-5">
+            <ProfileForm p={{
+              first: p.first_name ?? p.full_name?.split(" ")[0] ?? "", last: p.last_name ?? "", phone: p.phone ?? "", email: viewer.email,
+              dob: p.date_of_birth ?? "", goal: p.goal ?? "", ecName: p.emergency_contact_name ?? "", ecPhone: p.emergency_contact_phone ?? "",
+              photos: p.photo_consent, me: p.marketing_email,
+            }} />
+          </Card>
+        </Section>
+        <Section title="Health">
+          <Card className="px-5 py-5">
+            <HealthForm injuries={health?.injuries ?? health?.note ?? ""} medication={health?.medication ?? ""} />
+          </Card>
+        </Section>
+        <Section title="Receipts">
+          {(receipts ?? []).length ? (
+            <ul className="card divide-y divide-line overflow-hidden">
+              {receipts!.map((r) => (
+                <li key={r.id}>
+                  <Link href={`/receipts/${r.id}`} className="flex min-h-14 items-center justify-between gap-3 px-4 py-3 text-sm hover:bg-lilac-50">
+                    <span><span className="block font-medium text-ink">{receiptLabel(r)} · {eur(r.amount_cents)}</span><span className="text-xs text-ink-soft">{r.paid_at ? dotDate(r.paid_at) : ""}</span></span>
+                    <ChevronRight aria-hidden size={16} className="text-ink-soft" />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ) : <Card className="px-5 py-5 text-sm text-ink-soft">Your payment receipts will appear here.</Card>}
+        </Section>
         <Section title="Privacy & data">
           <details className="card px-5 py-1">
             <summary className="min-h-12 cursor-pointer content-center text-sm font-medium text-ink">Consents, download or delete my data</summary>
@@ -59,7 +85,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
             <details className="rounded-2xl border border-burgundy/20 bg-burgundy-soft/40 px-4 py-3" open={del === "confirm"}>
               <summary className="min-h-11 cursor-pointer content-center text-sm font-medium text-burgundy">Delete my account</summary>
               <form action={deleteAccount} className="mt-2 space-y-3">
-                <p className="text-xs leading-relaxed text-ink">This removes your name, contact details and health note, cancels your upcoming classes and signs you out. Unused credits are lost. We keep minimal anonymised booking and payment records where tax law requires it.</p>
+                <p className="text-xs leading-relaxed text-ink">This removes your name, contact details and health information, cancels your upcoming classes and signs you out. Unused credits are lost. We keep minimal anonymised booking and payment records where tax law requires it.</p>
                 {del === "confirm" && <Notice tone="error">Type DELETE to confirm.</Notice>}
                 <label htmlFor="confirm" className="block text-sm font-medium text-ink">Type DELETE to confirm</label>
                 <input id="confirm" name="confirm" autoComplete="off" className={inputClass} />

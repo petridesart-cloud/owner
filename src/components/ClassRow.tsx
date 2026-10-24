@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import type { Availability } from "@/lib/data";
 import { longDate, time } from "@/lib/time";
-import { Badge } from "./ui";
+import { Badge, stateColors } from "./ui";
 
 export function spotsLabel(c: Pick<Availability, "kind" | "spots_left" | "capacity">) {
   const unit = c.kind === "reformer" ? (c.capacity === 1 ? "reformer" : "reformers") : c.capacity === 1 ? "spot" : "spots";
@@ -16,14 +16,16 @@ export function ClassRow({ c, state, showDate = false }: { c: Availability; stat
   const past = new Date(c.starts_at) <= new Date();
   const mins = Math.round((new Date(c.ends_at).getTime() - new Date(c.starts_at).getTime()) / 60000);
   const action = cancelled ? "View" : state === "booked" ? "View booking for" : full ? "Join waitlist for" : "Book";
+  const tone = cancelled ? null : state === "booked" || state === "offered" ? "booked" : full || state === "waiting" ? "waitlist" : "open";
   const label = `${action} ${time(c.starts_at)} ${c.title}, ${longDate(c.starts_at)}. ${cancelled ? "Cancelled." : spotsLabel(c) + "."}`;
 
   return (
     <Link
       href={`/book/${c.id}`}
       aria-label={label}
-      className={`card pressable group flex min-h-[76px] items-center gap-4 px-4 py-3.5 hover:-translate-y-0.5 hover:shadow-[var(--shadow-lift)] ${cancelled || past ? "opacity-60" : ""}`}
+      className={`card pressable group relative flex min-h-[76px] items-center gap-4 overflow-hidden px-4 py-3.5 hover:-translate-y-0.5 hover:shadow-[var(--shadow-lift)] ${cancelled || past ? "opacity-60" : ""}`}
     >
+      {tone && <span aria-hidden className={`absolute inset-y-0 left-0 w-1.5 ${stateColors[tone]}`} />}
       <div className="w-[4.3rem] shrink-0">
         <p className="font-serif text-[1.65rem] leading-none text-ink">{time(c.starts_at)}</p>
         <p className="mt-1 text-[0.7rem] text-ink-soft">{showDate ? longDate(c.starts_at).split(" ").slice(0, 3).join(" ") : `${mins} min`}</p>
@@ -40,18 +42,15 @@ export function ClassRow({ c, state, showDate = false }: { c: Availability; stat
           {cancelled ? (
             <Badge tone="full">Cancelled</Badge>
           ) : state === "booked" ? (
-            <Badge tone="mauve">You&apos;re booked</Badge>
+            <Badge tone="booked">You&apos;re booked</Badge>
           ) : state === "offered" ? (
-            <Badge tone="mauve">Spot offered to you</Badge>
+            <Badge tone="booked">Spot offered to you</Badge>
           ) : state === "waiting" ? (
-            <Badge tone="plain">On waitlist</Badge>
+            <Badge tone="waitlist">On the waitlist</Badge>
           ) : full ? (
-            <>
-              <Badge tone="full">Full</Badge>
-              <Badge tone="plain">Waitlist{c.waitlist_count ? ` · ${c.waitlist_count}` : ""}</Badge>
-            </>
+            <Badge tone="waitlist">Full · Join waitlist</Badge>
           ) : (
-            <Badge tone={c.spots_left === 1 ? "mauve" : "lilac"}>{spotsLabel(c)}</Badge>
+            <Badge tone="open">{spotsLabel(c)}</Badge>
           )}
           {c.kind === "event" && <Badge tone="plain">Special event</Badge>}
         </div>

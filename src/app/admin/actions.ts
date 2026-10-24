@@ -6,6 +6,7 @@ import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/supabase/admin";
 import { cancelBooking, cancelSession, notifyOffers, onPaymentPaid, runTick, sessionInfo } from "@/lib/booking";
 import { notify } from "@/lib/notifications";
+import { applyRecurring } from "@/lib/recurring";
 import { friendlyError, type ActionResult } from "@/lib/errors";
 import { addDaysKey, localToUtc, spokenDateTime, todayKey } from "@/lib/time";
 import type { Json } from "@/lib/supabase/types";
@@ -146,6 +147,7 @@ export async function saveTimetable(_: ActionResult, form: FormData): Promise<Ac
   const unique = new Map(slots.data.map((s) => [`${s.weekday}-${s.time}`, s]));
   await db().from("template_slots").insert([...unique.values()].map((s) => ({ template_id: t.id, weekday: s.weekday, start_time: s.time, class_type_id: s.class_type_id, capacity: s.capacity ?? null })));
   const { data: n } = await db().rpc("generate_sessions", { p_template: t.id });
+  await applyRecurring();
   revalidatePath("/admin/timetable");
   return { ok: true, message: `Timetable saved. ${n} new classes created (existing classes were kept).` };
 }
@@ -155,8 +157,9 @@ export async function updateClient(profileId: string, _: ActionResult, form: For
   await admin("update_client", { profileId });
   const email = String(form.get("email") ?? "").trim().toLowerCase() || null;
   if (email && !z.string().email().safeParse(email).success) return { ok: false, error: "Invalid email." };
+  const name = String(form.get("full_name") ?? "").trim();
   const { error } = await db().from("profiles").update({
-    full_name: String(form.get("full_name") ?? "").trim() || null,
+    full_name: name || null, first_name: name.split(" ")[0] || null, last_name: name.split(" ").slice(1).join(" ") || null,
     phone: String(form.get("phone") ?? "").trim() || null,
     email,
     admin_notes: String(form.get("admin_notes") ?? "").trim() || null,
@@ -340,6 +343,8 @@ export async function saveSettings(_: ActionResult, form: FormData): Promise<Act
     legal_name: str("legal_name"), trader_name: str("trader_name"), address: str("address"),
     contact_email: str("contact_email"), contact_phone: str("contact_phone"), instagram_handle: str("instagram_handle").replace(/^@/, ""),
     policy_version: str("policy_version"),
+    booking_window_days: Math.round(num("booking_window_weeks") * 7) || 28,
+    studio_sections: str("studio_sections").split("\n").map((x) => x.trim().slice(0, 40)).filter(Boolean).slice(0, 12),
     updated_at: new Date().toISOString(),
   }).eq("id", 1);
   if (error) return { ok: false, error: "Some values are out of range. Please check them." };
@@ -380,10 +385,28 @@ export async function saveProduct(id: string, _: ActionResult, form: FormData): 
     period_days: Number(form.get("period_days")) || null,
     description: String(form.get("description") ?? "").trim() || null,
     active: form.get("active") === "on",
+    ...(form.has("per_week") ? { per_week: Number(form.get("per_week")) || null, months: Number(form.get("months")) || null } : {}),
   }).eq("id", id);
   if (error) return { ok: false, error: "Couldn't save." };
   revalidatePath("/admin/settings");
   return { ok: true, message: "Saved." };
+}
+
+/** The Package prices grid: one price per product. */
+export async function savePrices(_: ActionResult, form: FormData): Promise<ActionResult> {
+  await admin("save_prices");
+  const updates: { id: string; cents: number }[] = [];
+  for (const [k, v] of form.entries()) {
+    if (!k.startsWith("price_")) continue;
+    const id = k.slice(6);
+    const cents = Math.round(Number(String(v).replace(",", ".").replace("€", "")) * 100);
+    if (!/^[0-9a-f-]{36}$/.test(id) || !Number.isFinite(cents) || cents < 0 || cents > 1_000_000) return { ok: false, error: "Please check the prices (numbers only, e.g. 130)." };
+    updates.push({ id, cents });
+  }
+  for (const u of updates) await db().from("products").update({ price_cents: u.cents }).eq("id", u.id);
+  revalidatePath("/admin/settings");
+  revalidatePath("/packs");
+  return { ok: true, message: "Prices saved." };
 }
 
 export async function toggleCompliance(key: string, done: boolean) {

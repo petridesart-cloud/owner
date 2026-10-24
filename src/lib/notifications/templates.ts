@@ -13,7 +13,9 @@ export type TemplateName =
   | "renewal_upcoming"
   | "payment_failed"
   | "credits_expiring"
-  | "credits_low";
+  | "credits_low"
+  | "weekly_booked"
+  | "weekly_full";
 
 export type TemplateData = {
   name?: string;
@@ -103,7 +105,7 @@ export function render(t: TemplateName, raw: TemplateData): Rendered {
         subject: `Your request: ${d.className}`,
         heading: "See you at the studio",
         lines: [`Hi ${first(d.name)}, we've noted your request for <strong>${d.className}</strong>.`, d.note ?? ""],
-        cta: { label: "View my classes", href: `${link}/membership` },
+        cta: { label: "View my classes", href: `${link}/bookings` },
         sms: `Re·Form: request noted for ${d.className}. ${d.note ?? ""}`.trim(),
       };
     case "renewal_upcoming":
@@ -137,6 +139,22 @@ export function render(t: TemplateName, raw: TemplateData): Rendered {
         lines: [`Hi ${first(d.name)}, you have 1 ${d.className ?? ""} class left. Top up whenever you're ready.`],
         cta: { label: "See packages", href: `${link}/packs` },
         sms: `Re·Form: you have 1 class left. Top up: ${link}/packs`,
+      };
+    case "weekly_booked":
+      return {
+        subject: "Your weekly classes are booked",
+        heading: "See you on the reformer",
+        lines: [`Hi ${first(d.name)}, we booked your usual classes: ${d.when}.`, d.note ?? ""],
+        cta: { label: "My classes", href: `${link}/bookings` },
+        sms: `Re·Form: booked your weekly classes: ${d.when}. ${link}/bookings`,
+      };
+    case "weekly_full":
+      return {
+        subject: `${d.className} is full this week`,
+        heading: "This one is full",
+        lines: [`Hi ${first(d.name)}, your weekly class on ${d.when} is full, so we couldn't book it.`, "Join the waitlist and you'll get the spot if one opens."],
+        cta: { label: "Join waitlist", href: d.link ?? `${link}/schedule` },
+        sms: `Re·Form: your weekly class ${d.when} is full. Join the waitlist: ${d.link ?? `${link}/schedule`}`,
       };
   }
 }

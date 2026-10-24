@@ -5,17 +5,20 @@ import { markPaid, renewMembership, setMembershipState } from "./actions";
 const btn = "min-h-10 rounded-full border px-3 text-xs font-medium transition active:scale-[0.97] disabled:opacity-50";
 
 /** "Mark as paid": cash or card in person. Credits/booking are settled via the ledger. */
-export function MarkPaid({ paymentId, label }: { paymentId: string; label: string }) {
+export function MarkPaid({ paymentId, label, prefer }: { paymentId: string; label: string; prefer?: string | null }) {
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
   if (msg) return <span role="status" className="text-xs font-medium text-plum-700">{msg}</span>;
   const go = (m: "cash" | "card_in_person" | "revolut" | "bank_transfer") => start(async () => { const r = await markPaid(paymentId, m); setMsg(r.ok ? "Paid ✓" : r.error); });
+  // The method the client chose comes first and is highlighted.
+  const all = [["cash", "Cash"], ["revolut", "Revolut"], ["bank_transfer", "Bank"], ["card_in_person", "Card"]] as const;
+  const first = all.find(([m]) => m === prefer) ?? all[0];
+  const ordered = [first, ...all.filter((x) => x !== first)];
   return (
-    <span className="flex shrink-0 flex-wrap justify-end gap-1.5" role="group" aria-label={`Mark ${label} as paid`}>
-      <button disabled={pending} onClick={() => go("cash")} className={`${btn} border-ink bg-ink text-paper`}>Cash</button>
-      <button disabled={pending} onClick={() => go("revolut")} className={`${btn} border-line bg-white text-ink`}>Revolut</button>
-      <button disabled={pending} onClick={() => go("bank_transfer")} className={`${btn} border-line bg-white text-ink`}>Bank</button>
-      <button disabled={pending} onClick={() => go("card_in_person")} className={`${btn} border-line bg-white text-ink`}>Card</button>
+    <span className="flex shrink-0 flex-wrap gap-1.5 sm:justify-end" role="group" aria-label={`Mark ${label} as paid`}>
+      {ordered.map(([m, text], i) => (
+        <button key={m} disabled={pending} onClick={() => go(m)} className={`${btn} ${i === 0 ? "border-ink bg-ink text-paper" : "border-line bg-white text-ink"}`}>{text}</button>
+      ))}
     </span>
   );
 }

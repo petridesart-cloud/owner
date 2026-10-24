@@ -35,7 +35,10 @@ async function balance(profile: string) {
 async function lotRemaining(id: string) {
   return (await db.from("credit_lots").select("remaining").eq("id", id).single()).data!.remaining;
 }
-const book = (p: string, s: string, mode = "credit") => db.rpc("book_session", { p_profile: p, p_session: s, p_mode: mode });
+const book = (p: string, s: string, mode = "credit", source: "online" | "manual" = "online", method?: string) =>
+  db.rpc("book_session", { p_profile: p, p_session: s, p_mode: mode, p_source: source, p_method: method });
+// Beyond the 4-week online window: the studio adds the booking (same credit rules apply).
+const bookFar = (p: string, s: string) => book(p, s, "credit", "manual");
 
 before(async () => {
   reformer = (await db.from("class_types").select("id").eq("slug", "reformer").single()).data!.id;
@@ -290,19 +293,19 @@ describe("studio policy", () => {
     const p = await client("beyond");
     await packLot(p, 4, 30);
     assert.ifError((await book(p, await session(10 * D))).error);
-    assert.equal((await book(p, await session(45 * D))).error?.message, "beyond_expiry");
+    assert.equal((await bookFar(p, await session(45 * D))).error?.message, "beyond_expiry");
     // An earlier class that would pull the expiry before an existing booking is refused too.
     const q = await client("beyond2");
     await packLot(q, 4, 30);
     assert.ifError((await book(q, await session(20 * D))).error);
-    assert.ifError((await book(q, await session(45 * D))).error);          // start 20d → expiry 50d
+    assert.ifError((await bookFar(q, await session(45 * D))).error);       // start 20d → expiry 50d
     assert.equal((await book(q, await session(12 * D))).error?.message, "beyond_expiry");
   });
 
   test("closures freeze packages, counting overlapping closures once", async () => {
     const p = await client("freeze");
     const id = await packLot(p, 4, 30);
-    await book(p, await session(200 * D));
+    await bookFar(p, await session(200 * D));
     const before = await lot(id);
     const start = localDate(before.started_at!);
     const ids: string[] = [];
@@ -327,9 +330,14 @@ describe("studio policy", () => {
       })();
       // The studio can still add someone manually.
       assert.equal((await db.rpc("book_session", { p_profile: await client("closed"), p_session: closedDay, p_mode: "manual", p_source: "manual" })).error, null);
+      // Inside the booking window, a closure day refuses online bookings.
+      const near = addDaysKey(localDate(new Date().toISOString()), 10);
+      const c3 = (await db.from("closures").insert({ name: "Test break C", starts_on: near, ends_on: near, confirmed: true }).select("id").single()).data!.id;
+      ids.push(c3);
+      const nearClass = (await db.from("class_sessions").insert({ class_type_id: reformer, starts_at: localToUtc(near, "21:30"), ends_at: localToUtc(near, "22:20"), capacity: 3, title: "Engine test" }).select("id").single()).data!.id;
       const someone = await client("closed2");
       await grant(someone, 1, 400 * D);
-      assert.equal((await book(someone, closedDay)).error?.message, "studio_closed");
+      assert.equal((await book(someone, nearClass)).error?.message, "studio_closed");
     } finally {
       await db.from("closures").delete().in("id", ids);
     }
@@ -374,4 +382,43 @@ describe("studio policy", () => {
 // Leave the local database as a clean demo for the e2e tests.
 after(async () => {
   await db.rpc("reset_demo_data");
+});
+
+describe("client notes, round 1", () => {
+  const D = 86_400_000;
+  test("online bookings open 4 weeks ahead; the studio can add beyond that", async () => {
+    const p = await client("window");
+    await grant(p, 2, null);
+    assert.equal((await book(p, await session(35 * D))).error?.message, "beyond_window");
+    assert.ifError((await book(p, await session(20 * D))).error);
+    assert.ifError((await bookFar(p, await session(35 * D))).error);
+  });
+
+  test("trial: once per class type, then drop-in; both reserve with an unpaid payment and the chosen method", async () => {
+    const p = await client("trial");
+    const r = await book(p, await session(3 * D), "trial", "online", "revolut");
+    assert.ifError(r.error);
+    const bookingId = (r.data as { booking_id: string }).booking_id;
+    const { data: pay } = await db.from("payments").select("status, amount_cents, intended_method, products(tag)").eq("booking_id", bookingId).single();
+    assert.equal(pay?.status, "pending");
+    assert.equal(pay?.intended_method, "revolut");
+    assert.equal(pay?.products?.tag, "trial");
+    // A second trial is refused; one unpaid class at a time.
+    assert.equal((await book(p, await session(4 * D), "trial")).error?.message, "trial_used");
+    assert.equal((await book(p, await session(4 * D), "drop_in")).error?.message, "unpaid_limit");
+    // Once she marks it paid, a drop-in is fine.
+    const { data: payRow } = await db.from("payments").select("id").eq("booking_id", bookingId).single();
+    assert.ifError((await db.rpc("confirm_payment", { p_payment: payRow!.id, p_provider_ref: undefined as unknown as string, p_method: "revolut" })).error);
+    const d = await book(p, await session(5 * D), "drop_in", "online", "cash");
+    assert.ifError(d.error);
+    const { data: dp } = await db.from("payments").select("amount_cents, products(tag)").eq("booking_id", (d.data as { booking_id: string }).booking_id).single();
+    assert.equal(dp?.products?.tag, "drop_in");
+  });
+
+  test("someone who already took a class can't book a trial", async () => {
+    const p = await client("notrial");
+    await grant(p, 1, null);
+    assert.ifError((await book(p, await session(2 * D))).error);
+    assert.equal((await book(p, await session(3 * D), "trial")).error?.message, "trial_used");
+  });
 });

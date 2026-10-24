@@ -40,7 +40,8 @@ Booking web app for **Re·Form Pilates Studio**, Limassol, Cyprus (Instagram @re
   - 6h or more before class: the credit goes back to the same package with its original expiry, and the client can rebook.
   - Inside 6h, or a no-show: the credit is forfeited. The client can still release the spot to the waitlist.
   - Admin toggle (default off): refund the credit if the spot gets re-booked.
-- **Packages:**
+- **Packages (her real prices):** "N per week × 1 or 2 months" (Reformer €70/130/180/220 and €120/240/300/410; Mat €50/90/120/150 and €85/150/200/260). Classes = per week × 4 × months; "per week" is a guide, not a cap.
+  - **Trial** (Reformer €25, Mat €20): only for someone who has never booked that class type. **Drop-in** (€35 / €30). Both reserve the spot with an unpaid payment and the client's chosen method (cash/Revolut); she marks it paid. One unpaid class at a time.
   - Prepaid, 30 or 60 days of validity counted **from the first class**.
   - "Not started yet" until the first booking. Provisional expiry follows the earliest booked class and is locked once that class has passed.
   - Classes can't be booked beyond the expiry date. Unused classes expire (ledger `expiry`).
@@ -62,8 +63,13 @@ Booking web app for **Re·Form Pilates Studio**, Limassol, Cyprus (Instagram @re
   - Cyprus public holidays for the next 12 months are preloaded as suggestions she confirms.
   - "Missed class: public holiday" returns a class with a reason.
 - **Waitlist:** the first in line gets 2h (or until the cutoff) to claim. A live offer reserves the spot.
+- **Booking window:** clients book up to 4 weeks ahead (`booking_window_days`, Settings); the studio can add anyone beyond it.
+- **Same days every week:** clients pick weekly slots (`recurring_rules`); `applyRecurring()` books them while the package lasts, inside the window, on save, on Mark as paid, on timetable save and on every tick. Full weeks are skipped with a one-tap waitlist email; classes the client cancelled are never re-booked.
+- **Her photos:** Admin → Settings → Photos uploads to the public Storage bucket `media` (table `media`, slots `logo`, `instructor`, `studio:<section>`, `event:<id>`), resized in the browser to ≤1600px. Studio sections are a setting.
+- **Client profile:** first name, surname, optional DOB and goal, emergency contact, injuries and medication (health data, separate consent, instructor only), photo consent (with face / without face / none, logged in `consents` as `photos`). Her roster flags First class, Trial, Drop-in, No photos / No face.
 - **Her texts** are editable by her (Admin → Settings → Your texts, table `site_content`), falling back to the defaults in `src/lib/policy.ts`. They're reused across the policy pages, the first-class welcome, "What to bring", The Magic and Our Studio.
 - **Studio team:** she adds or removes admins in Admin → Settings → Studio team (`profiles.role`). `ADMIN_EMAILS` is only the bootstrap.
+- **Client navigation:** Home (logo, "Secure your package", next class, Pick classes / Every week, circles Studio · Events · Rules & policies, Next available) · Schedule · My classes (My profile / My progress: current package cards, upcoming, past packages with X/Y) · Account (details, health, photos consent, receipts).
 - **Keep it simple:** 5 admin tabs (Today, Classes, Clients, Stats, Settings); less-used tools sit inside Classes and Settings. Settings shows the essentials first, with technical options under "Advanced".
 
 ## Decisions (and why)
@@ -87,12 +93,17 @@ Booking web app for **Re·Form Pilates Studio**, Limassol, Cyprus (Instagram @re
 | Pay in advance + Mark as paid (offline payments) using the same payments/ledger as Stripe | She isn't registered yet; switching online on later needs only the flag and live keys. |
 | Student price computed server-side (`src/lib/pricing.ts`) | Clients can't send their own price. |
 | `where true` on bulk deletes in `reset_demo_data` | Supabase's safeupdate rejects unqualified DELETE/UPDATE via the API. |
+| Never edit an applied migration; replace functions in a new one (e.g. `seed_demo` v2 in `20261024000200`) | `scripts/migrate.mjs` runs each file once on the live database; edits to old files never reach it. |
+| Weekly repeat bookings in TypeScript (`src/lib/recurring.ts`) on top of `book_session` | Reuses every engine rule (capacity lock, validity, window) and the notification service; no second booking path. |
+| Navigation: wordmark is not a link, no header account icon, Back buttons go one step back (`BackButton`) | Her notes: the bottom bar already has Account; clients arrive deep-linked from Instagram. |
 
 ## Tech
 - **Stack:** Next.js 16 (App Router, `src/`, `proxy.ts` instead of middleware), TypeScript, Tailwind v4, Supabase (Postgres + Auth), Stripe, Resend, Twilio, Playwright.
 - **Key files:**
   - `supabase/migrations/*`: schema, engine, RLS, demo seed, hardening. Never change the DB manually; add a migration. `supabase/setup.sql` is a generated bundle (`npm run db:bundle`).
-  - `src/lib/booking.ts`: server orchestration (book, pay, cancel, waitlist, reminders) and notifications.
+  - `src/lib/booking.ts`: server orchestration (book, trial/drop-in, pay, cancel, waitlist, reminders) and notifications.
+  - `src/lib/packages.ts` (package cards and progress), `src/lib/recurring.ts` (weekly bookings), `src/lib/media.ts` (her photos), `src/lib/profile.ts` (profile and health saving).
+  - `docs/feedback/*`: her notes rewritten as build briefs, with open questions.
   - `src/lib/auth.ts`: `getViewer`, `requireAdmin`, `getSettings`.
   - `src/lib/payments/*`, `src/lib/notifications/*`: swappable providers.
   - `src/lib/time.ts`: all timezone formatting (UTC stored, Nicosia shown).
@@ -135,13 +146,16 @@ npm run db:types              # after schema changes
 
 ## Current status / next up
 - **Done:**
-  - Client app with her real policy, pay-in-advance package requests, Membership/history/receipts and Packages with terms acceptance.
-  - Admin: Today (awaiting payment, renewals, unpaid flags, cancel today), classes, timetable, closures, clients (student verification, holiday return, ledger), Outbox, stats (MRR, methods by month, CSV export), import, settings, compliance.
+  - Client app with her real policy, pay-in-advance package requests, receipts and Packages with terms acceptance.
+  - Her round-1 client notes (`docs/feedback/elysia-client-notes-1.md`): her logo, real prices, cash/Revolut choice, trials and drop-ins, weekly repeat bookings, 3-state colours, new My classes with package progress, new Account, Studio / Events / Rules pages, Back buttons, Photos manager.
+  - Admin: Today (awaiting payment with chosen method, roster flags), classes, timetable, closures, clients (profile, health behind a tap, student verification, holiday return, ledger), Outbox, stats, import, settings (price grid, booking window, studio sections), photos, compliance.
   - PWA manifest and icons, Open Graph previews.
-  - 27 engine tests + 6 Playwright flows green on a production build.
-- **Waiting on the owner:**
-  - Her Revolut link, IBAN, real prices and package names, logo and photos.
+  - 30 engine tests + 6 Playwright flows green on a production build.
+- **Waiting on the owner (questions in the brief):**
+  - Answers to the 9 questions in `docs/feedback/elysia-client-notes-1.md` (defaults are live).
+  - Her Revolut link, IBAN, original logo file and photos (she can upload them herself now).
   - Address, her full name, contact details.
 - **Proposed v2:**
   - Wallet passes, auto-renewing memberships (code exists, flagged off), corporate accounts, referrals, gift vouchers.
-  - PAR-Q questionnaire, private feedback, demand insights, Greek/Russian, motion system with sheets/gestures, benchmark doc, the /design page.
+  - PAR-Q questionnaire, private feedback, demand insights, Greek/Russian, motion system with sheets/gestures.
+  - Stop repeat trials from new email addresses (phone match), photo captions/reordering.

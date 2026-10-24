@@ -5,10 +5,11 @@ import { Bubbles } from "@/components/Bubbles";
 import { ClassRow } from "@/components/ClassRow";
 import { ButtonLink, Eyebrow, Section } from "@/components/ui";
 import { getSettings, getViewer } from "@/lib/auth";
-import { availability, creditBalance, nextBooking, usualSlot, viewerSessionState } from "@/lib/data";
-import { RebookButton } from "./RebookButton";
-import { dayMonth, longDate, relativeHours, time, weekdayLong, weekdayShort } from "@/lib/time";
-import { CalendarPlus, Repeat } from "lucide-react";
+import { availability, creditBalance, nextBooking, viewerSessionState } from "@/lib/data";
+import { dayMonth, longDate, relativeHours, time, weekdayShort } from "@/lib/time";
+import { CalendarPlus, CalendarRange, Repeat } from "lucide-react";
+import { getMedia, logoSrc } from "@/lib/media";
+import { recurringSummary } from "@/lib/recurring";
 import { eur } from "@/lib/money";
 import { scheduleTick } from "@/lib/tick";
 
@@ -28,28 +29,32 @@ export default async function Home() {
   const event = open.find((c) => c.kind === "event");
   const firstName = viewer?.profile.full_name?.split(" ")[0];
   const pid = viewer?.profile.id;
-  const [mine, usual, credits] = pid
-    ? await Promise.all([nextBooking(pid), usualSlot(pid, open, state.booked), creditBalance(pid)])
-    : [null, null, null];
-  const usualCredits = usual?.session.credit_kind && credits ? credits[usual.session.credit_kind] : 0;
+  const [mine, credits, weekly, logo, studioPics, eventPics] = await Promise.all([
+    pid ? nextBooking(pid) : null,
+    pid ? creditBalance(pid) : null,
+    pid ? recurringSummary(pid) : [],
+    logoSrc(),
+    getMedia("studio:"),
+    getMedia("event:"),
+  ]);
+  const hasPackage = !!credits && credits.reformer + credits.mat > 0;
 
   return (
     <div className="pb-4">
       <section className="lilac-wash relative overflow-hidden rounded-b-[36px] px-6 pb-9 pt-8 text-center">
         <div className="animate-rise mx-auto w-fit">
-          <Logo size={132} />
+          <Logo size={136} src={logo} priority />
         </div>
-        <p className="eyebrow mt-5 animate-rise [animation-delay:60ms]">Pilates studio · Limassol, Cyprus</p>
-        <h1 className="display mx-auto mt-3 max-w-xs animate-rise text-[1.7rem] text-ink [animation-delay:100ms]">
+        <h1 className="display mx-auto mt-5 max-w-xs animate-rise text-[1.7rem] text-ink [animation-delay:100ms]">
           {firstName ? <>Welcome back, <span className="font-script text-[2.1rem] normal-case tracking-normal text-plum-700">{firstName}</span></> : "Move well. Feel strong."}
         </h1>
         <p className="mx-auto mt-3 max-w-sm animate-rise text-[0.95rem] leading-relaxed text-ink-soft [animation-delay:140ms]">{settings.intro_line}</p>
-        <ButtonLink href="/schedule" className="mt-6 w-full max-w-xs animate-rise [animation-delay:180ms]">
-          Secure your spot
+        <ButtonLink href="/packs" className="mt-6 w-full max-w-xs animate-rise [animation-delay:180ms]">
+          Secure your package
         </ButtonLink>
       </section>
 
-      {(mine || usual) && (
+      {(mine || hasPackage) && (
         <div className="-mt-5 space-y-3 px-5">
           {mine && (
             <section aria-labelledby="next-class" className="card animate-rise flex items-center gap-4 px-4 py-4 [animation-delay:220ms]">
@@ -60,31 +65,27 @@ export default async function Home() {
               <div className="min-w-0 flex-1">
                 <p className="eyebrow" id="next-class">Your next class · in {relativeHours(mine.class_sessions.starts_at)}</p>
                 <p className="mt-1 truncate font-medium text-ink">{mine.class_sessions.title ?? mine.class_sessions.class_types?.name}</p>
-                <p className="text-sm text-ink-soft">{time(mine.class_sessions.starts_at)} · {mine.class_sessions.location ?? mine.class_sessions.class_types?.default_location ?? "Re·Form Studio"}</p>
+                <p className="text-sm text-ink-soft">{longDate(mine.class_sessions.starts_at).split(" ").slice(0, 3).join(" ")} · {time(mine.class_sessions.starts_at)}</p>
               </div>
               <a href={`/api/ics/${mine.id}`} aria-label="Add your next class to your calendar" className="grid size-11 shrink-0 place-items-center rounded-full bg-lilac-50 text-ink hover:bg-lilac-100">
                 <CalendarPlus aria-hidden size={19} />
               </a>
             </section>
           )}
-          {usual && (
-            <section aria-labelledby="usual" className="card animate-rise px-4 py-4 [animation-delay:280ms]">
-              <div className="flex items-start gap-3">
-                <span className="grid size-10 shrink-0 place-items-center rounded-full bg-mauve-soft text-ink"><Repeat aria-hidden size={18} /></span>
-                <div className="min-w-0 flex-1">
-                  <p className="eyebrow" id="usual">Your usual</p>
-                  <p className="mt-1 font-medium text-ink">{weekdayLong(usual.session.starts_at)}s at {time(usual.session.starts_at)}</p>
-                  <p className="text-sm text-ink-soft">
-                    {longDate(usual.session.starts_at)} · {usual.session.spots_left ? `${usual.session.spots_left} of ${usual.session.capacity} left` : "full, join the waitlist"}
-                  </p>
-                </div>
-              </div>
-              <div className="mt-3">
-                {usual.session.spots_left > 0 && usualCredits > 0 ? (
-                  <RebookButton sessionId={usual.session.id} label="Book again · 1 credit" />
-                ) : (
-                  <ButtonLink href={`/book/${usual.session.id}`} variant="soft" className="w-full">{usual.session.spots_left ? "Book again" : "Join waitlist"}</ButtonLink>
-                )}
+          {hasPackage && (
+            <section aria-labelledby="how-to-book" className="card animate-rise px-4 py-4 [animation-delay:280ms]">
+              <h2 className="eyebrow" id="how-to-book">Book your classes</h2>
+              <div className="mt-3 grid grid-cols-2 gap-2.5">
+                <Link href="/schedule" className="pressable flex flex-col gap-1.5 rounded-2xl bg-lilac-50 px-3.5 py-3 text-ink hover:bg-lilac-100">
+                  <CalendarRange aria-hidden size={19} />
+                  <span className="text-sm font-medium">Pick classes</span>
+                  <span className="text-xs text-ink-soft">One by one</span>
+                </Link>
+                <Link href="/bookings/weekly" className="pressable flex flex-col gap-1.5 rounded-2xl bg-lilac-50 px-3.5 py-3 text-ink hover:bg-lilac-100">
+                  <Repeat aria-hidden size={19} />
+                  <span className="text-sm font-medium">Every week</span>
+                  <span className="text-xs text-ink-soft">{weekly.length ? weekly.join(" · ") : "Same days & times"}</span>
+                </Link>
               </div>
             </section>
           )}
@@ -92,7 +93,7 @@ export default async function Home() {
       )}
 
       <div className="mt-6">
-        <Bubbles />
+        <Bubbles covers={{ studio: studioPics[0]?.url, events: eventPics[0]?.url }} />
       </div>
 
       <Section

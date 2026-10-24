@@ -1,14 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CalendarDays, MapPin, Users, X } from "lucide-react";
+import { CalendarDays, MapPin, Users } from "lucide-react";
+import { BackButton } from "@/components/BackButton";
 import { Badge, ButtonLink, Eyebrow, Notice } from "@/components/ui";
 import { spotsLabel } from "@/components/ClassRow";
 import { getSettings, getViewer } from "@/lib/auth";
 import { availability } from "@/lib/data";
 import { db } from "@/lib/supabase/admin";
 import { eur, vatLine } from "@/lib/money";
-import { longDate, relativeHours, time } from "@/lib/time";
+import { longDate, nowMs, relativeHours, time } from "@/lib/time";
 import { BookActions } from "./BookActions";
 import { getTexts } from "@/lib/content";
 import { Flower } from "@/components/Flower";
@@ -55,13 +56,30 @@ export default async function BookPage({ params, searchParams }: { params: Promi
   const { data: ctype } = await db().from("class_types").select("credit_cost").eq("id", c.class_type_id).single();
   const next = `/book/${id}`;
 
+  // Trial (first class of this type only) and drop-in, or a paid event: reserve now, pay by cash or Revolut.
+  const { data: singleProducts } = c.credit_kind
+    ? await db().from("products").select("tag, name, price_cents").eq("active", true).eq("credit_kind", c.credit_kind).in("tag", ["trial", "drop_in"]).order("sort_order")
+    : { data: [] };
+  let trialOk = false;
+  if (profile && c.credit_kind && singleProducts?.some((p) => p.tag === "trial")) {
+    const [{ count: classesOfType }, { count: trials }] = await Promise.all([
+      db().from("bookings").select("id, class_sessions!inner(class_types!inner(credit_kind))", { count: "exact", head: true })
+        .eq("profile_id", profile.id).in("status", ["held", "confirmed", "late_cancelled", "no_show"]).eq("class_sessions.class_types.credit_kind", c.credit_kind),
+      db().from("payments").select("id, products!inner(tag, credit_kind)", { count: "exact", head: true })
+        .eq("profile_id", profile.id).in("status", ["pending", "paid"]).eq("products.tag", "trial").eq("products.credit_kind", c.credit_kind),
+    ]);
+    trialOk = !classesOfType && !trials;
+  }
+  const singles = c.kind === "event"
+    ? [{ mode: "drop_in" as const, label: "Reserve your spot", price: eur(c.price_cents) }]
+    : (singleProducts ?? []).filter((p) => p.tag === "drop_in" || trialOk)
+        .map((p) => ({ mode: p.tag as "trial" | "drop_in", label: p.tag === "trial" ? "Book your trial" : "Drop-in", price: eur(p.price_cents) }));
+
   return (
     <div className="relative min-h-[70dvh]">
       <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-48 bg-gradient-to-b from-lilac-100/80 to-transparent" />
-      <article className="animate-rise relative mx-2 mt-3 rounded-[var(--radius-sheet)] border border-line/80 bg-white/90 px-5 pb-8 pt-3 shadow-[var(--shadow-lift)] backdrop-blur-xl">
-        <div className="flex items-center justify-between">
-          <span aria-hidden className="mx-auto mb-1 mt-1 block h-1.5 w-10 rounded-full bg-line" />
-        </div>
+      <div className="relative px-5 pt-3"><BackButton href="/schedule" /></div>
+      <article className="animate-rise relative mx-2 mt-1 rounded-[var(--radius-sheet)] border border-line/80 bg-white/90 px-5 pb-8 pt-3 shadow-[var(--shadow-lift)] backdrop-blur-xl">
         <div className="flex items-start justify-between gap-3">
           <div>
             {c.kind === "event" && <Eyebrow>Special event</Eyebrow>}
@@ -75,9 +93,6 @@ export default async function BookPage({ params, searchParams }: { params: Promi
               )}
             </h1>
           </div>
-          <Link href="/schedule" aria-label="Close and go back to the schedule" className="grid size-11 shrink-0 place-items-center rounded-full bg-lilac-50 text-ink hover:bg-lilac-100">
-            <X aria-hidden size={20} />
-          </Link>
         </div>
 
         <dl className="mt-4 space-y-2 text-[0.95rem] text-ink">
@@ -107,9 +122,11 @@ export default async function BookPage({ params, searchParams }: { params: Promi
             <Notice tone="error">This class has been cancelled by the studio.</Notice>
           ) : past ? (
             <Notice>This class has already started.</Notice>
+          ) : !booking && start.getTime() > nowMs() + settings.booking_window_days * 86_400_000 ? (
+            <Notice>Booking for this class opens {Math.round(settings.booking_window_days / 7)} weeks before, on {longDate(new Date(start.getTime() - settings.booking_window_days * 86_400_000))}.</Notice>
           ) : booking ? (
             <div className="space-y-3 text-center">
-              <Badge tone="mauve">You&apos;re booked</Badge>
+              <Badge tone="booked">You&apos;re booked</Badge>
               <p className="text-sm text-ink-soft">See you on the reformer. Manage or cancel in My classes.</p>
               <ButtonLink href="/bookings" variant="soft" className="w-full">My classes</ButtonLink>
             </div>
@@ -137,15 +154,16 @@ export default async function BookPage({ params, searchParams }: { params: Promi
               {blockedByExpiry && (
                 <Notice>Your package is valid until {longDate(new Date(new Date(usable!.latest_expiry!).getTime() - 1))}, so this class is after it. A new package will cover it.</Notice>
               )}
-              {creditCount === 0 && <PriceSummary price={c.price_cents} settings={settings} />}
+              {creditCount === 0 && !singles.length && <PriceSummary price={c.price_cents} settings={settings} />}
+              {creditCount === 0 && singles.length > 0 && <p className="text-sm text-ink-soft">Free cancellation up to {settings.cancellation_cutoff_hours}h before class. <Link href="/policy" className="underline underline-offset-4">Policies</Link></p>}
               {creditCount > 0 && <p className="text-sm text-ink-soft">Free cancellation up to {settings.cancellation_cutoff_hours}h before class.</p>}
               <BookActions
                 mode="book" sessionId={id} priceLabel={eur(c.price_cents)} credits={creditCount}
                 creditKind={c.credit_kind} creditCost={ctype?.credit_cost ?? 1} offered={offered}
-                online={settings.online_payments_enabled} payLater={settings.allow_pay_later}
+                online={settings.online_payments_enabled} payLater={settings.allow_pay_later} singles={singles}
               />
               {c.credit_kind && creditCount === 0 && (
-                <ButtonLink href="/packs" variant={creditCount ? "ghost" : "primary"} className="w-full">{creditCount ? "Get another package" : "Get a package to book"}</ButtonLink>
+                <ButtonLink href={c.credit_kind === "mat" ? "/packs?type=mat" : "/packs"} variant={singles.length ? "soft" : "primary"} className="w-full">Secure your package</ButtonLink>
               )}
             </div>
           )}

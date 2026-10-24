@@ -10,11 +10,11 @@ test("client requests a pack, studio marks it paid, client books with a class cr
   const client = await (await browser.newContext()).newPage();
   await signIn(client, email, "/packs");
   await completeWelcome(client, name);
-  const pack = client.getByRole("listitem").filter({ hasText: "Reformer · 4 classes" });
-  await pack.getByRole("button", { name: /^Choose/ }).click();
-  await pack.getByRole("checkbox").check();
-  await pack.getByRole("button", { name: /Request/ }).click();
-  await expect(client.getByText(/Request noted/)).toBeVisible();
+  await client.getByRole("group", { name: "Reformer, 1 month" }).getByText("1 per week").click();
+  await client.getByText("Cash", { exact: true }).click();
+  await client.locator("#accept").check();
+  await client.getByRole("button", { name: "Request package" }).click();
+  await expect(client.getByText(/Request sent/)).toBeVisible();
   await expect(client.getByText("Awaiting payment")).toBeVisible();
 
   const admin = await (await browser.newContext()).newPage();
@@ -28,9 +28,10 @@ test("client requests a pack, studio marks it paid, client books with a class cr
   await row.getByRole("button", { name: "Cash" }).click();
   await expect(row).toHaveCount(0); // settled: leaves the "Awaiting payment" list
 
-  await client.goto("/membership");
-  await expect(client.getByText("reformer classes left")).toBeVisible();
-  await expect(client.locator("p.font-serif").first()).toHaveText("4");
+  await client.goto("/bookings");
+  await expect(client.getByText("Reformer Package")).toBeVisible();
+  await expect(client.getByText("Starts with your first class")).toBeVisible();
+  await expect(client.locator('a[href^="/bookings/package/"] [data-left]').first()).toHaveText("4");
   await client.goto("/schedule");
   const days = client.getByRole("navigation", { name: "Choose a day" }).getByRole("link");
   const bookable = client.getByRole("link", { name: /^Book .*reformers? left/ });

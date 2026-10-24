@@ -11,6 +11,8 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   // Fonts read at runtime by the icon / Open Graph image routes.
   outputFileTracingIncludes: { "/*": ["./src/assets/fonts/**"] },
+  // Photos are resized in the browser (≤1600px JPEG) before upload; this leaves headroom.
+  experimental: { serverActions: { bodySizeLimit: "6mb" } },
   turbopack: {
     rules: {
       "*.css": { loaders: ["@tailwindcss/turbopack"], as: "*.css" },

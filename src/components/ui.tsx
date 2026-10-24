@@ -36,12 +36,18 @@ export function PageTitle({ eyebrow, title, script, children }: { eyebrow?: stri
   );
 }
 
-export function Badge({ tone = "lilac", children }: { tone?: "lilac" | "full" | "mauve" | "plain"; children: ReactNode }) {
+// The three class states she asked for, used everywhere: booked = pink, spots = purple, full = light pink.
+export const stateColors = { booked: "bg-mauve", open: "bg-lilac-300", waitlist: "bg-mauve-soft" } as const;
+
+export function Badge({ tone = "lilac", children }: { tone?: "lilac" | "full" | "mauve" | "plain" | keyof typeof stateColors; children: ReactNode }) {
   const tones = {
     lilac: "bg-lilac-100 text-ink",
     full: "bg-burgundy-soft text-burgundy",
     mauve: "bg-mauve-soft text-ink",
     plain: "bg-white text-ink-soft border border-line",
+    booked: `${stateColors.booked} text-ink`,
+    open: `${stateColors.open} text-ink`,
+    waitlist: `${stateColors.waitlist} text-ink border border-mauve/50`,
   };
   return <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[0.7rem] font-medium tracking-wide ${tones[tone]}`}>{children}</span>;
 }

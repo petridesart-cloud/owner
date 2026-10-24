@@ -7,6 +7,7 @@ import { paymentProvider } from "@/lib/payments";
 import { friendlyError, type ActionResult } from "@/lib/errors";
 import { spokenDateTime, time, relativeHours } from "@/lib/time";
 import { eur, vatPortion } from "@/lib/money";
+import { applyRecurring } from "@/lib/recurring";
 
 type OfferRow = { entry_id: string; profile_id: string; offer_expires_at: string };
 
@@ -102,12 +103,26 @@ export async function bookAtStudio(profile: Profile, sessionId: string): Promise
   return { ok: true, data: { redirect: `/bookings/${bookingId}/confirmed` } };
 }
 
+/** Trial or drop-in (or a paid event): reserve the spot, pay by cash or Revolut, the studio marks it paid. */
+export async function bookSingle(profile: Profile, sessionId: string, mode: "trial" | "drop_in", method: "cash" | "revolut"): Promise<ActionResult<{ redirect: string }>> {
+  const { data, error } = await db().rpc("book_session", { p_profile: profile.id, p_session: sessionId, p_mode: mode, p_method: method });
+  if (error) return { ok: false, error: friendlyError(error) };
+  const bookingId = (data as { booking_id: string }).booking_id;
+  const s = await sessionInfo(sessionId);
+  const { data: pay } = await db().from("payments").select("id, amount_cents").eq("booking_id", bookingId).single();
+  const how = method === "revolut" ? "by Revolut" : "in cash at the studio";
+  await notify({ profileId: profile.id, email: profile.email, phone: profile.phone }, "booking_confirmed",
+    { name: profile.full_name ?? undefined, ...tmpl(s), note: `${mode === "trial" ? "Your trial class. " : ""}Please pay ${eur(pay?.amount_cents ?? s.price)} ${how} before class (reference ${paymentReference(pay!.id)}).` },
+    { bookingId, sessionId });
+  return { ok: true, data: { redirect: `/bookings/${bookingId}/confirmed` } };
+}
+
 /**
  * Buy a class pack or monthly package. With online payments off (default while the
  * studio isn't registered) this records a request to pay at the studio; the admin's
  * "Mark as paid" then grants the credits through the same ledger.
  */
-export async function buyProduct(profile: Profile, productId: string): Promise<ActionResult<{ redirect: string }>> {
+export async function buyProduct(profile: Profile, productId: string, method: "cash" | "revolut" | "bank_transfer" = "cash"): Promise<ActionResult<{ redirect: string }>> {
   const { data: product } = await db().from("products").select("*").eq("id", productId).eq("active", true).single();
   if (!product) return { ok: false, error: "That package isn't available." };
   const cfg = await getSettings();
@@ -121,16 +136,17 @@ export async function buyProduct(profile: Profile, productId: string): Promise<A
   const price = productPrice(product, profile, cfg);
   if (!cfg.online_payments_enabled) {
     const { data: existing } = await db().from("payments").select("id").eq("profile_id", profile.id).eq("product_id", product.id).eq("status", "pending").eq("provider", "offline").maybeSingle();
+    if (existing) await db().from("payments").update({ intended_method: method }).eq("id", existing.id);
     if (!existing) {
       const { data: pay } = await db().from("payments").insert({
-        profile_id: profile.id, provider: "offline", amount_cents: price.cents, purpose, product_id: product.id,
+        profile_id: profile.id, provider: "offline", amount_cents: price.cents, purpose, product_id: product.id, intended_method: method,
         description: product.name, status: "pending", discount_note: price.student ? `Student ${cfg.student_discount_pct}%` : null,
       }).select("id").single();
       await notify({ profileId: profile.id, email: profile.email }, "payment_request",
         { name: profile.full_name ?? undefined, className: product.name, note: paymentInstructions(cfg, price.cents, paymentReference(pay!.id)) },
         { dedupeKey: `request:${pay!.id}` });
     }
-    return { ok: true, data: { redirect: "/membership?requested=1" } };
+    return { ok: true, data: { redirect: "/bookings?requested=1" } };
   }
 
   return product.kind === "membership" ? startSubscription(profile, product) : buyPack(profile, productId);
@@ -203,6 +219,7 @@ export async function onPaymentPaid(paymentId: string, providerRef?: string, met
     await notify(to, "credits_added", { name: profile.full_name ?? undefined, note: `${pay.products.credits} ${pay.products.credit_kind} classes are in your account.` },
       { dedupeKey: `credits:${paymentId}` });
   }
+  if (res.status !== "confirmed") await applyRecurring(profile.id);
   return res;
 }
 
@@ -307,7 +324,8 @@ export async function runTick() {
     }
   }
   sent += await creditAndRenewalNotices();
-  return { offers: (offers ?? []).length, reminders: sent };
+  const weekly = await applyRecurring();
+  return { offers: (offers ?? []).length, reminders: sent, weekly: weekly.booked };
 }
 
 /** Expire credits; warn about expiring credits (7 days), low credits (1 left) and renewals (3 days). */

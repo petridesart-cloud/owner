@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ClassRow } from "@/components/ClassRow";
-import { PageTitle } from "@/components/ui";
+import { stateColors } from "@/components/ui";
 import { getSettings, getViewer } from "@/lib/auth";
 import { availability, viewerSessionState } from "@/lib/data";
 import { addDaysKey, dayKey, keyToDate, longDate, monthYear, todayKey, weekdayShort } from "@/lib/time";
@@ -10,19 +10,16 @@ import { scheduleTick } from "@/lib/tick";
 export const metadata: Metadata = { title: "Schedule" };
 export const dynamic = "force-dynamic";
 
-const DAYS = 21;
 
 export default async function SchedulePage({ searchParams }: { searchParams: Promise<{ day?: string }> }) {
   scheduleTick();
   const { day } = await searchParams;
   const today = todayKey();
-  const keys = Array.from({ length: DAYS }, (_, i) => addDaysKey(today, i));
   const now = new Date();
-  const [viewer, settings, classes] = await Promise.all([
-    getViewer(),
-    getSettings(),
-    availability(now, new Date(now.getTime() + (DAYS + 1) * 86_400_000)),
-  ]);
+  const [viewer, settings] = await Promise.all([getViewer(), getSettings()]);
+  const DAYS = settings.booking_window_days;
+  const keys = Array.from({ length: DAYS }, (_, i) => addDaysKey(today, i));
+  const classes = await availability(now, new Date(now.getTime() + DAYS * 86_400_000));
   const state = await viewerSessionState(viewer?.profile.id);
 
   const byDay = new Map<string, typeof classes>();
@@ -36,9 +33,18 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
 
   return (
     <div>
-      <PageTitle eyebrow={monthYear(keyToDate(selected))} title="Schedule" script="Class">
-        Book up to three weeks ahead. Cancel free of charge up to {settings.cancellation_cutoff_hours} hours before class.
-      </PageTitle>
+      <header className="animate-rise px-5 pb-4 pt-6">
+        <h1 className="display text-[1.9rem] text-ink">Schedule</h1>
+        <p className="mt-1 font-serif text-[1.7rem] leading-tight text-plum-700">{monthYear(keyToDate(selected))}</p>
+        <p className="mt-2 text-[0.95rem] leading-relaxed text-ink-soft">
+          Book up to {Math.round(DAYS / 7)} weeks ahead. Cancel free of charge up to {settings.cancellation_cutoff_hours} hours before class.
+        </p>
+        <ul aria-label="Colour key" className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-soft">
+          <li className="flex items-center gap-1.5"><span aria-hidden className={`size-2.5 rounded-full ${stateColors.booked}`} />Booked</li>
+          <li className="flex items-center gap-1.5"><span aria-hidden className={`size-2.5 rounded-full ${stateColors.open}`} />Spots available</li>
+          <li className="flex items-center gap-1.5"><span aria-hidden className={`size-2.5 rounded-full border border-mauve/50 ${stateColors.waitlist}`} />Full · waitlist</li>
+        </ul>
+      </header>
 
       <nav aria-label="Choose a day" className="glass sticky top-14 z-20 border-y border-line/60 py-2.5">
         <ul className="no-scrollbar flex snap-x gap-2 overflow-x-auto px-5">

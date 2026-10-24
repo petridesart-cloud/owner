@@ -14,7 +14,9 @@ export async function signIn(page: Page, email: string, next = "/") {
 
 export async function completeWelcome(page: Page, name = "Test Client") {
   await expect(page.getByRole("heading", { name: /a little about you/i })).toBeVisible();
-  await page.getByLabel("Full name").fill(name);
+  const [first, ...rest] = name.split(" ");
+  await page.getByLabel("First name").fill(first);
+  await page.getByLabel("Surname").fill(rest.join(" ") || "Client");
   await page.getByLabel("Mobile number").fill("+357 99 123456");
   await page.locator("#policy").check();
   await page.locator("#fitness").check();

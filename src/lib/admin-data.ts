@@ -7,14 +7,30 @@ export type RosterSession = Awaited<ReturnType<typeof sessionsWithRoster>>[numbe
 export async function sessionsWithRoster(from: string, to: string) {
   const { data } = await db()
     .from("class_sessions")
-    .select("id, starts_at, ends_at, capacity, status, title, location, class_types(name, kind), bookings(id, status, paid_with, source, checked_in_at, profiles(id, full_name, phone, health_notes(note))), waitlist_entries(id, status, created_at, profiles(id, full_name))")
+    .select("id, starts_at, ends_at, capacity, status, title, location, class_types(name, kind), bookings(id, status, paid_with, source, checked_in_at, payment:payments!bookings_payment_id_fkey(status, intended_method, products(tag)), profiles(id, full_name, phone, photo_consent, health_notes(note, injuries, medication))), waitlist_entries(id, status, created_at, profiles(id, full_name))")
     .gte("starts_at", from)
     .lt("starts_at", to)
     .order("starts_at");
-  return (data ?? []).map((s) => ({
+  const rows = data ?? [];
+  // First class ever: no earlier attended/booked class for that client.
+  const ids = [...new Set(rows.flatMap((s) => s.bookings.map((b) => b.profiles?.id)).filter(Boolean))] as string[];
+  const first = new Map<string, string>();
+  if (ids.length) {
+    const { data: prior } = await db().from("bookings").select("profile_id, class_sessions!inner(starts_at)")
+      .in("profile_id", ids).in("status", ["confirmed", "no_show", "late_cancelled"]);
+    for (const b of prior ?? []) {
+      const cur = first.get(b.profile_id);
+      if (!cur || b.class_sessions.starts_at < cur) first.set(b.profile_id, b.class_sessions.starts_at);
+    }
+  }
+  return rows.map((s) => ({
     ...s,
     name: s.title ?? s.class_types?.name ?? "Class",
-    roster: s.bookings.filter((b) => b.status === "confirmed" || b.status === "no_show"),
+    roster: s.bookings.filter((b) => b.status === "confirmed" || b.status === "no_show").map((b) => ({
+      ...b,
+      firstClass: !!b.profiles && first.get(b.profiles.id) === s.starts_at,
+      tag: b.payment?.products?.tag as "trial" | "drop_in" | undefined,
+    })),
     waitlist: s.waitlist_entries.filter((w) => w.status === "waiting" || w.status === "offered").sort((a, b) => a.created_at.localeCompare(b.created_at)),
   }));
 }

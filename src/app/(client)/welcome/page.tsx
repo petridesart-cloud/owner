@@ -15,7 +15,7 @@ export default async function WelcomePage({ searchParams }: { searchParams: Prom
       </PageTitle>
       <div className="px-5">
         <div className="card animate-rise px-5 py-6">
-          <WelcomeForm email={viewer.email} name={viewer.profile.full_name ?? ""} phone={viewer.profile.phone ?? ""} next={next} />
+          <WelcomeForm email={viewer.email} first={viewer.profile.first_name ?? viewer.profile.full_name?.split(" ")[0] ?? ""} last={viewer.profile.last_name ?? ""} phone={viewer.profile.phone ?? ""} next={next} />
         </div>
       </div>
     </div>

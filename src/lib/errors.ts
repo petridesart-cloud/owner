@@ -14,6 +14,11 @@ const MESSAGES: Record<string, string> = {
   credits_not_accepted: "Credits can't be used for this event. It's paid individually.",
   not_cancellable: "This booking can't be cancelled.",
   not_found: "We couldn't find that. Please refresh and try again.",
+  beyond_window: "This class isn't open for booking yet. Classes open 4 weeks ahead.",
+  trial_used: "The trial is for your first class of this type. Choose a drop-in or a package instead.",
+  trial_not_available: "There's no trial for this class.",
+  unpaid_limit: "You already have a class waiting for payment. Once it's settled you can reserve another, or get a package.",
+  pay_later_off: "Please get a package first.",
 };
 
 export function friendlyError(e: unknown): string {
