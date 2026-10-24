@@ -13,6 +13,7 @@
     "db:types": "npx supabase@2 gen types typescript --local > src/lib/supabase/types.ts && npx -y prettier@3.3.3 --log-level warn --print-width 120 --write src/lib/supabase/types.ts",
     "db:bundle": "node scripts/bundle-sql.mjs",
     "test:engine": "node --test --import tsx tests/engine.test.ts",
+    "test:webhook": "node --test --import tsx tests/webhook.test.ts",
     "vercel-build": "node scripts/migrate.mjs && next build",
     "db:migrate": "node scripts/migrate.mjs"
   },
