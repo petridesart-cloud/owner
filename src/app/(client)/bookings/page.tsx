@@ -10,6 +10,7 @@ import { recurringSummary } from "@/lib/recurring";
 import { db } from "@/lib/supabase/admin";
 import { dayMonth, longDate, nowMs, relativeHours, time, weekdayShort } from "@/lib/time";
 import { CancelButton } from "./CancelButton";
+import { eur } from "@/lib/money";
 
 export const metadata: Metadata = { title: "My classes" };
 export const dynamic = "force-dynamic";
@@ -22,7 +23,7 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
   const [packages, weekly, { data: bookings }, { data: waits }, { data: pending }] = await Promise.all([
     clientPackages(p.id),
     recurringSummary(p.id),
-    db().from("bookings").select("id, status, paid_with, late_refund_pending, class_sessions!inner(id, starts_at, ends_at, title, location, class_types(name, kind))")
+    db().from("bookings").select("id, status, paid_with, late_refund_pending, payment:payments!bookings_payment_id_fkey(status, amount_cents, intended_method), class_sessions!inner(id, starts_at, ends_at, title, location, class_types(name, kind))")
       .eq("profile_id", p.id).eq("status", "confirmed").gt("class_sessions.starts_at", new Date().toISOString()),
     db().from("waitlist_entries").select("id, status, offer_expires_at, created_at, class_sessions!inner(id, starts_at, title, class_types(name))")
       .eq("profile_id", p.id).in("status", ["waiting", "offered"]),
@@ -120,6 +121,9 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
                         <div className="min-w-0 flex-1">
                           <p className="font-medium text-ink">{b.name}</p>
                           <p className="text-sm text-ink-soft">{time(b.s.starts_at)}–{time(b.s.ends_at)}{b.s.location ? ` · ${b.s.location}` : ""}</p>
+                          {b.paid_with === "pay_at_studio" && b.payment?.status === "pending" && (
+                            <p className="mt-1.5"><Badge tone="waitlist">To pay {eur(b.payment.amount_cents)}{b.payment.intended_method ? ` · ${b.payment.intended_method === "revolut" ? "Revolut" : "cash"}` : ""} before class</Badge></p>
+                          )}
                           <a href={`/api/ics/${b.id}`} className="mt-1 inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-ink underline-offset-4 hover:underline">
                             <CalendarPlus aria-hidden size={15} /> Add to calendar
                           </a>
