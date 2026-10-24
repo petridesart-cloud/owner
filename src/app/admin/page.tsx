@@ -134,8 +134,8 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
                       {b.birthday && <span className={`${flag} bg-mauve text-ink`}>Birthday 🎂</span>}
                       {b.firstClass && <span className={`${flag} bg-lilac-300 text-ink`}>First class</span>}
                       {b.minor && <span className={`${flag} bg-burgundy-soft text-burgundy`}>Under 18</span>}
-                      {!!b.profiles?.health_notes?.parq_yes?.length && <span className={`${flag} bg-burgundy-soft text-burgundy`}>PAR-Q: yes</span>}
-                      {b.profiles && !b.profiles.parq_completed_at && <span className={`${flag} bg-white text-ink-soft ring-1 ring-line`}>No PAR-Q</span>}
+                      {b.profiles?.health_notes?.clearance_needed && !b.profiles.health_notes.clearance_received_at && <span className={`${flag} bg-burgundy text-paper`}>Doctor&apos;s note needed</span>}
+                      {b.profiles && !b.profiles.parq_completed_at && <span className={`${flag} bg-white text-ink-soft ring-1 ring-line`}>No health answers</span>}
                       {b.tag === "trial" && <span className={`${flag} bg-mauve text-ink`}>Trial</span>}
                       {b.tag === "drop_in" && <span className={`${flag} bg-lilac-100 text-ink`}>Drop-in</span>}
                       {b.profiles?.photo_consent === "none" && <span className={`${flag} bg-ink text-paper`}>No photos</span>}

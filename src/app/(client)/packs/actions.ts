@@ -12,7 +12,7 @@ export async function buyPackAction(productId: string, acceptedTerms: boolean, m
   if (!viewer) return { ok: true, data: { redirect: "/login?next=/packs" } };
   if (!viewer.profile.onboarded_at) return { ok: true, data: { redirect: "/welcome?next=/packs" } };
   if (!viewer.profile.date_of_birth) return { ok: true, data: { redirect: "/account?dob=1" } };
-  if (!viewer.profile.parq_completed_at) return { ok: true, data: { redirect: "/account#parq" } };
+  if (!viewer.profile.parq_completed_at) return { ok: true, data: { redirect: "/health?next=/packs" } };
   if (await bookingLimited(viewer.profile.id)) return { ok: false, error: TOO_MANY };
   if (!acceptedTerms) return { ok: false, error: "Please accept the package terms first." };
   if (!METHODS.includes(method)) return { ok: false, error: "Please choose how you'll pay." };

@@ -1,6 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { db } from "@/lib/supabase/admin";
+import { needsClearance } from "@/lib/health";
 
 export { PHOTO_CONSENT, type PhotoConsent } from "@/lib/photo-consent";
 
@@ -28,47 +29,35 @@ export const fullName = (first: string, last: string) => `${first} ${last}`.trim
 
 type Consent = { profile_id: string; type: "health_data" | "photos"; granted: boolean; version: string };
 
-/**
- * Health info (special-category data): stored only with explicit consent, readable by
- * the client and instructor only. Empty fields delete it and record the withdrawal.
- */
-export async function saveHealth(profileId: string, h: { injuries?: string; medication?: string }, consent: boolean, version: string) {
-  const injuries = h.injuries?.trim().slice(0, 1000) || null;
-  const medication = h.medication?.trim().slice(0, 500) || null;
-  if (!injuries && !medication) {
-    const { data: row } = await db().from("health_notes").select("parq_yes").eq("profile_id", profileId).maybeSingle();
-    if (row?.parq_yes?.length) {
-      // Keep the PAR-Q answers they consented to; only clear these two fields.
-      await db().from("health_notes").update({ injuries: null, medication: null, note: null, updated_at: new Date().toISOString() }).eq("profile_id", profileId);
-      return { ok: true as const, cleared: true };
-    }
-    const count = row ? 1 : 0;
-    if (count) {
-      await db().from("health_notes").delete().eq("profile_id", profileId);
-      await db().from("consents").insert({ profile_id: profileId, type: "health_data", granted: false, version } satisfies Consent);
-    }
-    return { ok: true as const, cleared: !!count };
-  }
-  if (!consent) return { ok: false as const, error: "To store health information we need your explicit consent (tick the box), or leave it empty." };
-  const now = new Date().toISOString();
-  await db().from("health_notes").upsert({ profile_id: profileId, injuries, medication, note: null, consent_at: now, updated_at: now });
-  await db().from("consents").insert({ profile_id: profileId, type: "health_data", granted: true, version } satisfies Consent);
-  return { ok: true as const, cleared: false };
-}
+
+
+export type HealthAnswers = {
+  conditions: string[]; details: string | null; pregnancy: "current" | "past" | null;
+  pregnancyWeeks: number | null; postpartumMonths: number | null; bpMeds: boolean; medication: string | null;
+};
 
 /**
- * PAR-Q: the completion date is always kept. Which questions were answered "yes" is
- * health data, stored (instructor-only) only with explicit health consent.
+ * Health questions v2. Always records when they were answered. The answers themselves are
+ * health data: stored (instructor-only) only with explicit consent, which the form requires
+ * whenever there is something to store. "No conditions" clears any earlier answers.
  */
-export async function saveParq(profileId: string, yes: string[], consent: boolean, version: string) {
+export async function saveHealthAnswers(profileId: string, a: HealthAnswers, consent: boolean, version: string) {
   const now = new Date().toISOString();
+  const anything = a.conditions.length > 0 || a.bpMeds || !!a.medication || !!a.details;
+  if (anything && !consent) return { ok: false as const, error: "To keep this information for your instructor we need your consent (tick the box)." };
   await db().from("profiles").update({ parq_completed_at: now }).eq("id", profileId);
-  const { data: row } = await db().from("health_notes").select("injuries, medication, note").eq("profile_id", profileId).maybeSingle();
-  if (yes.length && consent) {
-    await db().from("health_notes").upsert({ profile_id: profileId, parq_yes: yes, consent_at: now, updated_at: now });
-    await db().from("consents").insert({ profile_id: profileId, type: "health_data", granted: true, version } satisfies Consent);
-  } else if (row) {
-    if (row.injuries || row.medication || row.note) await db().from("health_notes").update({ parq_yes: null, updated_at: now }).eq("profile_id", profileId);
-    else await db().from("health_notes").delete().eq("profile_id", profileId);
+  if (!anything) {
+    await db().from("health_notes").delete().eq("profile_id", profileId);
+    return { ok: true as const };
   }
+  const { data: prev } = await db().from("health_notes").select("clearance_received_at").eq("profile_id", profileId).maybeSingle();
+  const clearance = needsClearance({ conditions: a.conditions, pregnancy: a.pregnancy, postpartum_months: a.postpartumMonths });
+  await db().from("health_notes").upsert({
+    profile_id: profileId, conditions: a.conditions, details: a.details, pregnancy: a.pregnancy,
+    pregnancy_weeks: a.pregnancyWeeks, postpartum_months: a.postpartumMonths, bp_meds: a.bpMeds, medication: a.medication,
+    clearance_needed: clearance, clearance_received_at: clearance ? prev?.clearance_received_at ?? null : null,
+    note: null, injuries: null, parq_yes: null, consent_at: now, updated_at: now,
+  });
+  await db().from("consents").insert({ profile_id: profileId, type: "health_data", granted: true, version } satisfies Consent);
+  return { ok: true as const, clearance };
 }

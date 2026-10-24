@@ -9,7 +9,7 @@ export type RosterSession = Awaited<ReturnType<typeof sessionsWithRoster>>[numbe
 export async function sessionsWithRoster(from: string, to: string) {
   const { data } = await db()
     .from("class_sessions")
-    .select("id, starts_at, ends_at, capacity, status, title, location, class_types(name, kind), bookings(id, status, paid_with, source, checked_in_at, payment:payments!bookings_payment_id_fkey(status, intended_method, products(tag)), profiles(id, full_name, phone, photo_consent, date_of_birth, parq_completed_at, health_notes(note, injuries, medication, parq_yes))), waitlist_entries(id, status, created_at, profiles(id, full_name))")
+    .select("id, starts_at, ends_at, capacity, status, title, location, class_types(name, kind), bookings(id, status, paid_with, source, checked_in_at, payment:payments!bookings_payment_id_fkey(status, intended_method, products(tag)), profiles(id, full_name, phone, photo_consent, date_of_birth, parq_completed_at, health_notes(note, injuries, medication, parq_yes, conditions, details, pregnancy, pregnancy_weeks, postpartum_months, bp_meds, clearance_needed, clearance_received_at))), waitlist_entries(id, status, created_at, profiles(id, full_name))")
     .gte("starts_at", from)
     .lt("starts_at", to)
     .order("starts_at");

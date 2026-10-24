@@ -7,7 +7,7 @@ export async function GET() {
   if (!viewer) return new Response("Unauthorized", { status: 401 });
   const id = viewer.profile.id;
   const [health, consents, bookings, waitlist, credits, ledger, payments, notifications, weekly] = await Promise.all([
-    db().from("health_notes").select("note, injuries, medication, parq_yes, consent_at, updated_at").eq("profile_id", id).maybeSingle(),
+    db().from("health_notes").select("note, injuries, medication, parq_yes, conditions, details, pregnancy, pregnancy_weeks, postpartum_months, bp_meds, clearance_needed, clearance_received_at, consent_at, updated_at").eq("profile_id", id).maybeSingle(),
     db().from("consents").select("type, granted, version, created_at").eq("profile_id", id).order("created_at"),
     db().from("bookings").select("status, source, paid_with, created_at, cancelled_at, checked_in_at, class_sessions(starts_at, title, class_types(name))").eq("profile_id", id),
     db().from("waitlist_entries").select("status, created_at, offered_at, class_sessions(starts_at)").eq("profile_id", id),

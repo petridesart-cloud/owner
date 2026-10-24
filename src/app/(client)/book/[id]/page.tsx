@@ -147,7 +147,7 @@ export default async function BookPage({ params, searchParams }: { params: Promi
           ) : !profile.date_of_birth || !profile.parq_completed_at ? (
             <div className="space-y-3">
               <Notice>One more step before booking: {!profile.date_of_birth && !profile.parq_completed_at ? "your date of birth and a few health questions" : !profile.date_of_birth ? "your date of birth" : "a few health questions (1 minute)"}.</Notice>
-              <ButtonLink href={profile.date_of_birth ? "/account#parq" : "/account?dob=1"} className="w-full">Complete my details</ButtonLink>
+              <ButtonLink href={profile.date_of_birth ? `/health?next=${encodeURIComponent(next)}` : "/account?dob=1"} className="w-full">Complete my details</ButtonLink>
             </div>
           ) : entry?.status === "waiting" ? (
             <div className="space-y-3">

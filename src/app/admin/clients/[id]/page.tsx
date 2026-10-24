@@ -9,7 +9,7 @@ import { HealthInfo } from "../../HealthInfo";
 import { PHOTO_CONSENT, type PhotoConsent } from "@/lib/photo-consent";
 import { ageOn } from "@/lib/profile";
 import { eur } from "@/lib/money";
-import { adjustCredits, changeMembershipProduct, holidayReturn, setStudent, updateClient } from "../../actions";
+import { adjustCredits, changeMembershipProduct, clearanceReceived, holidayReturn, setStudent, updateClient } from "../../actions";
 import { MarkPaid, MembershipControls, RenewButtons } from "../../PaymentButtons";
 import { AdminTitle, Stat } from "../../ui";
 
@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 
 export default async function ClientPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { data: c } = await db().from("profiles").select("*, health_notes(note, injuries, medication, parq_yes, consent_at)").eq("id", id).maybeSingle();
+  const { data: c } = await db().from("profiles").select("*, health_notes(note, injuries, medication, parq_yes, conditions, details, pregnancy, pregnancy_weeks, postpartum_months, bp_meds, clearance_needed, clearance_received_at, consent_at)").eq("id", id).maybeSingle();
   if (!c) notFound();
   const [{ data: membership }, { data: monthly }, { data: ledger }] = await Promise.all([
     db().from("memberships").select("*, products!memberships_product_id_fkey(name, credits, price_cents), next:products!memberships_next_product_id_fkey(name)").eq("profile_id", id).in("status", ["active", "paused", "past_due"]).maybeSingle(),
@@ -52,12 +52,15 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
           <dt className="text-ink-soft">Born</dt><dd className="text-ink">{c.date_of_birth ? `${dotDate(c.date_of_birth)} (${ageOn(c.date_of_birth)})` : "–"}</dd>
           <dt className="text-ink-soft">Goal</dt><dd className="text-ink">{c.goal ?? "–"}</dd>
           <dt className="text-ink-soft">Emergency</dt><dd className="text-ink">{c.emergency_contact_name ? `${c.emergency_contact_name}${c.emergency_contact_phone ? ` · ${c.emergency_contact_phone}` : ""}` : "–"}</dd>
-          <dt className="text-ink-soft">PAR-Q</dt><dd className={c.parq_completed_at ? "text-ink" : "font-medium text-burgundy"}>{c.parq_completed_at ? `Answered ${dotDate(c.parq_completed_at)}` : "Not answered yet: ask before class"}</dd>
+          <dt className="text-ink-soft">Health</dt><dd className={c.parq_completed_at ? "text-ink" : "font-medium text-burgundy"}>{c.parq_completed_at ? `Answered ${dotDate(c.parq_completed_at)}` : "Not answered yet: ask before class"}</dd>
           <dt className="text-ink-soft">Photos</dt><dd className={c.photo_consent === "none" ? "font-medium text-burgundy" : "text-ink"}>{c.photo_consent ? PHOTO_CONSENT[c.photo_consent as PhotoConsent] : "Not asked yet"}</dd>
         </dl>
         {c.health_notes && (
           <div className="mt-3 rounded-2xl border border-burgundy/25 bg-burgundy-soft/60 px-3 py-1">
-            <HealthInfo h={c.health_notes} label="Health info (instructor only)" />
+            <HealthInfo h={c.health_notes} label="Health info (instructor only)" open />
+            {c.health_notes.clearance_needed && !c.health_notes.clearance_received_at && (
+              <div className="pb-2"><ActionForm action={clearanceReceived.bind(null, id)} submit="Doctor's note received" variant="soft" /></div>
+            )}
             <p className="pb-2 text-xs text-ink-soft">Consent given {dayMonth(c.health_notes.consent_at)}</p>
           </div>
         )}

@@ -2988,6 +2988,55 @@ grant execute on function public.phone_key(text), public.trial_eligible(uuid, pu
   public.book_session(uuid, uuid, text, public.booking_source, text) to service_role;
 
 
+-- ===== 20261025000900_health_questions_v2.sql =====
+-- Health questions v2 (Elysia's notes, round 2): tick what applies, then details,
+-- pregnancy follow-up, blood-pressure/heart medication. Health data: stored only with
+-- explicit consent, instructor-only (existing RLS on health_notes).
+alter table public.health_notes
+  add column conditions text[],
+  add column details text,
+  add column pregnancy text check (pregnancy in ('current', 'past')),
+  add column pregnancy_weeks int check (pregnancy_weeks between 1 and 45),
+  add column postpartum_months int check (postpartum_months between 0 and 240),
+  add column bp_meds boolean,
+  add column clearance_needed boolean not null default false,
+  add column clearance_received_at date;
+-- profiles.parq_completed_at now means "health questions answered".
+comment on column public.profiles.parq_completed_at is 'When the client last answered the health questions';
+
+
+-- ===== 20261025001000_demo_health.sql =====
+-- Demo: Maria's health answers need a doctor's note.
+create or replace function public.seed_demo_profiles() returns void
+language sql security definer set search_path = public as $$
+  update public.profiles set parq_completed_at = now()
+   where role = 'client' and parq_completed_at is null and email like '%@example.com';
+  update public.profiles
+     set date_of_birth = date '1984-01-01' + (abs(hashtext(email)) % 8000)
+   where role = 'client' and date_of_birth is null and email like '%@example.com';
+  -- One demo client celebrates on the day of their next class (shows the Birthday flag).
+  update public.profiles p
+     set date_of_birth = make_date(1992, extract(month from x.d)::int, extract(day from x.d)::int)
+    from (select (s.starts_at at time zone 'Europe/Nicosia')::date as d from public.bookings b
+            join public.class_sessions s on s.id = b.session_id
+            join public.profiles q on q.id = b.profile_id
+           where q.email = 'elena@example.com' and b.status = 'confirmed' and s.starts_at > now()
+           order by s.starts_at limit 1) x
+   where p.email = 'elena@example.com' and not (extract(month from x.d) = 2 and extract(day from x.d) = 29);
+  -- A demo client with health answers that need a doctor's note (shows the flag in her list).
+  insert into public.health_notes (profile_id, conditions, details, pregnancy, pregnancy_weeks, bp_meds, clearance_needed, consent_at, updated_at)
+  select id, '{pregnancy,back}', 'Lower back ache since the second trimester.', 'current', 20, false, true, now(), now()
+    from public.profiles where email = 'maria@example.com'
+  on conflict (profile_id) do update set conditions = excluded.conditions, details = excluded.details, pregnancy = excluded.pregnancy,
+    pregnancy_weeks = excluded.pregnancy_weeks, bp_meds = excluded.bp_meds, clearance_needed = true, clearance_received_at = null;
+$$;
+
+select public.seed_demo_profiles();
+
+revoke execute on function public.seed_demo_profiles() from public, anon, authenticated;
+grant execute on function public.seed_demo_profiles() to service_role;
+
+
 -- ===== seed.sql =====
 -- Demo data lives in public.seed_demo() (migration 20261011000400) so the admin
 -- "Reset demo data" button can rebuild it. Dates are relative to now().

@@ -4,8 +4,7 @@ import { useActionState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Checkbox, Field, Notice, inputClass } from "@/components/ui";
 import { completeWelcome, type WelcomeState } from "./actions";
-import { HealthFields, PhotoConsentField } from "@/components/ProfileFields";
-import { ParqFields } from "@/components/ParqFields";
+import { PhotoConsentField } from "@/components/ProfileFields";
 import { keepValues } from "@/lib/keep-form";
 
 export function WelcomeForm({ email, first, last, phone, next }: { email: string; first: string; last: string; phone: string; next: string }) {
@@ -36,15 +35,6 @@ export function WelcomeForm({ email, first, last, phone, next }: { email: string
       <Field id="date_of_birth" label="Date of birth" error={e.date_of_birth}>
         <input id="date_of_birth" name="date_of_birth" type="date" autoComplete="bday" required className={inputClass} {...err("date_of_birth")} />
       </Field>
-
-      <div className="rounded-[var(--radius-card)] border border-line bg-white/60 p-4">
-        <ParqFields error={e.parq} />
-      </div>
-
-      <fieldset className="space-y-3 rounded-[var(--radius-card)] border border-line bg-white/60 p-4">
-        <legend className="px-1 text-sm font-medium text-ink">Anything your instructor should know? <span className="font-normal text-ink-soft">(optional)</span></legend>
-        <HealthFields error={e.health_consent} />
-      </fieldset>
 
       <PhotoConsentField />
 

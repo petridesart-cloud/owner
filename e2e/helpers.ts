@@ -17,13 +17,18 @@ export async function completeWelcome(page: Page, name = "Test Client") {
   const [first, ...rest] = name.split(" ");
   await page.getByLabel("First name").fill(first);
   await page.getByLabel("Surname").fill(rest.join(" ") || "Client");
-  await page.getByLabel("Mobile number").fill("+357 99 123456");
+  await page.getByLabel("Mobile number").fill(`+357 9${Math.floor(1e6 + Math.random() * 8.9e6)}`); // unique: trials are matched by phone
   await page.getByLabel("Date of birth").fill("1994-05-17");
-  const noes = page.locator('label:has(input[name^="parq_"][value="no"])');
-  for (let i = 0; i < (await noes.count()); i++) await noes.nth(i).click();
   await page.locator("#policy").check();
   await page.locator("#fitness").check();
   await page.getByRole("button", { name: "Continue" }).click();
+  // Step 2: health questions.
+  await page.waitForURL(/\/health/);
+  await page.getByText("No injuries or medical conditions").click();
+  await page.getByRole("button", { name: "Next" }).click();
+  await page.locator('label:has(input[name="bp_meds"][value="no"])').click();
+  await page.getByRole("button", { name: "Save" }).click();
+  await page.waitForURL((u) => !u.pathname.startsWith("/health"));
 }
 
 /** Open the first bookable class on the schedule's later days. */

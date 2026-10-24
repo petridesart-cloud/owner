@@ -481,30 +481,54 @@ export type Database = {
       };
       health_notes: {
         Row: {
+          bp_meds: boolean | null;
+          clearance_needed: boolean;
+          clearance_received_at: string | null;
+          conditions: string[] | null;
           consent_at: string;
+          details: string | null;
           injuries: string | null;
           medication: string | null;
           note: string | null;
           parq_yes: string[] | null;
+          postpartum_months: number | null;
+          pregnancy: string | null;
+          pregnancy_weeks: number | null;
           profile_id: string;
           updated_at: string;
         };
         ComputedFields: never;
         Insert: {
+          bp_meds?: boolean | null;
+          clearance_needed?: boolean;
+          clearance_received_at?: string | null;
+          conditions?: string[] | null;
           consent_at: string;
+          details?: string | null;
           injuries?: string | null;
           medication?: string | null;
           note?: string | null;
           parq_yes?: string[] | null;
+          postpartum_months?: number | null;
+          pregnancy?: string | null;
+          pregnancy_weeks?: number | null;
           profile_id: string;
           updated_at?: string;
         };
         Update: {
+          bp_meds?: boolean | null;
+          clearance_needed?: boolean;
+          clearance_received_at?: string | null;
+          conditions?: string[] | null;
           consent_at?: string;
+          details?: string | null;
           injuries?: string | null;
           medication?: string | null;
           note?: string | null;
           parq_yes?: string[] | null;
+          postpartum_months?: number | null;
+          pregnancy?: string | null;
+          pregnancy_weeks?: number | null;
           profile_id?: string;
           updated_at?: string;
         };

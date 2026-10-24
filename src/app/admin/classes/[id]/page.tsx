@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 export default async function SessionAdmin({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { data: s } = await db().from("class_sessions")
-    .select("*, class_types(*), bookings!bookings_session_id_fkey(id, status, paid_with, source, checked_in_at, created_at, payment_id, profiles(id, full_name, email, phone, photo_consent, health_notes(note, injuries, medication, parq_yes))), waitlist_entries(id, status, created_at, offer_expires_at, profiles(id, full_name))")
+    .select("*, class_types(*), bookings!bookings_session_id_fkey(id, status, paid_with, source, checked_in_at, created_at, payment_id, profiles(id, full_name, email, phone, photo_consent, health_notes(note, injuries, medication, parq_yes, conditions, details, pregnancy, pregnancy_weeks, postpartum_months, bp_meds, clearance_needed, clearance_received_at))), waitlist_entries(id, status, created_at, offer_expires_at, profiles(id, full_name))")
     .eq("id", id).maybeSingle();
   if (!s) notFound();
   const [{ data: types }, { data: clients }] = await Promise.all([
