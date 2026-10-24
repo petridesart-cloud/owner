@@ -1,4 +1,5 @@
 import { eur } from "@/lib/money";
+import { todayKey } from "@/lib/time";
 
 /** Booking code clients use as the bank-transfer / Revolut reference. */
 export const paymentReference = (paymentId: string) => `RF-${paymentId.slice(0, 6).toUpperCase()}`;
@@ -9,7 +10,7 @@ export function productPrice(
   profile: { student_verified_until: string | null } | null,
   cfg: { student_discount_pct: number },
 ) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayKey(); // studio date (Nicosia), not UTC: "verified until" ends at local midnight
   const student = !!profile?.student_verified_until && profile.student_verified_until >= today && product.is_group && product.kind !== "single" && cfg.student_discount_pct > 0;
   return { cents: student ? Math.round(product.price_cents * (1 - cfg.student_discount_pct / 100)) : product.price_cents, student };
 }

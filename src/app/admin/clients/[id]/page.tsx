@@ -4,7 +4,7 @@ import { ActionForm } from "@/components/ActionForm";
 import { Badge, Field, inputClass } from "@/components/ui";
 import { db } from "@/lib/supabase/admin";
 import { creditBalance } from "@/lib/data";
-import { dayMonth, dotDate, longDate, time } from "@/lib/time";
+import { dayMonth, dotDate, longDate, time, todayKey } from "@/lib/time";
 import { HealthInfo } from "../../HealthInfo";
 import { PHOTO_CONSENT, type PhotoConsent } from "@/lib/photo-consent";
 import { ageOn } from "@/lib/profile";
@@ -103,7 +103,7 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
       <section className="card grid gap-5 px-5 py-5 sm:grid-cols-2">
         <div>
           <h2 className="display mb-1 text-[0.95rem]">Student</h2>
-          <p className="mb-3 text-sm text-ink-soft">After seeing their student card in person. No photos are stored.{c.student_verified_until && c.student_verified_until >= new Date().toISOString().slice(0, 10) ? ` Student price active until ${c.student_verified_until}.` : ""}</p>
+          <p className="mb-3 text-sm text-ink-soft">After seeing their student card in person. No photos are stored.{c.student_verified_until && c.student_verified_until >= todayKey() ? ` Student price active until ${c.student_verified_until}.` : ""}</p>
           <ActionForm action={setStudent.bind(null, id)} submit="Save" variant="ghost">
             <Field id="student_verified_until" label="Verified until" hint="Leave empty to remove"><input id="student_verified_until" name="student_verified_until" type="date" defaultValue={c.student_verified_until ?? ""} className={inputClass} /></Field>
           </ActionForm>

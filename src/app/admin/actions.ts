@@ -164,7 +164,7 @@ export async function saveTimetable(_: ActionResult, form: FormData): Promise<Ac
 /** She has seen the doctor's written clearance (pregnancy / recent surgery). */
 export async function clearanceReceived(profileId: string): Promise<ActionResult> {
   await admin("clearance_received", { profileId });
-  await db().from("health_notes").update({ clearance_received_at: new Date().toISOString().slice(0, 10) }).eq("profile_id", profileId);
+  await db().from("health_notes").update({ clearance_received_at: todayKey() }).eq("profile_id", profileId);
   revalidatePath(`/admin/clients/${profileId}`);
   revalidatePath("/admin");
   return { ok: true, message: "Noted: doctor's note received." };

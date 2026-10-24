@@ -2,6 +2,7 @@ import "server-only";
 import { z } from "zod";
 import { db } from "@/lib/supabase/admin";
 import { needsClearance } from "@/lib/health";
+import { todayKey } from "@/lib/time";
 
 export { PHOTO_CONSENT, type PhotoConsent } from "@/lib/photo-consent";
 
@@ -19,7 +20,7 @@ function yearsAgo(n: number) {
 }
 
 /** Age in whole years on a given day (default today). */
-export function ageOn(dob: string, on = new Date().toISOString().slice(0, 10)) {
+export function ageOn(dob: string, on = todayKey()) {
   const [y, m, d] = dob.split("-").map(Number);
   const [Y, M, D] = on.split("-").map(Number);
   return Y - y - (M < m || (M === m && D < d) ? 1 : 0);

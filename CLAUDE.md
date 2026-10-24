@@ -142,7 +142,7 @@ cp .env.example .env.local    # fill in the local keys printed by `supabase star
 npm run dev                   # http://localhost:3000
 npm run typecheck && npm run lint
 PW_CHROMIUM=/opt/pw-browsers/chromium npm run test:e2e   # booking, cancel, waitlist, admin access
-npm run test:engine          # 38 booking-engine tests (local Supabase)
+npm run test:engine          # 39 booking-engine tests (local Supabase)
 # Stripe webhooks (signature, credits once, expired): start the app with test-only keys, then
 STRIPE_SECRET_KEY=sk_test_dummy STRIPE_WEBHOOK_SECRET=whsec_test_dummy npx next start -p 3002 &
 npm run test:webhook
@@ -168,7 +168,7 @@ npm run db:types              # after schema changes
   - Her round-1 client notes (`docs/feedback/elysia-client-notes-1.md`): her logo, real prices, cash/Revolut choice, trials and drop-ins, weekly repeat bookings, 3-state colours, new My classes with package progress, new Account, Studio / Events / Rules pages, Back buttons, Photos manager.
   - Admin: Today (awaiting payment with chosen method, roster flags), classes, timetable, closures, clients (profile, health behind a tap, student verification, holiday return, ledger), Outbox, stats, import, settings (price grid, booking window, studio sections), photos, compliance.
   - PWA manifest and icons, Open Graph previews.
-  - 38 engine tests + 3 webhook tests + 6 Playwright flows green on a production build.
+  - 39 engine tests + 3 webhook tests + 6 Playwright flows green on a production build.
   - Polish: "To pay" on unpaid classes, trials matched by phone, photo captions/reordering.
 - **Waiting on the owner (questions in the brief):**
   - Answers to the open questions in `docs/feedback/elysia-client-notes-1.md` (euro and DOB required are answered; defaults are live for the rest) and `elysia-client-notes-2.md` (who counts as a client, event cancellation cutoff).
