@@ -438,7 +438,7 @@ export async function sendTestEmail(): Promise<ActionResult> {
 
 export async function runTickNow(): Promise<ActionResult> {
   await admin("run_tick");
-  const r = await runTick();
+  const r = await runTick("admin");
   revalidatePath("/admin/outbox");
   return { ok: true, message: `Done: ${r.reminders} reminders, ${r.offers} waitlist offers.` };
 }

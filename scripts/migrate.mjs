@@ -12,7 +12,8 @@ if (!url) {
   process.exit(0);
 }
 
-const sql = postgres(url, { ssl: "require", max: 1, onnotice: () => {} });
+const local = /@(localhost|127\.0\.0\.1)[:/]/.test(url);
+const sql = postgres(url, { ssl: local ? false : "require", max: 1, onnotice: () => {} });
 const dir = path.join(process.cwd(), "supabase/migrations");
 
 try {
@@ -39,6 +40,38 @@ try {
     }
   }
   console.log("[migrate] up to date");
+  await scheduleTick();
 } finally {
   await sql.end();
+}
+
+/**
+ * Reminders, waitlist offers and expiries run in /api/cron/tick. Supabase's pg_cron calls it
+ * every 5 minutes through pg_net, so nothing depends on someone opening the site.
+ * Idempotent: cron.schedule replaces the job with the same name.
+ */
+async function scheduleTick() {
+  const secret = process.env.CRON_SECRET ?? "";
+  const site = process.env.NEXT_PUBLIC_SITE_URL || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "");
+  const target = process.env.TICK_URL || `${site.replace(/\/$/, "")}/api/cron/tick`;
+  if (!/^[A-Za-z0-9_+/=.-]{16,}$/.test(secret) || !/^https?:\/\/[\w.:-]+\/api\/cron\/tick$/.test(target)) {
+    console.warn("[migrate] scheduler not set up: needs CRON_SECRET (16+ characters, no quotes or spaces) and NEXT_PUBLIC_SITE_URL");
+    return;
+  }
+  if (process.env.VERCEL_ENV && process.env.VERCEL_ENV !== "production") {
+    console.log("[migrate] preview deployment: scheduler left as is");
+    return;
+  }
+  const s = postgres(url, { ssl: local ? false : "require", max: 1, onnotice: () => {} });
+  try {
+    await s`create extension if not exists pg_cron`;
+    await s`create extension if not exists pg_net`;
+    const command = `select net.http_get(url := '${target}', headers := jsonb_build_object('Authorization', 'Bearer ${secret}'), timeout_milliseconds := 30000)`;
+    await s`select cron.schedule('reform-tick', '*/5 * * * *', ${command})`;
+    console.log(`[migrate] scheduler: every 5 minutes → ${target}`);
+  } catch (e) {
+    console.warn("[migrate] scheduler not set up:", e.message);
+  } finally {
+    await s.end();
+  }
 }

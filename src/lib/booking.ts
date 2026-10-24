@@ -292,7 +292,9 @@ export async function cancelSession(sessionId: string, reason: string) {
 // ---------------------------------------------------------------------------
 // Periodic work: waitlist offers + reminders. Safe to call often (deduplicated).
 // ---------------------------------------------------------------------------
-export async function runTick() {
+export async function runTick(source: "cron" | "page" | "admin" = "page") {
+  const now = new Date().toISOString();
+  await db().from("studio_settings").update(source === "cron" ? { last_tick_at: now, last_cron_tick_at: now } : { last_tick_at: now }).eq("id", 1);
   const { data: offers } = await db().rpc("tick");
   await notifyOffers((offers ?? []) as OfferRow[]);
 

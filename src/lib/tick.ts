@@ -10,6 +10,6 @@ export function scheduleTick() {
   if (Date.now() - last < 60_000) return;
   last = Date.now();
   after(async () => {
-    try { await runTick(); } catch (e) { console.error("tick failed", e); }
+    try { await runTick("page"); } catch (e) { console.error("tick failed", e); }
   });
 }

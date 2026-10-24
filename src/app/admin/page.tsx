@@ -12,6 +12,8 @@ import { cancelToday } from "./actions";
 import { eur } from "@/lib/money";
 import { dayMonth, nowMs } from "@/lib/time";
 import { AdminTitle, Stat } from "./ui";
+import { getSettings } from "@/lib/auth";
+import { ago, schedulerHealthy } from "@/lib/scheduler";
 import { HealthInfo } from "./HealthInfo";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +25,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   scheduleTick();
   const { day } = await searchParams;
   const key = day && /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : todayKey();
+  const settings = await getSettings();
   const sessions = await sessionsWithRoster(localToUtc(key, "00:00"), localToUtc(addDaysKey(key, 1), "00:00"));
   const live = sessions.filter((s) => s.status === "scheduled");
   const booked = live.reduce((n, s) => n + s.roster.length, 0);
@@ -53,6 +56,11 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
         <Stat label="Booked" value={`${booked}/${cap}`} />
         <Stat label="Waitlist" value={live.reduce((n, s) => n + s.waitlist.length, 0)} />
       </div>
+      {settings.last_cron_tick_at && !schedulerHealthy(settings.last_cron_tick_at) && (
+        <p role="alert" className="mb-5 rounded-2xl border border-burgundy/25 bg-burgundy-soft px-4 py-3 text-sm text-burgundy">
+          Automatic reminders last ran {ago(settings.last_cron_tick_at)}. Open <Link href="/admin/outbox" className="font-medium underline underline-offset-4">Settings → Messages</Link> and tap &ldquo;Send due reminders now&rdquo;, then let your developer know.
+        </p>
+      )}
       {(pendingRefunds ?? 0) > 0 && (
         <p role="status" className="mb-5 rounded-2xl border border-burgundy/25 bg-burgundy-soft px-4 py-3 text-sm text-burgundy">
           {pendingRefunds} payment{pendingRefunds === 1 ? "" : "s"} need a manual refund in Stripe (paid after the spot was gone, or a cancelled event).

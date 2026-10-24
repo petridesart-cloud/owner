@@ -20,6 +20,22 @@ export type Database = {
   };
   public: {
     Tables: {
+      _app_migrations: {
+        Row: {
+          applied_at: string;
+          name: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          applied_at?: string;
+          name: string;
+        };
+        Update: {
+          applied_at?: string;
+          name?: string;
+        };
+        Relationships: [];
+      };
       audit_log: {
         Row: {
           action: string;
@@ -1025,6 +1041,8 @@ export type Database = {
           id: number;
           instagram_handle: string;
           intro_line: string;
+          last_cron_tick_at: string | null;
+          last_tick_at: string | null;
           legal_name: string;
           map_url: string;
           membership_period_mode: string;
@@ -1064,6 +1082,8 @@ export type Database = {
           id?: number;
           instagram_handle?: string;
           intro_line?: string;
+          last_cron_tick_at?: string | null;
+          last_tick_at?: string | null;
           legal_name?: string;
           map_url?: string;
           membership_period_mode?: string;
@@ -1102,6 +1122,8 @@ export type Database = {
           id?: number;
           instagram_handle?: string;
           intro_line?: string;
+          last_cron_tick_at?: string | null;
+          last_tick_at?: string | null;
           legal_name?: string;
           map_url?: string;
           membership_period_mode?: string;
@@ -1390,6 +1412,8 @@ export type Database = {
           id: number;
           instagram_handle: string;
           intro_line: string;
+          last_cron_tick_at: string | null;
+          last_tick_at: string | null;
           legal_name: string;
           map_url: string;
           membership_period_mode: string;

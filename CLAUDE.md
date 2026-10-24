@@ -76,6 +76,8 @@ Booking web app for **Re·Form Pilates Studio**, Limassol, Cyprus (Instagram @re
 | Decision | Why |
 |---|---|
 | Email 6-digit code login (no magic links, no passwords) | Instagram's in-app browser breaks magic links. Codes are generated with Supabase Auth's admin `generateLink` and delivered by our own notification service (Resend), so we control the template and demo mode can show them. |
+| `APP_ENV=production` forces demo mode off whatever `DEMO_MODE` says | The real app can never show login codes on screen or seed/reset demo data by mistake. |
+| Real app without an email key refuses sign-in with a clear message; login codes aren't stored in the Outbox once email is live | Never claim a code was sent; nobody reading the log can sign in as a client. |
 | Demo mode shows client codes on screen, never admin codes | So the preview can be clicked through without email. Admins enter `DEMO_ADMIN_CODE` instead; otherwise anyone could open the admin on a public preview. |
 | Booking engine in Postgres functions (`book_session`, `cancel_booking`, `process_waitlist`, …) that `SELECT … FOR UPDATE` the class row | Guarantees no double-booking of the last reformer under concurrency (tested with 6 parallel requests → exactly 3 succeed). |
 | Server is the only writer (service role); engine functions executable only by `service_role`; RLS lets clients read only their own rows | Defence in depth if the public anon key is used directly. Health notes: client reads own, instructor reads all, writes server-side so consent is logged. |
@@ -83,7 +85,7 @@ Booking web app for **Re·Form Pilates Studio**, Limassol, Cyprus (Instagram @re
 | Waitlist offer reserves the spot (`spots_taken` counts live offers) | The offered person can't be beaten to it while they decide. |
 | Payment layer behind `PaymentProvider` (Stripe Checkout today, mock without keys, Viva.com stub) | Viva Wallet is common in Cyprus; Stripe-hosted checkout means no card data touches us. |
 | Notification service writes every message to `notifications` (the admin Outbox) and only sends when the provider is configured and demo mode is off | Demo-safe; doubles as a message log. Transactional only; marketing must never go through it. |
-| Reminders and waitlist advancing run in `runTick()`: an opportunistic background tick on page views (max once a minute) plus `GET /api/cron/tick` (Bearer `CRON_SECRET`) | Vercel Hobby cron is daily only. In production, call the endpoint every 5 minutes from Supabase pg_cron or an external scheduler. |
+| Reminders and waitlist advancing run in `runTick()`, called every 5 minutes by Supabase **pg_cron + pg_net** → `GET /api/cron/tick` (Bearer `CRON_SECRET`). `scripts/migrate.mjs` (re)creates the job `reform-tick` on every production deploy from `NEXT_PUBLIC_SITE_URL` + `CRON_SECRET`. Page views also tick (max once a minute) as a fallback. Heartbeat `studio_settings.last_cron_tick_at`; admin warns after 20 min | Vercel Hobby cron is daily only; pg_cron is free and inside the database. |
 | Next.js 16 with `cacheComponents` off | Almost every page is per-user and dynamic; the previous caching model is simpler and fully supported. |
 | Map is click-to-load; only essential cookies | ePrivacy: no cookie banner needed, and nothing third-party loads before consent. |
 | Demo data is a SQL function (`seed_demo`) relative to `now()`, with admin "Reset demo data" (demo mode only) | The demo always looks current and can be replayed. |

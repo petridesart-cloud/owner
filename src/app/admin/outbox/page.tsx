@@ -7,11 +7,17 @@ import { emailLive, env } from "@/lib/env";
 import { dayMonth, time } from "@/lib/time";
 import { runTickNow, sendTestEmail } from "../actions";
 import { AdminTitle } from "../ui";
+import { getSettings } from "@/lib/auth";
+import { ago, schedulerHealthy } from "@/lib/scheduler";
 
 export const dynamic = "force-dynamic";
 
 export default async function OutboxPage() {
-  const { data: rows } = await db().from("notifications").select("*").order("created_at", { ascending: false }).limit(60);
+  const [{ data: rows }, s] = await Promise.all([
+    db().from("notifications").select("*").order("created_at", { ascending: false }).limit(60),
+    getSettings(),
+  ]);
+  const schedulerOk = schedulerHealthy(s.last_cron_tick_at);
   return (
     <div>
       <AdminTitle title="Outbox" sub={notificationsMode() === "outbox" ? "Demo mode: messages are logged here, not sent." : "Live: messages are sent via Resend / Twilio and logged here."} />
@@ -26,6 +32,11 @@ export default async function OutboxPage() {
         {!env.demoMode && !emailLive() && <p className="text-burgundy">Clients can&apos;t sign in until email is set up (RESEND_API_KEY and EMAIL_FROM).</p>}
         {emailLive() && !emailFromOk() && <p className="text-burgundy">The sender address is a placeholder. Use an address on your own verified domain.</p>}
         <ActionForm action={sendTestEmail} submit="Send me a test email" variant="soft" />
+        <p className="flex items-center justify-between gap-3 border-t border-line pt-3">
+          <span className="font-medium text-ink">Automatic reminders</span>
+          <Badge tone={schedulerOk ? "open" : "full"}>{s.last_cron_tick_at ? `Last ran ${ago(s.last_cron_tick_at)}` : "Not running yet"}</Badge>
+        </p>
+        <p className="text-ink-soft">Every 5 minutes: reminders, waitlist, expiring requests.</p>
       </section>
       <div className="mb-5"><ActionForm action={runTickNow} submit="Send due reminders & waitlist offers now" variant="ghost" /></div>
       <ul className="space-y-3">
