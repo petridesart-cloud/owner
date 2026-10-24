@@ -4,6 +4,7 @@ import { emailLive, smsLive, env } from "@/lib/env";
 import { emailHtml, render, type TemplateData, type TemplateName } from "./templates";
 import { sendEmail } from "./email";
 import { sendSms } from "./sms";
+import { getSettings } from "@/lib/auth";
 
 type Recipient = { profileId?: string | null; email?: string | null; phone?: string | null };
 type Opts = { sms?: boolean; dedupeKey?: string; bookingId?: string; sessionId?: string };
@@ -43,7 +44,7 @@ async function deliver(
   if (error) return "duplicate"; // duplicate dedupe key = already sent
   if (!live) return "logged";
   try {
-    const ref = channel === "email" ? await sendEmail(recipient, subject!, body) : await sendSms(recipient, body);
+    const ref = channel === "email" ? await sendEmail(recipient, subject!, body, await replyTo()) : await sendSms(recipient, body);
     await db().from("notifications").update({ status: "sent", provider_ref: ref }).eq("id", row.id);
     return "sent";
   } catch (e) {
@@ -51,6 +52,13 @@ async function deliver(
     await db().from("notifications").update({ status: "failed", error: String(e).slice(0, 500) }).eq("id", row.id);
     return "failed";
   }
+}
+
+/** Replies go to her real inbox: EMAIL_REPLY_TO, else the contact email in Settings (if filled in). */
+async function replyTo() {
+  if (env.emailReplyTo) return env.emailReplyTo;
+  const contact = (await getSettings()).contact_email;
+  return /@/.test(contact) && !/example\.(com|org)/i.test(contact) ? contact : null;
 }
 
 /** Is the From address on a real, verifiable domain (not a placeholder)? */

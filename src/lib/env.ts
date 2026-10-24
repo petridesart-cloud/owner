@@ -8,6 +8,8 @@ export const env = {
   stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
   resendKey: process.env.RESEND_API_KEY,
   emailFrom: process.env.EMAIL_FROM || "Re·Form Pilates <hello@example.com>",
+  // Where client replies go (the sender address has no inbox). Falls back to the studio's contact email.
+  emailReplyTo: process.env.EMAIL_REPLY_TO || "",
   twilioSid: process.env.TWILIO_ACCOUNT_SID,
   twilioToken: process.env.TWILIO_AUTH_TOKEN,
   twilioFrom: process.env.TWILIO_FROM,
