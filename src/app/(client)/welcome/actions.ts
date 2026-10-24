@@ -3,7 +3,8 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/supabase/admin";
 import { getSettings, requireViewer } from "@/lib/auth";
-import { PHOTO_CONSENT, dobSchema, fullName, nameSchema, phoneSchema, saveHealth, type PhotoConsent } from "@/lib/profile";
+import { PHOTO_CONSENT, dobSchema, fullName, nameSchema, phoneSchema, saveHealth, saveParq, type PhotoConsent } from "@/lib/profile";
+import { readParq } from "@/lib/parq";
 
 export type WelcomeState = { ok: boolean; errors?: Record<string, string>; redirect?: string };
 
@@ -24,6 +25,9 @@ export async function completeWelcome(_: WelcomeState, form: FormData): Promise<
   const injuries = String(form.get("injuries") ?? "").trim();
   const medication = String(form.get("medication") ?? "").trim();
   const photos = String(form.get("photo_consent") ?? "");
+  const parq = readParq(form);
+  if (!parq.ok) errors.parq = `Please answer all the health questions (${parq.missing} left).`;
+  else if (parq.yes.length && form.get("parq_ack") !== "on") errors.parq = "Please confirm you'll check with your doctor and tell your instructor.";
   if (!policy) errors.policy = "Please accept the Studio Rules and Terms to book.";
   if (!fitness) errors.fitness = "Please confirm the health declaration to book.";
   if ((injuries || medication) && !healthConsent) errors.health_consent = "To store health information we need your explicit consent. Or leave those boxes empty.";
@@ -48,6 +52,7 @@ export async function completeWelcome(_: WelcomeState, form: FormData): Promise<
   if (photoConsent) rows.push({ profile_id: p.id, type: "photos", granted: photoConsent !== "none", version: `${v}:${photoConsent}` });
   await db().from("consents").insert(rows);
   if (injuries || medication) await saveHealth(p.id, { injuries, medication }, healthConsent, v);
+  if (parq.ok) await saveParq(p.id, parq.yes, healthConsent, v);
 
   const next = String(form.get("next") ?? "/");
   redirect(next.startsWith("/") && !next.startsWith("//") ? next : "/");

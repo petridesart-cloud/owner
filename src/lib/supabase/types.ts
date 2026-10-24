@@ -485,6 +485,7 @@ export type Database = {
           injuries: string | null;
           medication: string | null;
           note: string | null;
+          parq_yes: string[] | null;
           profile_id: string;
           updated_at: string;
         };
@@ -494,6 +495,7 @@ export type Database = {
           injuries?: string | null;
           medication?: string | null;
           note?: string | null;
+          parq_yes?: string[] | null;
           profile_id: string;
           updated_at?: string;
         };
@@ -502,6 +504,7 @@ export type Database = {
           injuries?: string | null;
           medication?: string | null;
           note?: string | null;
+          parq_yes?: string[] | null;
           profile_id?: string;
           updated_at?: string;
         };
@@ -888,6 +891,7 @@ export type Database = {
           marketing_email: boolean;
           marketing_sms: boolean;
           onboarded_at: string | null;
+          parq_completed_at: string | null;
           phone: string | null;
           photo_consent: string | null;
           reminder_emails: boolean;
@@ -913,6 +917,7 @@ export type Database = {
           marketing_email?: boolean;
           marketing_sms?: boolean;
           onboarded_at?: string | null;
+          parq_completed_at?: string | null;
           phone?: string | null;
           photo_consent?: string | null;
           reminder_emails?: boolean;
@@ -937,6 +942,7 @@ export type Database = {
           marketing_email?: boolean;
           marketing_sms?: boolean;
           onboarded_at?: string | null;
+          parq_completed_at?: string | null;
           phone?: string | null;
           photo_consent?: string | null;
           reminder_emails?: boolean;

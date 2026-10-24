@@ -8,7 +8,7 @@ import { dotDate, longDate } from "@/lib/time";
 import { eur } from "@/lib/money";
 import { receiptLabel } from "@/lib/receipts";
 import { deleteAccount, signOutAction } from "./actions";
-import { HealthForm, ProfileForm } from "./Forms";
+import { HealthForm, ParqForm, ProfileForm } from "./Forms";
 
 export const metadata: Metadata = { title: "Account" };
 export const dynamic = "force-dynamic";
@@ -23,7 +23,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
   const viewer = await requireViewer("/account");
   const p = viewer.profile;
   const [{ data: health }, { data: consents }, { data: receipts }] = await Promise.all([
-    db().from("health_notes").select("note, injuries, medication").eq("profile_id", p.id).maybeSingle(),
+    db().from("health_notes").select("note, injuries, medication, parq_yes").eq("profile_id", p.id).maybeSingle(),
     db().from("consents").select("type, granted, version, created_at").eq("profile_id", p.id).order("created_at", { ascending: false }).limit(30),
     db().from("payments").select("id, description, amount_cents, paid_at, products(tag, credit_kind)").eq("profile_id", p.id).eq("status", "paid").order("paid_at", { ascending: false }).limit(24),
   ]);
@@ -42,6 +42,13 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
               dob: p.date_of_birth ?? "", goal: p.goal ?? "", ecName: p.emergency_contact_name ?? "", ecPhone: p.emergency_contact_phone ?? "",
               photos: p.photo_consent, me: p.marketing_email, reminders: p.reminder_emails,
             }} />
+          </Card>
+        </Section>
+        <Section title="Health questions">
+          {!p.parq_completed_at && <div className="mb-3 scroll-mt-20" id="parq"><Notice>Please answer these before your next booking.</Notice></div>}
+          <Card className="px-5 py-5">
+            {p.parq_completed_at && <p className="mb-3 text-sm text-ink-soft">Answered on {dotDate(p.parq_completed_at)}. Update them if anything changes.</p>}
+            <ParqForm yes={health?.parq_yes ?? []} answered={!!p.parq_completed_at} shared={!!health?.parq_yes?.length} />
           </Card>
         </Section>
         <Section title="Health">

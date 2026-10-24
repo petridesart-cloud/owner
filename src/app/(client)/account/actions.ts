@@ -5,7 +5,8 @@ import { z } from "zod";
 import { db } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import { getSettings, requireViewer } from "@/lib/auth";
-import { PHOTO_CONSENT, dobSchema, fullName, nameSchema, phoneSchema, saveHealth, type PhotoConsent } from "@/lib/profile";
+import { PHOTO_CONSENT, dobSchema, fullName, nameSchema, phoneSchema, saveHealth, saveParq, type PhotoConsent } from "@/lib/profile";
+import { readParq } from "@/lib/parq";
 
 export type SaveState = { ok: boolean; message?: string; error?: string };
 
@@ -55,6 +56,17 @@ export async function saveHealthInfo(_: SaveState, form: FormData): Promise<Save
   if (!res.ok) return { ok: false, error: res.error };
   revalidatePath("/account");
   return { ok: true, message: res.cleared ? "Health information deleted and consent withdrawn." : "Saved. Only your instructor can see this." };
+}
+
+export async function saveParqAnswers(_: SaveState, form: FormData): Promise<SaveState> {
+  const viewer = await requireViewer("/account");
+  const settings = await getSettings();
+  const parq = readParq(form);
+  if (!parq.ok) return { ok: false, error: `Please answer all the health questions (${parq.missing} left).` };
+  if (parq.yes.length && form.get("parq_ack") !== "on") return { ok: false, error: "Please confirm you'll check with your doctor and tell your instructor." };
+  await saveParq(viewer.profile.id, parq.yes, form.get("health_consent") === "on", settings.policy_version);
+  revalidatePath("/account");
+  return { ok: true, message: "Thank you, saved." };
 }
 
 export async function signOutAction() {

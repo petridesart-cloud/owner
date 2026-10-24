@@ -2,7 +2,8 @@
 import { useActionState } from "react";
 import { Button, Checkbox, Field, Notice, inputClass } from "@/components/ui";
 import { HealthFields, PhotoConsentField } from "@/components/ProfileFields";
-import { saveHealthInfo, saveProfile, type SaveState } from "./actions";
+import { saveHealthInfo, saveParqAnswers, saveProfile, type SaveState } from "./actions";
+import { ParqFields } from "@/components/ParqFields";
 import { keepValues } from "@/lib/keep-form";
 
 type P = {
@@ -56,6 +57,21 @@ export function HealthForm({ injuries, medication }: { injuries: string; medicat
       {state.error && <Notice tone="error">{state.error}</Notice>}
       {state.message && <Notice tone="success">{state.message}</Notice>}
       <Button type="submit" variant="soft" disabled={pending} className="w-full">{pending ? "Saving…" : "Save health info"}</Button>
+    </form>
+  );
+}
+
+export function ParqForm({ yes, answered, shared }: { yes: string[]; answered: boolean; shared: boolean }) {
+  const [state, action, pending] = useActionState<SaveState, FormData>(saveParqAnswers, { ok: false });
+  return (
+    <form onSubmit={keepValues(action)} className="space-y-3">
+      <ParqFields initialYes={yes} answered={answered} />
+      <Checkbox id="parq_health_consent" name="health_consent" defaultChecked={shared}>
+        Let my instructor see my answers (health data; only she can see it, and I can change this any time).
+      </Checkbox>
+      {state.error && <Notice tone="error">{state.error}</Notice>}
+      {state.message && <Notice tone="success">{state.message}</Notice>}
+      <Button type="submit" variant="soft" disabled={pending} className="w-full">{pending ? "Saving…" : answered ? "Update my answers" : "Save my answers"}</Button>
     </form>
   );
 }

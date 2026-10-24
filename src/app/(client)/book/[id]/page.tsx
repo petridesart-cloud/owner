@@ -149,10 +149,10 @@ export default async function BookPage({ params, searchParams }: { params: Promi
             </div>
           ) : !profile?.onboarded_at ? (
             <ButtonLink href={`/welcome?next=${encodeURIComponent(next)}`} className="w-full">Add your details to book</ButtonLink>
-          ) : !profile.date_of_birth ? (
+          ) : !profile.date_of_birth || !profile.parq_completed_at ? (
             <div className="space-y-3">
-              <Notice>One more detail: please add your date of birth before booking.</Notice>
-              <ButtonLink href="/account?dob=1" className="w-full">Add date of birth</ButtonLink>
+              <Notice>One more step before booking: {!profile.date_of_birth && !profile.parq_completed_at ? "your date of birth and a few health questions" : !profile.date_of_birth ? "your date of birth" : "a few health questions (1 minute)"}.</Notice>
+              <ButtonLink href={profile.date_of_birth ? "/account#parq" : "/account?dob=1"} className="w-full">Complete my details</ButtonLink>
             </div>
           ) : entry?.status === "waiting" ? (
             <div className="space-y-3">
