@@ -48,7 +48,14 @@ Her notes are about the client side. Each item has a priority, what was built, a
 - Photos go in Settings → Photos → The Studio.
 - The old "Studio page sections" setting is removed.
 
-## Open questions for Elysia
+## Her answers (and what changed)
+- **Who counts as a client:** clients with an **active package** (classes left, not ended); trials and drop-ins don't count. She can also let specific people see and book a clients-only event (event page → "Who can see this event"). Anyone already booked keeps access.
+- **Event cancellations:** clients can't cancel or get refunds for events in the app (they're told to message the studio); she can still remove someone herself. Without her own terms, events show "Events can't be cancelled or refunded in the app."
+- **The Studio page:** title, then her photos, then her text. What to bring, The Magic and the map were removed (their settings are hidden; nothing was deleted).
+- **Clients-only details:** people who can't see the event get a blurred "Clients only" card with no details at all, also from a direct link; on the Schedule it shows as "Special event · Clients only" and can't be tapped.
+- **Events page title:** just "Events".
+
+## Open questions for Elysia (answered above)
 1. **Who counts as a client for clients-only events?** The default is anyone who has paid for something, been given classes, or come to a class. Should a booked trial count before it happens?
 2. **Event cancellations.** The app shows her own terms, but cancelling in the app still follows the 6h rule (free release before 6h). Do events need their own cutoff, e.g. 48h? It's a small addition if yes.
 3. **Studio text above or below the photos?** It's above for now.
