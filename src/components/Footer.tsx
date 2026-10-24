@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getSettings } from "@/lib/auth";
+import { business } from "@/lib/business";
 
 const legal = [
   { href: "/policy", label: "Studio Rules" },
@@ -10,6 +11,7 @@ const legal = [
 
 export async function Footer() {
   const s = await getSettings();
+  const b = business(s);
   return (
     <footer className="print:hidden mx-5 mb-28 mt-14 border-t border-line pt-6 text-xs leading-relaxed text-ink-soft">
       <nav aria-label="Legal">
@@ -22,11 +24,13 @@ export async function Footer() {
         </ul>
       </nav>
       <address className="mt-4 not-italic">
-        <strong className="font-medium text-ink">{s.legal_name}</strong>
-        <br />Run by {s.trader_name}
-        <br />{s.address}
+        <strong className="font-medium text-ink">{b.name}</strong>
+        {b.owner && <><br />Run by {b.owner}</>}
+        <br />{b.address ?? "Limassol, Cyprus"}
         {s.vat_registered && s.vat_number && <><br />VAT {s.vat_number}</>}
-        <br /><a className="underline underline-offset-4" href={`mailto:${s.contact_email}`}>{s.contact_email}</a> · <a className="underline underline-offset-4" href={`tel:${s.contact_phone.replace(/\s/g, "")}`}>{s.contact_phone}</a>
+        {(b.email || b.phone) && (
+          <><br />{b.email && <a className="underline underline-offset-4" href={`mailto:${b.email}`}>{b.email}</a>}{b.email && b.phone && " · "}{b.phone && <a className="underline underline-offset-4" href={`tel:${b.phone.replace(/\s/g, "")}`}>{b.phone}</a>}</>
+        )}
       </address>
       <p className="mt-4">© {new Date().getFullYear()} Re·Form Pilates Studio · Essential cookies only · <Link href="/contact" className="underline underline-offset-4">Contact</Link></p>
     </footer>

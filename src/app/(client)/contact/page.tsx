@@ -2,15 +2,17 @@ import type { Metadata } from "next";
 import { AtSign, Mail, Phone } from "lucide-react";
 import { Card, PageTitle } from "@/components/ui";
 import { getSettings } from "@/lib/auth";
+import { business } from "@/lib/business";
 
 export const metadata: Metadata = { title: "Contact" };
 
 export default async function ContactPage() {
   const s = await getSettings();
+  const b = business(s);
   const items = [
     { icon: AtSign, label: "Instagram", value: `@${s.instagram_handle}`, href: `https://instagram.com/${s.instagram_handle}` },
-    { icon: Mail, label: "Email", value: s.contact_email, href: `mailto:${s.contact_email}` },
-    { icon: Phone, label: "Phone", value: s.contact_phone, href: `tel:${s.contact_phone.replace(/\s/g, "")}` },
+    ...(b.email ? [{ icon: Mail, label: "Email", value: b.email, href: `mailto:${b.email}` }] : []),
+    ...(b.phone ? [{ icon: Phone, label: "Phone", value: b.phone, href: `tel:${b.phone.replace(/\s/g, "")}` }] : []),
   ];
   return (
     <div>

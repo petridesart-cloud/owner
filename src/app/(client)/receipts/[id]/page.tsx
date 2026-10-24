@@ -5,6 +5,7 @@ import { BackButton } from "@/components/BackButton";
 import { PrintButton } from "@/components/PrintButton";
 import { logoSrc } from "@/lib/media";
 import { receiptLabel } from "@/lib/receipts";
+import { business } from "@/lib/business";
 import { getSettings, requireViewer } from "@/lib/auth";
 import { db } from "@/lib/supabase/admin";
 import { eur } from "@/lib/money";
@@ -22,6 +23,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
   const { data: pay } = await db().from("payments").select("*, products(tag, credit_kind, credits, months, per_week)").eq("id", id).maybeSingle();
   if (!pay || (pay.profile_id !== viewer.profile.id && viewer.profile.role !== "admin") || pay.status !== "paid") notFound();
   const s = await getSettings();
+  const biz = business(s);
   const [{ data: client }, logo] = await Promise.all([db().from("profiles").select("full_name, email").eq("id", pay.profile_id!).single(), logoSrc()]);
   const pr = pay.products;
   const item = pr?.tag === "package" && pr.credit_kind
@@ -47,7 +49,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
         </div>
         {s.vat_registered && pay.vat_cents > 0 && <p className="mt-2 text-right text-xs text-ink-soft">incl. VAT {eur(pay.vat_cents)} · VAT no. {s.vat_number}</p>}
         <address className="mt-6 text-xs not-italic leading-relaxed text-ink-soft">
-          {s.legal_name}{s.trader_name ? ` · ${s.trader_name}` : ""}<br />{s.address}<br />{s.contact_email} · {s.contact_phone}
+          {biz.name}{biz.owner ? ` · ${biz.owner}` : ""}<br />{biz.address ?? "Limassol, Cyprus"}{(biz.email || biz.phone) && <><br />{[biz.email, biz.phone].filter(Boolean).join(" · ")}</>}
         </address>
         <p className="mt-4 text-xs text-ink-soft">Payment confirmation. Thank you for practising with us.</p>
       </article>

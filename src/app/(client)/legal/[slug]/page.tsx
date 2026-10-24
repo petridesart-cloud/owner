@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { business } from "@/lib/business";
 import { notFound, redirect } from "next/navigation";
 import { DraftNotice, Prose } from "@/components/Prose";
 import { PageTitle } from "@/components/ui";
@@ -12,7 +13,7 @@ const PAGES: Record<string, { title: string; body: (s: Settings) => React.ReactN
     body: (s) => (
       <>
         <h2>Who we are</h2>
-        <p>{s.legal_name} is run by {s.trader_name}, an individual trader, at {s.address}. Contact: {s.contact_email}, {s.contact_phone}.</p>
+        <p>{business(s).name} is run by {business(s).owner ?? "its owner"}, an individual trader, at {business(s).address ?? "Limassol, Cyprus"}.{business(s).email ? ` Contact: ${[business(s).email, business(s).phone].filter(Boolean).join(", ")}.` : ` Contact us on Instagram @${s.instagram_handle}.`}</p>
         <h2>Bookings</h2>
         <p>A booking is confirmed only after successful payment or after a class credit is deducted. Each booking is for one person, for the class, date and time shown.</p>
         <h2>Prices &amp; payment</h2>
@@ -59,7 +60,7 @@ const PAGES: Record<string, { title: string; body: (s: Settings) => React.ReactN
     body: (s) => (
       <>
         <h2>Controller</h2>
-        <p>{s.trader_name}, trading as {s.legal_name}, {s.address}. For any data request, email {s.contact_email}.</p>
+        <p>{business(s).owner ?? "The owner"}, trading as {business(s).name}, {business(s).address ?? "Limassol, Cyprus"}. For any data request, {business(s).email ? `email ${business(s).email}` : `message us on Instagram @${s.instagram_handle}`}.</p>
         <h2>What we collect and why</h2>
         <table>
           <thead><tr><th>Data</th><th>Purpose</th><th>Legal basis</th></tr></thead>

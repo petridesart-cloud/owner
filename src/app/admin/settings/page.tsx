@@ -6,26 +6,33 @@ import { db } from "@/lib/supabase/admin";
 import { paymentsUnlocked, resetDemoData, saveClassType, savePrices, saveProduct, saveSettings } from "../actions";
 import { env } from "@/lib/env";
 import { AdminTitle } from "../ui";
+import { Readiness } from "../Readiness";
+import { isPlaceholder, launchReadiness } from "@/lib/business";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
-  const [s, { data: types }, { data: products }, unlocked] = await Promise.all([
+  const [s, { data: types }, { data: products }, unlocked, readiness] = await Promise.all([
     getSettings(),
     db().from("class_types").select("*").order("sort_order"),
     db().from("products").select("*").or("active.eq.true,kind.neq.membership").order("sort_order"),
     paymentsUnlocked(),
+    getSettings().then(launchReadiness),
   ]);
   const n = (id: string, label: string, value: number, hint?: string, step = 1) => (
     <Field id={id} label={label} hint={hint}><input id={id} name={id} type="number" step={step} min={0} defaultValue={value} className={inputClass} /></Field>
   );
   const t = (id: string, label: string, value: string, hint?: string) => (
-    <Field id={id} label={label} hint={hint}><input id={id} name={id} defaultValue={value} className={inputClass} /></Field>
+    <Field id={id} label={label} hint={hint}>
+      <input id={id} name={id} defaultValue={isPlaceholder(value) ? "" : value} placeholder={isPlaceholder(value) ? value.replace(/[[\]]/g, "") : undefined} className={inputClass} />
+    </Field>
   );
 
   return (
     <div className="space-y-6">
       <AdminTitle title="Settings" sub="Times are in Europe/Nicosia; prices in EUR." />
+
+      <Readiness items={readiness} />
 
       <nav aria-label="More tools" className="grid grid-cols-2 gap-2">
         {[

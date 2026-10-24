@@ -7,6 +7,7 @@ import { ButtonLink, PageTitle, Section } from "@/components/ui";
 import { getSettings } from "@/lib/auth";
 import { getTexts } from "@/lib/content";
 import { getMedia } from "@/lib/media";
+import { business } from "@/lib/business";
 
 export const metadata: Metadata = { title: "Studio" };
 export const dynamic = "force-dynamic";
@@ -44,7 +45,7 @@ export default async function StudioPage() {
       </section>
 
       <Section title="Find us" className="mt-8">
-        <ClickToLoadMap query={s.address.includes("[") ? "Limassol, Cyprus" : s.address} address={s.address} />
+        <ClickToLoadMap query={business(s).address ?? "Limassol, Cyprus"} address={business(s).address ?? "Limassol, Cyprus"} />
       </Section>
       <div className="mt-6 px-5"><ButtonLink href="/packs" className="w-full">Secure your package</ButtonLink></div>
     </div>
