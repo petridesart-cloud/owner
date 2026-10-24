@@ -212,7 +212,7 @@ language sql security definer set search_path = public as $$
   on conflict (profile_id) do update set conditions = excluded.conditions, details = excluded.details, pregnancy = excluded.pregnancy,
     pregnancy_weeks = excluded.pregnancy_weeks, bp_meds = excluded.bp_meds, clearance_needed = true, clearance_received_at = null;
   update public.class_sessions s
-     set clients_only = (s.title = 'Brunch & Pilates'),
+     set clients_only = coalesce(s.title = 'Brunch & Pilates', false),
          what_to_bring = case when s.title = 'SUP Pilates' then E'Swimwear or comfy activewear\nTowel and water\nSunscreen' end,
          event_policy = case when s.title = 'SUP Pilates' then 'Weather permitting. If the sea is too rough we move the date and you keep your spot or get your money back. Cancel at least 48 hours before for a full refund.'
                              else 'Cancel at least 48 hours before for a full refund. After that the fee covers food ordered for you.' end,
