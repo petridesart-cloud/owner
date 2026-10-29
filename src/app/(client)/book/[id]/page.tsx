@@ -6,7 +6,7 @@ import { BackButton } from "@/components/BackButton";
 import { Badge, ButtonLink, Eyebrow, Notice } from "@/components/ui";
 import { spotsLabel } from "@/components/ClassRow";
 import { getSettings, getViewer } from "@/lib/auth";
-import { availability, eventExtras, lockedEventIds } from "@/lib/data";
+import { availability, creditBalance, eventExtras, lockedEventIds } from "@/lib/data";
 import { Lock } from "lucide-react";
 import { db } from "@/lib/supabase/admin";
 import { eur, vatLine } from "@/lib/money";
@@ -65,12 +65,16 @@ export default async function BookPage({ params, searchParams }: { params: Promi
   }
 
   const past = start <= new Date();
+  const closeLabel = settings.waitlist_close_minutes % 60 === 0 ? `${settings.waitlist_close_minutes / 60} hour${settings.waitlist_close_minutes === 60 ? "" : "s"}` : `${settings.waitlist_close_minutes} minutes`;
   const offered = entry?.status === "offered" && new Date(entry.offer_expires_at!) > new Date();
   const full = c.spots_left === 0 && !offered;
   const usable = profile && c.credit_kind
     ? (await db().rpc("usable_credits", { p_profile: profile.id, p_kind: c.credit_kind, p_class: c.starts_at })).data?.[0]
     : null;
   const creditCount = usable?.usable ?? 0;
+  // A Reformer package can't be used for Mat (and the other way round): say so instead of just "get a package".
+  const otherKind = c.credit_kind === "mat" ? "reformer" : "mat";
+  const otherCredits = profile && c.credit_kind && creditCount === 0 ? (await creditBalance(profile.id))[otherKind] : 0;
   const blockedByExpiry = !!usable && usable.total > 0 && usable.usable === 0;
   const { data: closed } = await db().rpc("is_closed_on", { p_at: c.starts_at });
   const { data: ctype } = await db().from("class_types").select("credit_cost").eq("id", c.class_type_id).single();
@@ -179,17 +183,25 @@ export default async function BookPage({ params, searchParams }: { params: Promi
             </div>
           ) : entry?.status === "waiting" ? (
             <div className="space-y-3">
-              <Notice>You&apos;re <strong>#{position}</strong> on the waitlist. {c.kind === "event" ? <> If a spot opens, we&apos;ll hold it for you and email you.</> : <> If a spot opens, we&apos;ll book you in with a class from your package (or hold the spot for you for {Math.round(settings.waitlist_window_minutes / 60)}h) and email you.</>}</Notice>
+              <Notice>
+                You&apos;re <strong>{ordinal(position)}</strong> on the waitlist.{" "}
+                {c.kind === "event"
+                  ? "If a spot opens, we'll hold it for you and email you."
+                  : `If a spot opens up to ${closeLabel} before class, we'll book you in using a credit from your package and email you.`}
+              </Notice>
               <BookActions mode="leave" sessionId={id} entryId={entry.id} />
             </div>
           ) : full ? (
             <div className="space-y-3">
-              <p className="text-sm text-ink-soft">This class is full{c.waitlist_count ? ` and ${c.waitlist_count} ${c.waitlist_count === 1 ? "person is" : "people are"} waiting` : ""}. {c.kind === "event" ? "Join the waitlist: if a spot opens, we email you and hold it for you." : `Join the waitlist: if a spot opens more than ${settings.cancellation_cutoff_hours}h before class and you have a class in your package, we book you in automatically and email you. Otherwise we email you and hold the spot for you.`}</p>
+              <p className="text-sm text-ink-soft">This class is full{c.waitlist_count ? ` and ${c.waitlist_count} ${c.waitlist_count === 1 ? "person is" : "people are"} waiting` : ""}. {c.kind === "event" ? "Join the waitlist: if a spot opens, we email you and hold it for you." : `Join the waitlist: if a spot opens up to ${closeLabel} before class, we'll book you in using a credit from your package and email you.`}</p>
               <BookActions mode="waitlist" sessionId={id} />
             </div>
           ) : (
             <div className="space-y-4">
               {offered && <Notice tone="success">A spot opened up for you. It&apos;s held until {time(entry!.offer_expires_at!)} ({relativeHours(entry!.offer_expires_at!)} left).</Notice>}
+              {otherCredits > 0 && (
+                <Notice>Your {otherKind === "reformer" ? "Reformer" : "Mat"} package is for {otherKind === "reformer" ? "Reformer" : "Mat"} classes only. For this {c.credit_kind === "mat" ? "Mat" : "Reformer"} class, book a drop-in or get a {c.credit_kind === "mat" ? "Mat" : "Reformer"} package.</Notice>
+              )}
               {blockedByExpiry && (
                 <Notice>Your package is valid until {longDate(new Date(new Date(usable!.latest_expiry!).getTime() - 1))}, so this class is after it. A new package will cover it.</Notice>
               )}
@@ -241,4 +253,10 @@ function PriceSummary({ price, settings, event = false, policy = null }: { price
       )}
     </div>
   );
+}
+
+/** 1st, 2nd, 3rd, 4th… */
+function ordinal(n: number) {
+  const t = n % 100;
+  return `${n}${t >= 11 && t <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
 }

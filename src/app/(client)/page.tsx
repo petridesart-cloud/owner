@@ -5,12 +5,11 @@ import { Bubbles } from "@/components/Bubbles";
 import { ClassRow } from "@/components/ClassRow";
 import { ButtonLink, Eyebrow, Section } from "@/components/ui";
 import { getSettings, getViewer } from "@/lib/auth";
-import { availability, creditBalance, nextBooking, viewerSessionState } from "@/lib/data";
+import { availability, nextBooking, viewerSessionState } from "@/lib/data";
 import { dayMonth, longDate, relativeHours, time, weekdayShort } from "@/lib/time";
-import { CalendarPlus, CalendarRange, Hourglass, Repeat } from "lucide-react";
+import { CalendarPlus, Hourglass } from "lucide-react";
 import { db } from "@/lib/supabase/admin";
 import { getMedia, logoSrc } from "@/lib/media";
-import { recurringSummary } from "@/lib/recurring";
 import { eur } from "@/lib/money";
 import { scheduleTick } from "@/lib/tick";
 
@@ -30,16 +29,13 @@ export default async function Home() {
   const event = open.find((c) => c.kind === "event");
   const firstName = viewer?.profile.full_name?.split(" ")[0];
   const pid = viewer?.profile.id;
-  const [mine, credits, weekly, logo, studioPics, eventPics, requested] = await Promise.all([
+  const [mine, logo, studioPics, eventPics, requested] = await Promise.all([
     pid ? nextBooking(pid) : null,
-    pid ? creditBalance(pid) : null,
-    pid ? recurringSummary(pid) : [],
     logoSrc(),
     getMedia("studio:"),
     getMedia("event:"),
     pid ? db().from("payments").select("id, description, amount_cents").eq("profile_id", pid).eq("status", "pending").eq("provider", "offline").is("booking_id", null).limit(1).maybeSingle().then((r) => r.data) : null,
   ]);
-  const hasPackage = !!credits && credits.reformer + credits.mat > 0;
 
   return (
     <div className="pb-4">
@@ -56,7 +52,7 @@ export default async function Home() {
         </ButtonLink>
       </section>
 
-      {(mine || hasPackage || requested) && (
+      {(mine || requested) && (
         <div className="-mt-5 space-y-3 px-5">
           {requested && (
             <Link href="/bookings" className="card animate-rise flex items-center gap-4 px-4 py-4 [animation-delay:200ms]">
@@ -83,23 +79,6 @@ export default async function Home() {
               <a href={`/api/ics/${mine.id}`} aria-label="Add your next class to your calendar" className="grid size-11 shrink-0 place-items-center rounded-full bg-lilac-50 text-ink hover:bg-lilac-100">
                 <CalendarPlus aria-hidden size={19} />
               </a>
-            </section>
-          )}
-          {hasPackage && (
-            <section aria-labelledby="how-to-book" className="card animate-rise px-4 py-4 [animation-delay:280ms]">
-              <h2 className="eyebrow" id="how-to-book">Book your classes</h2>
-              <div className="mt-3 grid grid-cols-2 gap-2.5">
-                <Link href="/schedule" className="pressable flex flex-col gap-1.5 rounded-2xl bg-lilac-50 px-3.5 py-3 text-ink hover:bg-lilac-100">
-                  <CalendarRange aria-hidden size={19} />
-                  <span className="text-sm font-medium">Pick classes</span>
-                  <span className="text-xs text-ink-soft">One by one</span>
-                </Link>
-                <Link href="/bookings/weekly" className="pressable flex flex-col gap-1.5 rounded-2xl bg-lilac-50 px-3.5 py-3 text-ink hover:bg-lilac-100">
-                  <Repeat aria-hidden size={19} />
-                  <span className="text-sm font-medium">Every week</span>
-                  <span className="text-xs text-ink-soft">{weekly.length ? weekly.join(" · ") : "Same days & times"}</span>
-                </Link>
-              </div>
             </section>
           )}
         </div>

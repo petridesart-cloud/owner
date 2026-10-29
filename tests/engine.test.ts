@@ -484,7 +484,7 @@ describe("waitlist", () => {
     return { sid, b, rows: (rows ?? []) as { profile_id: string; offer_expires_at: string | null }[] };
   };
 
-  test("a spot that opens more than 6h ahead auto-books the first in line who has a class", async () => {
+  test("a spot that opens more than 1h before class books the first in line who has a class", async () => {
     const { sid, b, rows } = await waitFor(3 * D, 2);
     assert.equal(rows.length, 1);
     assert.equal(rows[0].profile_id, b);
@@ -506,11 +506,25 @@ describe("waitlist", () => {
     assert.equal((await book(c, sid)).error?.message, "full");
   });
 
-  test("inside the 6h cutoff nobody is auto-booked; they get an offer until class time", async () => {
-    const { b, rows } = await waitFor(3 * H, 2);
+  test("inside the 6h cutoff they're still booked in, with 30 minutes to cancel for free", async () => {
+    const { sid, b, rows } = await waitFor(3 * H, 2);
     assert.equal(rows[0].profile_id, b);
+    assert.equal(rows[0].offer_expires_at, null);
+    const { data: bk } = await db.from("bookings").select("id, free_cancel_until").eq("session_id", sid).eq("profile_id", b).eq("status", "confirmed").single();
+    assert.ok(bk!.free_cancel_until && new Date(bk!.free_cancel_until).getTime() <= Date.now() + 31 * 60_000);
+    const { data: res } = await db.rpc("cancel_booking", { p_booking: bk!.id, p_profile: b, p_admin: false });
+    assert.equal((res as { status: string }).status, "cancelled"); // free: the class went back
+  });
+
+  test("in the last hour before class nobody is moved in", async () => {
+    const { rows } = await waitFor(50 * 60_000, 2);
+    assert.equal(rows.length, 0);
+  });
+
+  test("without a package class, the held offer ends 1 hour before class", async () => {
+    const { rows } = await waitFor(90 * 60_000, 0);
     assert.ok(rows[0].offer_expires_at);
-    assert.ok(new Date(rows[0].offer_expires_at!).getTime() <= Date.now() + 3 * H + 60_000);
+    assert.ok(new Date(rows[0].offer_expires_at!).getTime() <= Date.now() + 31 * 60_000);
   });
 });
 

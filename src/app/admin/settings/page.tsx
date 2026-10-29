@@ -4,7 +4,7 @@ import { Checkbox, Field, inputClass } from "@/components/ui";
 import { getSettings } from "@/lib/auth";
 import { db } from "@/lib/supabase/admin";
 import { paymentsUnlocked, resetDemoData, saveClassType, savePrices, saveProduct, saveSettings } from "../actions";
-import { env } from "@/lib/env";
+import { env, smsLive } from "@/lib/env";
 import { AdminTitle } from "../ui";
 import { Readiness } from "../Readiness";
 import { isPlaceholder, launchReadiness } from "@/lib/business";
@@ -86,7 +86,11 @@ export default async function SettingsPage() {
             {n("booking_window_weeks", "Clients can book (weeks ahead)", Math.round(s.booking_window_days / 7))}
             {n("cancellation_cutoff_hours", "Free cancellation until (hours before)", s.cancellation_cutoff_hours)}
             {n("expiry_reminder_days", "Remind before package expires (days)", s.expiry_reminder_days)}
+            {n("waitlist_close_minutes", "Waitlist stops (minutes before class)", s.waitlist_close_minutes, "Nobody is moved in after this. Yours: 60")}
           </div>
+          <Checkbox id="waitlist_sms" name="waitlist_sms" defaultChecked={s.waitlist_sms}>
+            Also text people when a waitlist spot is theirs {smsLive() ? "" : "(starts once an SMS account is connected)"}
+          </Checkbox>
 
           <h3 className="display pt-3 text-[0.85rem]">Message on every page</h3>
           {t("status_banner", "Status banner (optional)", s.status_banner, "e.g. “Studio closed this week, see you Monday!” Leave empty to hide.")}

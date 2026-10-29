@@ -52,7 +52,7 @@ export async function clientPackages(profileId: string, lotId?: string): Promise
     const kindLabel = l.credit_kind === "reformer" ? "Reformer" : "Mat";
     const title = `${kindLabel} Package`;
     const subtitle = p?.per_week && p.months
-      ? `${p.per_week} per week · ${months(p.months)}`
+      ? `${p.credits ?? l.total} classes · ${months(p.months)}`
       : l.note?.split(" · ").slice(1).join(" · ") || `${l.total} classes`;
     const expiredOut = !!l.expires_at && new Date(l.expires_at).getTime() <= now;
     const upcoming = classes.some((c) => c.status === "upcoming");

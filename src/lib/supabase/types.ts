@@ -60,6 +60,7 @@ export type Database = {
           confirmed_at: string | null;
           created_at: string;
           credit_lot_id: string | null;
+          free_cancel_until: string | null;
           hold_expires_at: string | null;
           id: string;
           late_refund_pending: boolean;
@@ -77,6 +78,7 @@ export type Database = {
           confirmed_at?: string | null;
           created_at?: string;
           credit_lot_id?: string | null;
+          free_cancel_until?: string | null;
           hold_expires_at?: string | null;
           id?: string;
           late_refund_pending?: boolean;
@@ -93,6 +95,7 @@ export type Database = {
           confirmed_at?: string | null;
           created_at?: string;
           credit_lot_id?: string | null;
+          free_cancel_until?: string | null;
           hold_expires_at?: string | null;
           id?: string;
           late_refund_pending?: boolean;
@@ -1203,6 +1206,8 @@ export type Database = {
           vat_number: string;
           vat_rate: number;
           vat_registered: boolean;
+          waitlist_close_minutes: number;
+          waitlist_sms: boolean;
           waitlist_window_minutes: number;
         };
         ComputedFields: never;
@@ -1244,6 +1249,8 @@ export type Database = {
           vat_number?: string;
           vat_rate?: number;
           vat_registered?: boolean;
+          waitlist_close_minutes?: number;
+          waitlist_sms?: boolean;
           waitlist_window_minutes?: number;
         };
         Update: {
@@ -1284,6 +1291,8 @@ export type Database = {
           vat_number?: string;
           vat_rate?: number;
           vat_registered?: boolean;
+          waitlist_close_minutes?: number;
+          waitlist_sms?: boolean;
           waitlist_window_minutes?: number;
         };
         Relationships: [];
@@ -1600,6 +1609,8 @@ export type Database = {
           vat_number: string;
           vat_rate: number;
           vat_registered: boolean;
+          waitlist_close_minutes: number;
+          waitlist_sms: boolean;
           waitlist_window_minutes: number;
         };
         SetofOptions: {
@@ -1628,6 +1639,7 @@ export type Database = {
           profile_id: string;
         }[];
       };
+      tidy_package_name: { Args: { v: string }; Returns: string };
       trial_eligible: {
         Args: { p_kind: Database["public"]["Enums"]["credit_kind"]; p_profile: string };
         Returns: boolean;

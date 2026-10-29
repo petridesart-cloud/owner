@@ -62,9 +62,11 @@ Booking web app for **Re·Form Pilates Studio**, Limassol, Cyprus (Instagram @re
   - Started packages are frozen: their expiry extends by the closed days in their window (overlapping closures counted once), recorded as ledger `freeze_extension`.
   - Cyprus public holidays for the next 12 months are preloaded as suggestions she confirms.
   - "Missed class: public holiday" returns a class with a reason.
-- **Waitlist (auto-book, owner's decision):** when a spot opens more than the cutoff (6h) before class, the first in line is booked automatically with a usable package class and emailed (`waitlist_booked`), so they can still cancel free. Otherwise (no usable class, events, inside 6h) they get an offer: 2h, or until the cutoff, or until class time if already inside it. A live offer reserves the spot.
+- **Waitlist (her rule, round 3):** when a spot opens more than `waitlist_close_minutes` (60) before class, the first in line with a usable package class is booked in automatically and emailed (`waitlist_booked`). If that happens inside the 6h cutoff they get `bookings.free_cancel_until` (30 min, never past the close) to cancel for free (`cancel_booking` honours it). Without a usable class (or events) they get a held offer that ends by the close. Inside the last hour nobody is moved in. Waitlist emails also go by SMS when `waitlist_sms` is on and Twilio is configured.
 - **Booking window:** clients book up to 4 weeks ahead (`booking_window_days`, Settings); the studio can add anyone beyond it.
 - **Same days every week:** clients pick weekly slots (`recurring_rules`); `applyRecurring()` books them while the package lasts, inside the window, on save, on Mark as paid, on timetable save and on every tick. Full weeks are skipped with a one-tap waitlist email; classes the client cancelled are never re-booked.
+- **Package names** read "Reformer · 8 classes · 1 month" everywhere: triggers (`tidy_package_name`) rewrite "N per week" names on products, payment descriptions and package notes; `packages.ts` shows credits.
+- **Home** no longer has the "Book your classes" box (Every week lives under the package cards in My classes); the Studio page has no button. A Reformer package can't book Mat (the class page says so).
 - **Emergency contact** has an optional relation (`profiles.emergency_contact_relation`).
 - **Her photos:** Admin → Settings → Photos uploads to the public Storage bucket `media` (table `media`, slots `logo`, `instructor`, `studio:space` (the Studio page shows every `studio:*` slot), `event:<id>` (archive), `event-cover:<id>` (one background picture, set on the event's admin page)), resized in the browser to ≤1600px.
 - **Events (her round-2 notes):** per event she sets title, date, location, description, price, spots, plus `clients_only`, `what_to_bring` (empty = hidden), `event_policy` (shown and emailed instead of the studio policy) and `recap` (archive text). Clients-only (her answer): `is_studio_client()` = an active package (credit lot with classes left, not expired; trials/drop-ins don't count); `can_access_event()` also allows people she adds per event (`event_access`, event admin page) and anyone already booked. Others get a blurred "Clients only" card with no details (Events page, direct link, Schedule row "Special event"), and the trigger `guard_clients_only` refuses their online bookings/waitlist joins; manual adds by the studio are allowed. Events can't be cancelled by clients (`cancelBooking` refuses unless admin; `EVENT_POLICY` is the default terms). Previous events show only events with photos or a recap. Optional Events intro (`site_content.events_intro`) and Studio text: saved empty = hidden.
@@ -150,7 +152,7 @@ cp .env.example .env.local    # fill in the local keys printed by `supabase star
 npm run dev                   # http://localhost:3000
 npm run typecheck && npm run lint
 PW_CHROMIUM=/opt/pw-browsers/chromium npm run test:e2e   # booking, cancel, waitlist, admin access
-npm run test:engine          # 44 booking-engine tests (local Supabase)
+npm run test:engine          # 46 booking-engine tests (local Supabase)
 # Stripe webhooks (signature, credits once, expired): start the app with test-only keys, then
 STRIPE_SECRET_KEY=sk_test_dummy STRIPE_WEBHOOK_SECRET=whsec_test_dummy npx next start -p 3002 &
 npm run test:webhook
@@ -176,13 +178,14 @@ npm run db:types              # after schema changes
   - Her round-1 client notes (`docs/feedback/elysia-client-notes-1.md`): her logo, real prices, cash/Revolut choice, trials and drop-ins, weekly repeat bookings, 3-state colours, new My classes with package progress, new Account, Studio / Events / Rules pages, Back buttons, Photos manager.
   - Admin: Today (awaiting payment with chosen method, roster flags), classes, timetable, closures, clients (profile, health behind a tap, student verification, holiday return, ledger), Outbox, stats, import, settings (price grid, booking window, studio sections), photos, compliance.
   - PWA manifest and icons, Open Graph previews.
-  - 44 engine tests + 3 webhook tests + 6 Playwright flows green on a production build.
+  - 46 engine tests + 3 webhook tests + 6 Playwright flows green on a production build.
   - Her studio notes, round 1: back buttons, Classes day strip, repeating timetable, Active/Not active clients with birthdays, new client page with package adjustments and health history, new Stats.
   - Polish: "To pay" on unpaid classes, trials matched by phone, photo captions/reordering.
 - **Waiting on the owner (questions in the brief):**
   - Answers to the open questions in `docs/feedback/elysia-client-notes-1.md` (euro and DOB required are answered; defaults are live for the rest) and `elysia-client-notes-2.md` (who counts as a client, event cancellation cutoff), and `elysia-studio-notes-1.md` (unpaid trial = active?, freeze blocking bookings, birthday wording, auto-attended).
   - Her Revolut link, IBAN, original logo file and photos (she can upload them herself now).
   - Address, her full name, contact details.
+- **Her notes, round 3** (`docs/feedback/elysia-notes-3.md`): package names, home/studio simplified, waitlist 1h rule + grace period, Reformer-vs-Mat notice, fill rate %, her name, waitlist SMS switch, demo birthday (Sofia's birthday is always today in demo mode, set on each tick).
 - **Hosting plan (owner's decision):** Vercel Hobby during the soft launch; upgrade `reform-studio` to Pro before the link goes in her Instagram bio (`docs/launch/0-checklist.md` step 6).
 - **Proposed v2:**
   - Wallet passes, auto-renewing memberships (code exists, flagged off), corporate accounts, referrals, gift vouchers.

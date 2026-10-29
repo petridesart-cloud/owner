@@ -87,13 +87,13 @@ export default async function StatsPage() {
       <h2 className="display mb-2 text-[0.95rem]">This week</h2>
       <div className="grid grid-cols-2 gap-2">
         <Big label="Bookings" value={wb} after={`of ${ws} spots`} />
-        <Big label="Fill rate" value={pct(wb, ws)} after={`of ${ws} spots`} />
+        <Big label="Fill rate" value={pct(wb, ws)} />
       </div>
 
       <h2 className="display mb-2 mt-6 text-[0.95rem]">{monthYear(`${monthKey}T12:00:00Z`)}</h2>
       <div className="grid grid-cols-2 gap-2">
         <Big label="Bookings" value={mb} after={`of ${ms} spots`} />
-        <Big label="Fill rate" value={pct(mb, ms)} after={`of ${ms} spots`} />
+        <Big label="Fill rate" value={pct(mb, ms)} />
         <Big label="Revenue" value={eur(revenue)} hint="Everything marked as paid" />
         <Big label="New clients" value={newClients ?? 0} after="signed up" />
       </div>

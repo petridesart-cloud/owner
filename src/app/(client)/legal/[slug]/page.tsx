@@ -47,7 +47,7 @@ const PAGES: Record<string, { title: string; body: (s: Settings) => React.ReactN
         <h2>Inside {s.cancellation_cutoff_hours} hours</h2>
         <p>Cancellations within {s.cancellation_cutoff_hours} hours of class are not refunded: the class is used. Please still cancel: your spot is offered to the waitlist.{s.refund_late_cancel_if_filled ? " If someone takes your spot, we return your credit." : ""}</p>
         <h2>Waitlist</h2>
-        <p>When a spot opens, the first person on the waitlist is notified and has {Math.round(s.waitlist_window_minutes / 60)} hours (or until the cancellation cutoff) to claim it. After that, it goes to the next person.</p>
+        <p>When a spot opens up to {s.waitlist_close_minutes >= 60 ? `${s.waitlist_close_minutes / 60} hour${s.waitlist_close_minutes === 60 ? "" : "s"}` : `${s.waitlist_close_minutes} minutes`} before class, the first person on the waitlist with a class left in their package is booked in automatically and emailed. If they were booked in less than {s.cancellation_cutoff_hours} hours before class, they can still cancel for free within 30 minutes. Without a package class (or for events), the spot is held for them for {Math.round(s.waitlist_window_minutes / 60)} hours, then goes to the next person. Nobody is moved in after that point.</p>
         <h2>If we cancel</h2>
         <p>If the studio cancels a class, you are notified and your credit is returned automatically. Special events paid by card are refunded to your card.</p>
         <h2>Right of withdrawal</h2>

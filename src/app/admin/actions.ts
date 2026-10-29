@@ -424,6 +424,8 @@ export async function saveSettings(_: ActionResult, form: FormData): Promise<Act
   const { error } = await db().from("studio_settings").update({
     cancellation_cutoff_hours: num("cancellation_cutoff_hours"),
     waitlist_window_minutes: Math.round(num("waitlist_window_hours") * 60),
+    waitlist_close_minutes: Math.min(720, Math.max(0, Math.round(num("waitlist_close_minutes") || 0))),
+    waitlist_sms: form.get("waitlist_sms") === "on",
     hold_minutes: num("hold_minutes"),
     reminder_offsets_minutes: offsets.length ? offsets : [1440, 120],
     refund_late_cancel_if_filled: form.get("refund_late_cancel_if_filled") === "on",

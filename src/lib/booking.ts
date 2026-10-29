@@ -5,7 +5,7 @@ import { getSettings, type Profile } from "@/lib/auth";
 import { notify } from "@/lib/notifications";
 import { paymentProvider } from "@/lib/payments";
 import { friendlyError, type ActionResult } from "@/lib/errors";
-import { spokenDateTime, time, relativeHours } from "@/lib/time";
+import { spokenDateTime, time, relativeHours, todayKey } from "@/lib/time";
 import { eur, vatPortion } from "@/lib/money";
 import { applyRecurring } from "@/lib/recurring";
 
@@ -253,21 +253,24 @@ export async function leaveWaitlist(profile: Profile, entryId: string): Promise<
 }
 
 export async function notifyOffers(rows: OfferRow[]) {
+  const sms = rows.length ? (await getSettings()).waitlist_sms : false; // texts too, when she turned it on and an SMS account is connected
   for (const r of rows) {
     const { data: w } = await db().from("waitlist_entries").select("session_id").eq("id", r.entry_id).single();
     if (!w) continue;
     const [s, p] = await Promise.all([sessionInfo(w.session_id), profileById(r.profile_id)]);
     if (!r.offer_expires_at) {
       // Auto-booked from the waitlist with a class from their package.
-      const { data: b } = await db().from("bookings").select("id").eq("session_id", s.id).eq("profile_id", p.id).eq("status", "confirmed").maybeSingle();
+      const { data: b } = await db().from("bookings").select("id, free_cancel_until").eq("session_id", s.id).eq("profile_id", p.id).eq("status", "confirmed").maybeSingle();
+      // Booked inside the cancellation window: they get a short grace period to cancel for free.
+      const grace = b?.free_cancel_until ? ` Can't make it? Cancel in the app by ${time(b.free_cancel_until)} and the class goes back into your package.` : "";
       await notify({ profileId: p.id, email: p.email, phone: p.phone }, "waitlist_booked",
-        { name: p.full_name ?? undefined, ...tmpl(s), note: "1 class from your package was used." },
-        { sms: true, sessionId: s.id, bookingId: b?.id, dedupeKey: `waitlist-booked:${r.entry_id}` });
+        { name: p.full_name ?? undefined, ...tmpl(s), note: `1 class from your package was used.${grace}`, ...(grace ? { policy: undefined } : {}) },
+        { sms, sessionId: s.id, bookingId: b?.id, dedupeKey: `waitlist-booked:${r.entry_id}` });
       continue;
     }
     await notify({ profileId: p.id, email: p.email, phone: p.phone }, "waitlist_offer",
       { name: p.full_name ?? undefined, ...tmpl(s), note: `It's held for you until ${time(r.offer_expires_at)} (${relativeHours(r.offer_expires_at)}). After that it goes to the next person.` },
-      { sms: true, sessionId: s.id, dedupeKey: `offer:${r.entry_id}` });
+      { sms, sessionId: s.id, dedupeKey: `offer:${r.entry_id}` });
   }
 }
 
@@ -354,6 +357,8 @@ export async function runTick(source: "cron" | "page" | "admin" = "page") {
   }
   sent += await creditAndRenewalNotices();
   await db().rpc("extend_timetable", {}); // the timetable repeats by itself, ~9 weeks ahead
+  // Demo only: Sofia always has her birthday today, so the cake and the birthday email can be tried.
+  if (env.demoMode) await db().from("profiles").update({ date_of_birth: `1995-${todayKey().slice(5) === "02-29" ? "02-28" : todayKey().slice(5)}` }).eq("email", "sofia@example.com");
   const weekly = await applyRecurring();
   return { offers: (offers ?? []).length, reminders: sent, weekly: weekly.booked };
 }
