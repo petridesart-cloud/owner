@@ -2,7 +2,7 @@ import { Checkbox, Field, inputClass } from "@/components/ui";
 
 type Type = { id: string; name: string; default_capacity: number; default_duration_minutes: number };
 type Defaults = { class_type_id?: string; date?: string; time?: string; duration?: number; capacity?: number; price?: string; title?: string | null; location?: string | null; description?: string | null;
-  clients_only?: boolean; what_to_bring?: string | null; event_policy?: string | null; recap?: string | null };
+  clients_only?: boolean; what_to_bring?: string | null; event_policy?: string | null; recap?: string | null; signup_question?: string | null };
 
 export function SessionFields({ types, d = {}, event = false }: { types: Type[]; d?: Defaults; event?: boolean }) {
   return (
@@ -18,7 +18,7 @@ export function SessionFields({ types, d = {}, event = false }: { types: Type[];
       <Field id="time" label="Start time"><input id="time" name="time" type="time" required defaultValue={d.time} step={300} className={inputClass} /></Field>
       <Field id="duration" label="Minutes"><input id="duration" name="duration" type="number" min={10} max={600} required defaultValue={d.duration ?? 50} className={inputClass} /></Field>
       <Field id="capacity" label="Spots"><input id="capacity" name="capacity" type="number" min={1} max={100} required defaultValue={d.capacity ?? 3} className={inputClass} /></Field>
-      <div className="col-span-2"><Field id="price" label="Price (€)" hint="Leave empty to use the class type's price. For events, the event fee."><input id="price" name="price" inputMode="decimal" defaultValue={d.price} className={inputClass} /></Field></div>
+      <div className="col-span-2"><Field id="price" label="Price (€)" hint="For events, the event fee: 0 makes it free (booked in one tap, no payment). For classes, leave empty."><input id="price" name="price" inputMode="decimal" defaultValue={d.price} className={inputClass} /></Field></div>
       <div className="col-span-2"><Field id="title" label="Title (events)" hint="e.g. SUP Pilates or Brunch & Pilates. Leave empty for regular classes."><input id="title" name="title" defaultValue={d.title ?? ""} className={inputClass} /></Field></div>
       <div className="col-span-2"><Field id="location" label="Location"><input id="location" name="location" defaultValue={d.location ?? ""} className={inputClass} /></Field></div>
       <div className="col-span-2"><Field id="description" label="Description"><textarea id="description" name="description" rows={3} defaultValue={d.description ?? ""} className={`${inputClass} py-3`} /></Field></div>
@@ -30,6 +30,9 @@ export function SessionFields({ types, d = {}, event = false }: { types: Type[];
           </Checkbox>
           <Field id="what_to_bring" label="What to bring (optional)" hint="One item per line. Leave empty to hide the section.">
             <textarea id="what_to_bring" name="what_to_bring" rows={3} defaultValue={d.what_to_bring ?? ""} className={`${inputClass} py-3`} />
+          </Field>
+          <Field id="signup_question" label="Question for people booking (optional)" hint="e.g. Any dietary requirements? Their answers show in the list of people booked.">
+            <input id="signup_question" name="signup_question" maxLength={200} defaultValue={d.signup_question ?? ""} className={inputClass} />
           </Field>
           <Field id="event_policy" label="Event terms (optional)" hint="Payment, refunds, weather… Shown instead of the studio's cancellation policy.">
             <textarea id="event_policy" name="event_policy" rows={3} defaultValue={d.event_policy ?? ""} className={`${inputClass} py-3`} />

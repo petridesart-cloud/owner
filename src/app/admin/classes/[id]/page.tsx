@@ -20,7 +20,7 @@ export const dynamic = "force-dynamic";
 export default async function SessionAdmin({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { data: s } = await db().from("class_sessions")
-    .select("*, class_types(*), bookings!bookings_session_id_fkey(id, status, paid_with, source, checked_in_at, created_at, payment_id, profiles(id, full_name, email, phone, photo_consent, health_notes(note, injuries, medication, parq_yes, conditions, details, pregnancy, pregnancy_weeks, postpartum_months, bp_meds, clearance_needed, clearance_received_at))), waitlist_entries(id, status, created_at, offer_expires_at, profiles(id, full_name))")
+    .select("*, class_types(*), bookings!bookings_session_id_fkey(id, status, paid_with, source, checked_in_at, answer, note, created_at, payment_id, profiles(id, full_name, email, phone, photo_consent, health_notes(note, injuries, medication, parq_yes, conditions, details, pregnancy, pregnancy_weeks, postpartum_months, bp_meds, clearance_needed, clearance_received_at))), waitlist_entries(id, status, created_at, offer_expires_at, profiles(id, full_name))")
     .eq("id", id).maybeSingle();
   if (!s) notFound();
   const [{ data: types }, { data: clients }] = await Promise.all([
@@ -58,6 +58,8 @@ export default async function SessionAdmin({ params }: { params: Promise<{ id: s
                   {b.profiles?.photo_consent === "no_face" && <span className="ml-1 rounded-full bg-ink/80 px-2 py-0.5 font-medium text-paper">No face</span>}
                 </p>
                 {b.paid_with === "pay_at_studio" && b.payment_id && <div className="mt-1.5"><MarkPaid paymentId={b.payment_id} label={b.profiles?.full_name ?? "booking"} /></div>}
+                {b.answer && <p className="mt-1 text-xs text-ink"><span className="text-ink-soft">{s.signup_question ?? "Answer"}:</span> {b.answer}</p>}
+                {b.note && <p className="mt-1 text-xs text-ink"><span className="text-ink-soft">Note:</span> {b.note}</p>}
                 <HealthInfo h={b.profiles?.health_notes} />
               </div>
               {b.status === "confirmed" && s.status === "scheduled" && <RosterActions bookingId={b.id} sessionId={s.id} name={b.profiles?.full_name ?? "client"} past={past} />}
@@ -88,17 +90,25 @@ export default async function SessionAdmin({ params }: { params: Promise<{ id: s
               </select>
             </Field>
             <details className="rounded-2xl border border-line px-4 py-2">
-              <summary className="min-h-10 cursor-pointer content-center text-sm font-medium">…or a new client</summary>
+              <summary className="min-h-10 cursor-pointer content-center text-sm font-medium">…or someone new</summary>
               <div className="mt-2 space-y-3 pb-2">
-                <Field id="full_name" label="Name"><input id="full_name" name="full_name" className={inputClass} /></Field>
-                <Field id="email" label="Email (optional)"><input id="email" name="email" type="email" className={inputClass} /></Field>
-                <Field id="phone" label="Phone (optional)"><input id="phone" name="phone" type="tel" className={inputClass} /></Field>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field id="first_name" label="Name"><input id="first_name" name="first_name" autoComplete="off" className={inputClass} /></Field>
+                  <Field id="last_name" label="Surname"><input id="last_name" name="last_name" autoComplete="off" className={inputClass} /></Field>
+                </div>
+                <Field id="phone" label="Phone"><input id="phone" name="phone" type="tel" className={inputClass} /></Field>
+                <Field id="email" label="Email" hint="So they get the confirmation and can sign in later with this email."><input id="email" name="email" type="email" className={inputClass} /></Field>
               </div>
             </details>
+            <Field id="note" label="Note (optional)" hint={s.signup_question ? `e.g. their answer to: ${s.signup_question}` : "Anything you need to remember for this booking."}>
+              <input id="note" name="note" maxLength={300} className={inputClass} />
+            </Field>
             <fieldset className="space-y-1">
               <legend className="mb-1 text-sm font-medium">Payment</legend>
               <label className="flex min-h-10 items-center gap-2 text-sm"><input type="radio" name="mode" value="manual" defaultChecked className="size-4 accent-ink" /> Paid / settled outside the app</label>
-              <label className="flex min-h-10 items-center gap-2 text-sm"><input type="radio" name="mode" value="credit" className="size-4 accent-ink" /> Use one of their credits</label>
+              {s.class_types?.credit_kind && <label className="flex min-h-10 items-center gap-2 text-sm"><input type="radio" name="mode" value="credit" className="size-4 accent-ink" /> Use one of their package classes</label>}
+              <label className="flex min-h-10 items-center gap-2 text-sm"><input type="radio" name="mode" value="unpaid" className="size-4 accent-ink" /> Not paid yet (shows under Awaiting payment)</label>
+              <label className="flex min-h-10 items-center gap-2 text-sm"><input type="radio" name="mode" value="free" className="size-4 accent-ink" /> Free</label>
             </fieldset>
             <Checkbox id="notify" name="notify">Email them a booking confirmation</Checkbox>
           </ActionForm>
@@ -111,7 +121,7 @@ export default async function SessionAdmin({ params }: { params: Promise<{ id: s
           <SessionFields types={types ?? []} d={{
             class_type_id: s.class_type_id, date: dayKey(s.starts_at), time: time(s.starts_at), duration: mins, capacity: s.capacity,
             price: s.price_cents != null ? (s.price_cents / 100).toFixed(2) : "", title: s.title, location: s.location, description: s.description,
-            clients_only: s.clients_only, what_to_bring: s.what_to_bring, event_policy: s.event_policy, recap: s.recap,
+            clients_only: s.clients_only, what_to_bring: s.what_to_bring, event_policy: s.event_policy, recap: s.recap, signup_question: s.signup_question,
           }} event={s.class_types?.kind === "event"} />
         </ActionForm>
       </section>

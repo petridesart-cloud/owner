@@ -1,7 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { getViewer } from "@/lib/auth";
-import { bookAtStudio, bookSingle, bookWithCredit, bookWithPayment, joinWaitlist, leaveWaitlist } from "@/lib/booking";
+import { bookAtStudio, bookFree, bookSingle, bookWithCredit, bookWithPayment, joinWaitlist, leaveWaitlist, saveAnswer } from "@/lib/booking";
 import type { ActionResult } from "@/lib/errors";
 import { TOO_MANY, bookingLimited } from "@/lib/rate-limit";
 
@@ -16,15 +16,17 @@ async function onboardedProfile() {
 }
 
 export async function bookAction(
-  sessionId: string, method: "credit" | "pay" | "studio" | "trial" | "drop_in", payBy: "cash" | "revolut" = "cash",
+  sessionId: string, method: "credit" | "pay" | "studio" | "trial" | "drop_in" | "free", payBy: "cash" | "revolut" = "cash", answer = "",
 ): Promise<ActionResult<{ redirect: string }>> {
   const v = await onboardedProfile();
   if ("error" in v) return { ok: false, error: v.error! };
   if (payBy !== "cash" && payBy !== "revolut") return { ok: false, error: "Please choose cash or Revolut." };
   const res = method === "credit" ? await bookWithCredit(v.profile, sessionId)
     : method === "studio" ? await bookAtStudio(v.profile, sessionId)
+    : method === "free" ? await bookFree(v.profile, sessionId)
     : method === "trial" || method === "drop_in" ? await bookSingle(v.profile, sessionId, method, payBy)
     : await bookWithPayment(v.profile, sessionId);
+  if (res.ok && typeof answer === "string") await saveAnswer(v.profile.id, sessionId, answer);
   revalidatePath("/schedule");
   return res;
 }

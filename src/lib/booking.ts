@@ -130,6 +130,24 @@ export async function bookSingle(profile: Profile, sessionId: string, mode: "tri
   return { ok: true, data: { redirect: `/bookings/${bookingId}/confirmed` } };
 }
 
+/** A free event (price €0): booked straight away, no payment question. The database refuses it if the event isn't free. */
+export async function bookFree(profile: Profile, sessionId: string): Promise<ActionResult<{ redirect: string }>> {
+  const { data, error } = await db().rpc("book_session", { p_profile: profile.id, p_session: sessionId, p_mode: "free" });
+  if (error) return { ok: false, error: friendlyError(error) };
+  const bookingId = (data as { booking_id: string }).booking_id;
+  const s = await sessionInfo(sessionId);
+  await notify({ profileId: profile.id, email: profile.email, phone: profile.phone }, "booking_confirmed",
+    { name: profile.full_name ?? undefined, ...tmpl(s) }, { bookingId, sessionId });
+  return { ok: true, data: { redirect: `/bookings/${bookingId}/confirmed` } };
+}
+
+/** Their answer to the event's question (e.g. dietary needs), kept on the booking for the studio. */
+export async function saveAnswer(profileId: string, sessionId: string, answer: string) {
+  const text = answer.trim().slice(0, 500);
+  if (!text) return;
+  await db().from("bookings").update({ answer: text }).eq("session_id", sessionId).eq("profile_id", profileId).in("status", ["confirmed", "held"]);
+}
+
 /**
  * Buy a class pack or monthly package. With online payments off (default while the
  * studio isn't registered) this records a request to pay at the studio; the admin's

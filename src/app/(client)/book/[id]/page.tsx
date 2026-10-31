@@ -100,7 +100,7 @@ export default async function BookPage({ params, searchParams }: { params: Promi
           : Promise.resolve({ data: null }),
       ])
     : [{ data: null }, { data: null }];
-  const singles = unpaid ? [] : c.kind === "event"
+  const singles = unpaid && !(c.kind === "event" && c.price_cents === 0) ? [] : c.kind === "event"
     ? [{ mode: "drop_in" as const, label: "Reserve your spot", price: eur(c.price_cents) }]
     : (singleProducts ?? []).filter((p) => p.tag === "drop_in" || trialOk)
         .map((p) => ({ mode: p.tag as "trial" | "drop_in", label: p.tag === "trial" ? "Book your trial" : "Drop-in", price: eur(p.price_cents) }));
@@ -206,7 +206,7 @@ export default async function BookPage({ params, searchParams }: { params: Promi
                 <Notice>Your package is valid until {longDate(new Date(new Date(usable!.latest_expiry!).getTime() - 1))}, so this class is after it. A new package will cover it.</Notice>
               )}
               {requestedPack && <Notice>Your package request is awaiting payment. As soon as it&apos;s confirmed you can book this class with it.</Notice>}
-              {unpaid && (
+              {unpaid && !(c.kind === "event" && c.price_cents === 0) && (
                 <Notice>
                   You have a class waiting for payment ({unpaid.class_sessions.title ?? unpaid.class_sessions.class_types?.name}, {longDate(unpaid.class_sessions.starts_at)}).
                   Once it&apos;s paid you can reserve another, or get a package.
@@ -221,6 +221,7 @@ export default async function BookPage({ params, searchParams }: { params: Promi
                   mode="book" sessionId={id} priceLabel={eur(c.price_cents)} credits={creditCount}
                   creditKind={c.credit_kind} creditCost={ctype?.credit_cost ?? 1} offered={offered}
                   online={settings.online_payments_enabled} payLater={settings.allow_pay_later} singles={singles}
+                  free={c.kind === "event" && c.price_cents === 0} question={ev?.signup_question}
                 />
               )}
               {c.credit_kind && creditCount === 0 && !requestedPack && (
@@ -240,7 +241,7 @@ function PriceSummary({ price, settings, event = false, policy = null }: { price
     <div className="rounded-2xl border border-line bg-paper p-4 text-sm">
       <div className="flex items-baseline justify-between">
         <span className="text-ink">{event ? "Event fee" : "Single class"}</span>
-        <span className="font-serif text-2xl text-ink">{eur(price)}</span>
+        <span className="font-serif text-2xl text-ink">{price === 0 ? "Free" : eur(price)}</span>
       </div>
       {vat && <p className="mt-0.5 text-right text-xs text-ink-soft">{vat}</p>}
       {event && policy ? (

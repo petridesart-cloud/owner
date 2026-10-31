@@ -20,7 +20,7 @@ export function EventCard({ e, cover, booked, clientsOnly }: { e: Availability; 
           {e.location && <p className="mt-2 flex items-center gap-1.5 text-sm text-ink-soft"><MapPin aria-hidden size={14} />{e.location}</p>}
           <div className="mt-4 flex flex-wrap items-center gap-1.5">
             {booked ? <Badge tone="booked">You&apos;re booked</Badge>
-              : e.spots_left ? <Badge tone="open">{e.spots_left} of {e.capacity} spots left · {eur(e.price_cents)}</Badge>
+              : e.spots_left ? <Badge tone="open">{e.spots_left} of {e.capacity} spots left · {e.price_cents === 0 ? "Free" : eur(e.price_cents)}</Badge>
               : <Badge tone="waitlist">Full · Join waitlist</Badge>}
             {clientsOnly && <Badge tone="plain">Clients only</Badge>}
             <ArrowRight aria-hidden size={17} className="ml-auto text-ink" />

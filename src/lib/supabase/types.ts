@@ -55,6 +55,7 @@ export type Database = {
       };
       bookings: {
         Row: {
+          answer: string | null;
           cancelled_at: string | null;
           checked_in_at: string | null;
           confirmed_at: string | null;
@@ -64,6 +65,7 @@ export type Database = {
           hold_expires_at: string | null;
           id: string;
           late_refund_pending: boolean;
+          note: string | null;
           paid_with: Database["public"]["Enums"]["paid_with"] | null;
           payment_id: string | null;
           profile_id: string;
@@ -73,6 +75,7 @@ export type Database = {
         };
         ComputedFields: never;
         Insert: {
+          answer?: string | null;
           cancelled_at?: string | null;
           checked_in_at?: string | null;
           confirmed_at?: string | null;
@@ -82,6 +85,7 @@ export type Database = {
           hold_expires_at?: string | null;
           id?: string;
           late_refund_pending?: boolean;
+          note?: string | null;
           paid_with?: Database["public"]["Enums"]["paid_with"] | null;
           payment_id?: string | null;
           profile_id: string;
@@ -90,6 +94,7 @@ export type Database = {
           status: Database["public"]["Enums"]["booking_status"];
         };
         Update: {
+          answer?: string | null;
           cancelled_at?: string | null;
           checked_in_at?: string | null;
           confirmed_at?: string | null;
@@ -99,6 +104,7 @@ export type Database = {
           hold_expires_at?: string | null;
           id?: string;
           late_refund_pending?: boolean;
+          note?: string | null;
           paid_with?: Database["public"]["Enums"]["paid_with"] | null;
           payment_id?: string | null;
           profile_id?: string;
@@ -151,6 +157,7 @@ export type Database = {
           location: string | null;
           price_cents: number | null;
           recap: string | null;
+          signup_question: string | null;
           starts_at: string;
           status: Database["public"]["Enums"]["session_status"];
           template_id: string | null;
@@ -171,6 +178,7 @@ export type Database = {
           location?: string | null;
           price_cents?: number | null;
           recap?: string | null;
+          signup_question?: string | null;
           starts_at: string;
           status?: Database["public"]["Enums"]["session_status"];
           template_id?: string | null;
@@ -190,6 +198,7 @@ export type Database = {
           location?: string | null;
           price_cents?: number | null;
           recap?: string | null;
+          signup_question?: string | null;
           starts_at?: string;
           status?: Database["public"]["Enums"]["session_status"];
           template_id?: string | null;

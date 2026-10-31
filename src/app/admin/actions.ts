@@ -5,7 +5,7 @@ import { z } from "zod";
 import { requireAdmin } from "@/lib/auth";
 import { env } from "@/lib/env";
 import { db } from "@/lib/supabase/admin";
-import { cancelBooking, cancelSession, notifyOffers, onPaymentPaid, policyLine, runTick, sessionInfo } from "@/lib/booking";
+import { EVENT_POLICY, cancelBooking, cancelSession, notifyOffers, onPaymentPaid, policyLine, runTick, sessionInfo } from "@/lib/booking";
 import { notify } from "@/lib/notifications";
 import { applyRecurring } from "@/lib/recurring";
 import { friendlyError, type ActionResult } from "@/lib/errors";
@@ -39,37 +39,46 @@ export async function adminCancelBooking(bookingId: string, sessionId: string): 
 }
 
 const NewClient = z.object({
-  full_name: z.string().trim().min(2, "Name is required"),
+  first_name: z.string().trim().min(1, "Name is required").max(60),
+  last_name: z.string().trim().max(60).optional(),
   email: z.string().trim().toLowerCase().email().optional().or(z.literal("")),
-  phone: z.string().trim().optional(),
+  phone: z.string().trim().max(30).optional(),
 });
 
+/** Add someone to a class or event by hand (from DMs or the phone): an existing client, or someone new with their details. */
 export async function manualBook(sessionId: string, _: ActionResult, form: FormData): Promise<ActionResult> {
   await admin("manual_book", { sessionId });
   let profileId = String(form.get("profile_id") ?? "");
   if (!profileId) {
-    const parsed = NewClient.safeParse({ full_name: form.get("full_name"), email: form.get("email") ?? "", phone: form.get("phone") ?? "" });
-    if (!parsed.success) return { ok: false, error: "Pick a client or enter at least a name." };
+    const parsed = NewClient.safeParse({ first_name: form.get("first_name") ?? "", last_name: form.get("last_name") ?? "", email: form.get("email") ?? "", phone: form.get("phone") ?? "" });
+    if (!parsed.success) return { ok: false, error: "Pick a client, or enter at least the name of someone new." };
+    const { first_name, last_name, phone } = parsed.data;
     const email = parsed.data.email || null;
     const existing = email ? (await db().from("profiles").select("id").ilike("email", email).is("deleted_at", null).maybeSingle()).data : null;
     if (existing) profileId = existing.id;
     else {
-      const { data, error } = await db().from("profiles").insert({ full_name: parsed.data.full_name, email, phone: parsed.data.phone || null }).select("id").single();
-      if (error) return { ok: false, error: "Couldn't create the client." };
+      const { data, error } = await db().from("profiles").insert({
+        first_name, last_name: last_name || null, full_name: [first_name, last_name].filter(Boolean).join(" "), email, phone: phone || null,
+      }).select("id").single();
+      if (error) return { ok: false, error: "Couldn't add them. Is that email already used by someone else?" };
       profileId = data.id;
     }
   }
-  const mode = form.get("mode") === "credit" ? "credit" : "manual";
+  const choice = String(form.get("mode") ?? "manual");
+  const mode = choice === "credit" ? "credit" : choice === "unpaid" ? "pay_at_studio" : choice === "free" ? "free" : "manual";
   const { data, error } = await db().rpc("book_session", { p_profile: profileId, p_session: sessionId, p_mode: mode, p_source: "manual" });
   if (error) return { ok: false, error: friendlyError(error) };
+  const note = String(form.get("note") ?? "").trim().slice(0, 300);
+  if (note) await db().from("bookings").update({ note }).eq("id", (data as { booking_id: string }).booking_id);
   if (form.get("notify") === "on") {
     const [{ data: p }, s] = await Promise.all([db().from("profiles").select("*").eq("id", profileId).single(), sessionInfo(sessionId)]);
     if (p) await notify({ profileId: p.id, email: p.email, phone: p.phone }, "booking_confirmed",
-      { name: p.full_name ?? undefined, className: s.name, when: spokenDateTime(s.starts_at), location: s.where, policy: policyLine(s.cancelBy, s.cutoff) },
+      { name: p.full_name ?? undefined, className: s.name, when: spokenDateTime(s.starts_at), location: s.where,
+        policy: s.type.kind === "event" ? s.event_policy ?? EVENT_POLICY : policyLine(s.cancelBy, s.cutoff) },
       { bookingId: (data as { booking_id: string }).booking_id, sessionId });
   }
   revalidatePath(`/admin/classes/${sessionId}`);
-  return { ok: true, message: "Added to class." };
+  return { ok: true, message: mode === "pay_at_studio" ? "Added. It's under Awaiting payment on Today until you mark it paid." : "Added." };
 }
 
 // ── Classes ────────────────────────────────────────────────────────────
@@ -86,6 +95,7 @@ const SessionForm = z.object({
   what_to_bring: z.string().trim().max(600).optional(),
   event_policy: z.string().trim().max(1500).optional(),
   recap: z.string().trim().max(600).optional(),
+  signup_question: z.string().trim().max(200).optional(),
 });
 
 function sessionRow(form: FormData) {
@@ -105,13 +115,22 @@ function sessionRow(form: FormData) {
     what_to_bring: p.data.what_to_bring || null,
     event_policy: p.data.event_policy || null,
     recap: p.data.recap || null,
+    signup_question: p.data.signup_question || null,
   };
+}
+
+/** Events have no price on their type: each event needs its own fee (0 = free). */
+async function eventNeedsFee(row: { class_type_id: string; price_cents: number | null }) {
+  if (row.price_cents != null) return false;
+  const { data } = await db().from("class_types").select("kind").eq("id", row.class_type_id).single();
+  return data?.kind === "event";
 }
 
 export async function createSession(_: ActionResult, form: FormData): Promise<ActionResult> {
   await admin("create_session");
   const row = sessionRow(form);
   if (!row) return { ok: false, error: "Please check the date, time, duration and capacity." };
+  if (await eventNeedsFee(row)) return { ok: false, error: "Set the event fee (0 for a free event)." };
   const { data, error } = await db().from("class_sessions").insert(row).select("id").single();
   if (error) return { ok: false, error: error.code === "23505" ? "A class of that type already exists at that time." : "Couldn't create the class." };
   redirect(`/admin/classes/${data.id}`);
@@ -121,6 +140,7 @@ export async function updateSession(sessionId: string, _: ActionResult, form: Fo
   await admin("update_session", { sessionId });
   const row = sessionRow(form);
   if (!row) return { ok: false, error: "Please check the fields." };
+  if (await eventNeedsFee(row)) return { ok: false, error: "Set the event fee (0 for a free event)." };
   const { count } = await db().from("bookings").select("id", { count: "exact", head: true }).eq("session_id", sessionId).eq("status", "confirmed");
   if ((count ?? 0) > row.capacity) return { ok: false, error: `${count} people are booked, so capacity can't go below that.` };
   const { error } = await db().from("class_sessions").update(row).eq("id", sessionId);
@@ -449,61 +469,89 @@ export async function saveSettings(_: ActionResult, form: FormData): Promise<Act
   return { ok: true, message: "Settings saved." };
 }
 
+/**
+ * A class type is what appears on the schedule and in the timetable (e.g. "Pre-natal"), and says which
+ * package pays for it. No price: prices come from packages, trials and drop-ins. Events have no
+ * capacity, length, price or credits here: each event sets its own.
+ */
 export async function saveClassType(id: string | null, _: ActionResult, form: FormData): Promise<ActionResult> {
   await admin("save_class_type", { id });
   const name = String(form.get("name") ?? "").trim();
   const kind = String(form.get("kind")) as "reformer" | "mat" | "event";
-  if (!name || !["reformer", "mat", "event"].includes(kind)) return { ok: false, error: "Name and kind are required." };
+  if (!name || !["reformer", "mat", "event"].includes(kind)) return { ok: false, error: "Name and type are required." };
+  const isEvent = kind === "event";
   const row = {
     name, kind,
-    slug: id ? undefined : name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") + "-" + Date.now().toString(36),
-    credit_kind: kind === "event" ? null : kind,
-    default_capacity: Number(form.get("default_capacity")),
-    default_duration_minutes: Number(form.get("default_duration_minutes")),
-    price_cents: Math.round(Number(String(form.get("price")).replace(",", ".")) * 100),
-    credit_cost: Math.max(1, Math.min(10, Number(form.get("credit_cost")) || 1)),
+    credit_kind: isEvent ? null : kind,
     description: String(form.get("description") ?? "").trim() || null,
     default_location: String(form.get("default_location") ?? "").trim() || null,
     active: form.get("active") === "on",
+    ...(isEvent ? {} : {
+      default_capacity: Number(form.get("default_capacity")),
+      default_duration_minutes: Number(form.get("default_duration_minutes")),
+      credit_cost: Math.max(1, Math.min(10, Number(form.get("credit_cost")) || 1)),
+    }),
   };
-  const { error } = id ? await db().from("class_types").update({ ...row, slug: undefined }).eq("id", id) : await db().from("class_types").insert({ ...row, slug: row.slug! });
-  if (error) return { ok: false, error: "Couldn't save. Check capacity (1–100), duration and price." };
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") + "-" + Date.now().toString(36);
+  const { error } = id
+    ? await db().from("class_types").update(row).eq("id", id)
+    : await db().from("class_types").insert({ ...row, slug, price_cents: 0, default_capacity: row.default_capacity ?? 10, default_duration_minutes: row.default_duration_minutes ?? 90 });
+  if (error) return { ok: false, error: "Couldn't save. Check the spots (1–100) and minutes." };
   revalidatePath("/admin/settings");
   return { ok: true, message: "Saved." };
 }
 
+const PackageForm = z.object({
+  credit_kind: z.enum(["reformer", "mat"]),
+  credits: z.coerce.number().int().min(1).max(200),
+  months: z.coerce.number().int().min(1).max(12),
+  validity_days: z.coerce.number().int().min(1).max(400),
+  price: z.string().trim().regex(/^\d+([.,]\d{1,2})?$/),
+});
+
+/** A package's details and price (packages, trials and drop-ins all live in one list). */
 export async function saveProduct(id: string, _: ActionResult, form: FormData): Promise<ActionResult> {
   await admin("save_product", { id });
+  const cents = Math.round(Number(String(form.get("price")).replace(",", ".")) * 100);
+  if (!Number.isFinite(cents) || cents < 0 || cents > 1_000_000) return { ok: false, error: "Please check the price (numbers only, e.g. 130)." };
+  const { data: cur } = await db().from("products").select("tag, credit_kind").eq("id", id).single();
+  const credits = Number(form.get("credits"));
+  const months = Number(form.get("months")) || null;
   const { error } = await db().from("products").update({
-    name: String(form.get("name") ?? "").trim(),
-    credits: Number(form.get("credits")),
-    price_cents: Math.round(Number(String(form.get("price")).replace(",", ".")) * 100),
-    validity_days: Number(form.get("validity_days")) || null,
-    period_days: Number(form.get("period_days")) || null,
+    price_cents: cents,
     description: String(form.get("description") ?? "").trim() || null,
     active: form.get("active") === "on",
-    ...(form.has("per_week") ? { per_week: Number(form.get("per_week")) || null, months: Number(form.get("months")) || null } : {}),
+    ...(cur?.tag === "package" ? {
+      credits, months, validity_days: Number(form.get("validity_days")) || null,
+      per_week: months ? Math.max(1, Math.round(credits / (4 * months))) : null,
+      // The name follows the details: "Reformer · 8 classes · 1 month".
+      name: `${cur.credit_kind === "mat" ? "Mat" : "Reformer"} · ${credits} classes · ${months} month${months === 1 ? "" : "s"}`,
+    } : { name: String(form.get("name") ?? "").trim() || undefined }),
   }).eq("id", id);
   if (error) return { ok: false, error: "Couldn't save." };
   revalidatePath("/admin/settings");
-  return { ok: true, message: "Saved." };
+  revalidatePath("/packs");
+  return { ok: true, message: "Saved. Clients see it straight away." };
 }
 
-/** The Package prices grid: one price per product. */
-export async function savePrices(_: ActionResult, form: FormData): Promise<ActionResult> {
-  await admin("save_prices");
-  const updates: { id: string; cents: number }[] = [];
-  for (const [k, v] of form.entries()) {
-    if (!k.startsWith("price_")) continue;
-    const id = k.slice(6);
-    const cents = Math.round(Number(String(v).replace(",", ".").replace("€", "")) * 100);
-    if (!/^[0-9a-f-]{36}$/.test(id) || !Number.isFinite(cents) || cents < 0 || cents > 1_000_000) return { ok: false, error: "Please check the prices (numbers only, e.g. 130)." };
-    updates.push({ id, cents });
-  }
-  for (const u of updates) await db().from("products").update({ price_cents: u.cents }).eq("id", u.id);
+/** A new package on the Packages page. */
+export async function addPackage(_: ActionResult, form: FormData): Promise<ActionResult> {
+  await admin("add_package");
+  const p = PackageForm.safeParse(Object.fromEntries(form));
+  if (!p.success) return { ok: false, error: "Please check the classes, months, days valid and price." };
+  const { credit_kind, credits, months, validity_days } = p.data;
+  const { data: last } = await db().from("products").select("sort_order").order("sort_order", { ascending: false }).limit(1).maybeSingle();
+  const { error } = await db().from("products").insert({
+    kind: "pack", tag: "package", credit_kind, credits, months, validity_days, is_group: true, active: true,
+    per_week: Math.max(1, Math.round(credits / (4 * months))),
+    price_cents: Math.round(Number(p.data.price.replace(",", ".")) * 100),
+    name: `${credit_kind === "mat" ? "Mat" : "Reformer"} · ${credits} classes · ${months} month${months === 1 ? "" : "s"}`,
+    sort_order: (last?.sort_order ?? 0) + 1,
+  });
+  if (error) return { ok: false, error: "Couldn't add the package." };
   revalidatePath("/admin/settings");
   revalidatePath("/packs");
-  return { ok: true, message: "Prices saved." };
+  return { ok: true, message: "Package added. Clients see it on the Packages page." };
 }
 
 export async function toggleCompliance(key: string, done: boolean) {

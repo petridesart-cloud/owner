@@ -36,11 +36,10 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
           <li key={c.id}>
             <Link href={`/admin/clients/${c.id}`} className="flex min-h-14 items-center justify-between gap-3 px-4 py-2.5 hover:bg-lilac-50">
               <span className="min-w-0">
-                <span className="block truncate font-medium text-ink">{name(c)}</span>
+                <span className="flex items-center gap-1.5 font-medium text-ink"><span className="truncate">{name(c)}</span>{birthday && <Cake aria-label="Birthday today" size={17} strokeWidth={1.6} className="shrink-0 text-ink" />}</span>
                 <span className="block truncate text-sm text-ink-soft">{c.phone ?? "no phone"}</span>
               </span>
               <span className="flex shrink-0 items-center gap-2">
-                {birthday && <Cake aria-label="Birthday today" size={20} className="text-plum-700" />}
                 <ChevronRight aria-hidden size={16} className="text-ink-soft" />
               </span>
             </Link>

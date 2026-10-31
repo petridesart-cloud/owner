@@ -80,11 +80,11 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
     <div className="space-y-5">
       <AdminTitle back="/admin/clients" title={c.full_name ?? "Client"}
         sub={<>{c.phone ?? "no phone"}<br />{c.email ?? "no email"}{c.deleted_at ? " · deleted" : ""}</>}
-        action={birthday ? <Cake aria-label="Birthday today" size={26} className="text-plum-700" /> : undefined} />
+        action={birthday ? <Cake aria-label="Birthday today" size={24} strokeWidth={1.6} className="text-ink" /> : undefined} />
 
       {birthday && (
         <section className="card border-plum-700/20 bg-lilac-50 px-5 py-4">
-          <h2 className="display mb-1 flex items-center gap-2 text-[0.95rem]"><Cake aria-hidden size={18} className="text-plum-700" />It&apos;s {first}&apos;s birthday</h2>
+          <h2 className="display mb-1 flex items-center gap-2 text-[0.95rem]"><Cake aria-hidden size={18} strokeWidth={1.6} className="text-ink" />It&apos;s {first}&apos;s birthday</h2>
           <p className="mb-3 text-sm text-ink-soft">Send them a birthday email. Change the words as you like.</p>
           <ActionForm action={sendBirthday.bind(null, id)} submit="Send birthday email" variant="soft">
             <label htmlFor="message" className="sr-only">Message</label>

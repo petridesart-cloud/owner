@@ -9,6 +9,10 @@ type Props =
       mode: "book"; sessionId: string; priceLabel: string; credits: number; creditKind: string | null; creditCost: number; online: boolean; payLater: boolean; offered?: boolean;
       /** Reserve now, pay by cash or Revolut: trial (first class of this type), drop-in, or a paid event. */
       singles?: { mode: "trial" | "drop_in"; label: string; price: string }[];
+      /** A free event (€0): one tap, no payment question. */
+      free?: boolean;
+      /** The event's question for people booking (e.g. dietary needs). */
+      question?: string | null;
     }
   | { mode: "waitlist"; sessionId: string }
   | { mode: "leave"; sessionId: string; entryId: string };
@@ -22,10 +26,11 @@ export function BookActions(props: Props) {
   const go = (url: string) => (url.startsWith("http") ? window.location.assign(url) : router.push(url));
 
   const [payBy, setPayBy] = useState<"cash" | "revolut">("cash");
-  const book = (method: "credit" | "pay" | "studio" | "trial" | "drop_in") =>
+  const [answer, setAnswer] = useState("");
+  const book = (method: "credit" | "pay" | "studio" | "trial" | "drop_in" | "free") =>
     start(async () => {
       setError(null);
-      const res = await bookAction(props.sessionId, method, payBy);
+      const res = await bookAction(props.sessionId, method, payBy, answer);
       if (!res.ok) { setError(res.error); router.refresh(); return; }
       go(res.data!.redirect);
     });
@@ -59,6 +64,22 @@ export function BookActions(props: Props) {
     );
   }
 
+  const question = props.question ? (
+    <div>
+      <label htmlFor="answer" className="mb-1.5 block text-sm font-medium text-ink">{props.question}</label>
+      <textarea id="answer" value={answer} onChange={(e) => setAnswer(e.target.value)} maxLength={500} rows={2}
+        className="w-full rounded-2xl border border-line bg-white px-4 py-3 text-[0.95rem] text-ink focus:border-plum-700 focus:outline-none focus:ring-2 focus:ring-lilac-300" />
+    </div>
+  ) : null;
+  if (props.free) {
+    return (
+      <div className="space-y-3">
+        {error && <Notice tone="error">{error}</Notice>}
+        {question}
+        <Button className="w-full" disabled={pending} onClick={() => book("free")}>{pending ? "Booking…" : "Book your free spot"}</Button>
+      </div>
+    );
+  }
   const canUseCredit = !!props.creditKind && props.credits >= props.creditCost;
   const classes = (n: number) => `${n} ${props.creditKind} class${n === 1 ? "" : "es"}`;
   const singles = !canUseCredit && !props.online ? props.singles ?? [] : [];
@@ -66,6 +87,7 @@ export function BookActions(props: Props) {
     return (
       <div className="space-y-3">
         {error && <Notice tone="error">{error}</Notice>}
+        {question}
         <fieldset>
           <legend className="mb-2 text-sm font-medium text-ink">How will you pay?</legend>
           <div className="grid grid-cols-2 gap-2">

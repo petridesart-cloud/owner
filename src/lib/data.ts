@@ -14,12 +14,12 @@ export async function availability(from: Date, to: Date): Promise<Availability[]
   return (data ?? []) as Availability[];
 }
 
-export type EventExtras = { clients_only: boolean; what_to_bring: string | null; event_policy: string | null; recap: string | null };
+export type EventExtras = { clients_only: boolean; what_to_bring: string | null; event_policy: string | null; recap: string | null; signup_question: string | null };
 
 /** Her per-event options (clients only, what to bring, own terms), keyed by session id. */
 export async function eventExtras(ids: string[]): Promise<Map<string, EventExtras>> {
   if (!ids.length) return new Map();
-  const { data } = await db().from("class_sessions").select("id, clients_only, what_to_bring, event_policy, recap").in("id", ids);
+  const { data } = await db().from("class_sessions").select("id, clients_only, what_to_bring, event_policy, recap, signup_question").in("id", ids);
   return new Map((data ?? []).map(({ id, ...x }) => [id, x]));
 }
 
