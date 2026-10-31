@@ -186,6 +186,7 @@ npm run db:types              # after schema changes
   - Her Revolut link, IBAN, original logo file and photos (she can upload them herself now).
   - Address, her full name, contact details.
 - **Her notes, round 3** (`docs/feedback/elysia-notes-3.md`): package names, home/studio simplified, waitlist 1h rule + grace period, Reformer-vs-Mat notice, fill rate %, her name, waitlist SMS switch, demo birthday (Sofia's birthday is always today in demo mode, set on each tick).
+- **Pre-launch check (31 Oct):** all tests green; every page loads on local, demo and real app; Supabase advisor fixes in `20261025001800` (remaining advisor notes are intended: server-only tables without policies, `is_admin`/`my_profile_id` used by RLS, `pg_net` in public, password check n/a with email codes).
 - **Hosting plan (owner's decision):** Vercel Hobby during the soft launch; upgrade `reform-studio` to Pro before the link goes in her Instagram bio (`docs/launch/0-checklist.md` step 6).
 - **Proposed v2:**
   - Wallet passes, auto-renewing memberships (code exists, flagged off), corporate accounts, referrals, gift vouchers.
