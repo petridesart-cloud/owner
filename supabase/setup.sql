@@ -4152,6 +4152,23 @@ create index if not exists event_access_profile_idx on public.event_access (prof
 create index if not exists class_sessions_template_idx on public.class_sessions (template_id);
 
 
+-- ===== 20261025001900_round4.sql =====
+-- Her notes, round 4.
+
+-- ── Passwords ───────────────────────────────────────────────────────────────
+-- Sign-in with email + password; the email is confirmed once with a code. The server needs to know
+-- whether a login already exists for an email (and whether it is confirmed / has a password) to
+-- handle existing code-only accounts and unfinished sign-ups.
+create or replace function public.auth_user_by_email(p_email text)
+returns table (id uuid, confirmed boolean, has_password boolean)
+language sql stable security definer set search_path = public, auth as $$
+  select u.id, u.email_confirmed_at is not null, coalesce(u.encrypted_password, '') <> ''
+    from auth.users u where lower(u.email) = lower(trim(p_email)) limit 1
+$$;
+revoke execute on function public.auth_user_by_email(text) from public, anon, authenticated;
+grant execute on function public.auth_user_by_email(text) to service_role;
+
+
 -- ===== seed.sql =====
 -- Demo data lives in public.seed_demo() (migration 20261011000400) so the admin
 -- "Reset demo data" button can rebuild it. Dates are relative to now().

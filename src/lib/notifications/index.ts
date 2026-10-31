@@ -35,7 +35,7 @@ async function deliver(
     .insert({
       // Login codes are never stored in the Outbox once real email is on (anyone reading it could sign in as the client).
       profile_id: to.profileId ?? null, channel, template, recipient, subject,
-      body: template === "login_code" && live ? "[sign-in code; not stored]" : body,
+      body: (template === "login_code" || template === "verify_email" || template === "reset_code") && live ? "[code; not stored]" : body,
       status: "logged", dedupe_key: opts.dedupeKey ? `${opts.dedupeKey}:${channel}` : null,
       booking_id: opts.bookingId ?? null, session_id: opts.sessionId ?? null,
     })

@@ -8,10 +8,11 @@ export { PHOTO_CONSENT, type PhotoConsent } from "@/lib/photo-consent";
 
 export const nameSchema = z.string().trim().min(1, "Please fill this in.").max(60);
 export const phoneSchema = z.string().trim().regex(/^\+?[0-9 ()-]{8,20}$/, "Please enter a valid phone number, e.g. +357 99 123456.");
-// Required (her answer, round 1). Ages 12–100.
+// Required (her answer, round 1). Clients are 18 or over (her answer, round 4).
 export const dobSchema = z.string({ error: "Please add your date of birth." }).trim()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Please add your date of birth.")
-  .refine((d) => d >= yearsAgo(100) && d <= yearsAgo(12), "Please check the date.");
+  .refine((d) => d >= yearsAgo(100), "Please check the date.")
+  .refine((d) => d <= yearsAgo(18), "Classes are for adults: you need to be 18 or over.");
 
 function yearsAgo(n: number) {
   const t = new Date();

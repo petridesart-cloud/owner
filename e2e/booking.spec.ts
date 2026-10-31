@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { openBookableClass, signIn, uniqueEmail, completeWelcome } from "./helpers";
+import { openBookableClass, signIn, signUp, uniqueEmail } from "./helpers";
 
 test("returning client books with a package class, adds to calendar, cancels and gets it back", async ({ page }) => {
   await signIn(page, "elena@example.com", "/bookings");
@@ -27,8 +27,7 @@ test("a new client without a package can book a trial (pay by Revolut) or get a 
   await openBookableClass(page);
   const url = new URL(page.url()).pathname;
   await page.getByRole("link", { name: "Secure your spot" }).click();
-  await signIn(page, uniqueEmail("nopack"), url);
-  await completeWelcome(page);
+  await signUp(page, uniqueEmail("nopack"), url);
   await expect(page.getByRole("button", { name: /Pay €/ })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Secure your package" })).toBeVisible();
   await page.getByText("Revolut", { exact: true }).click();

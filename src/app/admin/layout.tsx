@@ -13,7 +13,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <header className="glass sticky top-0 z-30 border-b border-line/70">
         <div className="mx-auto flex h-14 max-w-3xl items-center justify-between px-4">
           <Link href="/admin" className="flex items-center gap-2"><Wordmark className="text-[1.35rem]" /><span className="eyebrow">Studio</span></Link>
-          <Link href="/" className="inline-flex min-h-11 items-center rounded-full px-3 text-sm text-ink-soft hover:text-ink">View app ↗</Link>
+          <Link href="/" className="inline-flex min-h-11 items-center rounded-full px-3 text-sm text-ink-soft hover:text-ink">Client view ↗</Link>
         </div>
         <AdminNav />
       </header>

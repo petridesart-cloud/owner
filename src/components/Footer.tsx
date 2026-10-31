@@ -32,7 +32,7 @@ export async function Footer() {
           <><br />{b.email && <a className="underline underline-offset-4" href={`mailto:${b.email}`}>{b.email}</a>}{b.email && b.phone && " · "}{b.phone && <a className="underline underline-offset-4" href={`tel:${b.phone.replace(/\s/g, "")}`}>{b.phone}</a>}</>
         )}
       </address>
-      <p className="mt-4">© {new Date().getFullYear()} Re·Form Pilates Studio · Essential cookies only · <Link href="/contact" className="underline underline-offset-4">Contact</Link></p>
+      <p className="mt-4">© {new Date().getFullYear()} Re·Form Pilates Studio · Essential cookies only · <Link href="/contact" className="underline underline-offset-4">Contact</Link> · <Link href="/login?next=/admin" className="underline underline-offset-4">Studio sign-in</Link></p>
     </footer>
   );
 }

@@ -2,6 +2,8 @@ import { env } from "@/lib/env";
 
 export type TemplateName =
   | "login_code"
+  | "verify_email"
+  | "reset_code"
   | "booking_confirmed"
   | "reminder_24h"
   | "reminder_2h"
@@ -48,6 +50,20 @@ export function render(t: TemplateName, raw: TemplateData): Rendered {
         heading: "Your sign-in code",
         lines: [`Enter this code to continue: <strong style="font-size:28px;letter-spacing:6px">${d.code}</strong>`, "It expires in 10 minutes. If you didn't ask for it, you can ignore this email."],
         sms: `${d.code} is your Re·Form code. It expires in 10 minutes.`,
+      };
+    case "verify_email":
+      return {
+        subject: `${d.code} confirms your Re·Form account`,
+        heading: "Confirm your email",
+        lines: [`Welcome to Re·Form! Enter this code to finish creating your account: <strong style="font-size:28px;letter-spacing:6px">${d.code}</strong>`, "It expires in 10 minutes. If you didn't create an account, you can ignore this email."],
+        sms: `${d.code} confirms your Re·Form account.`,
+      };
+    case "reset_code":
+      return {
+        subject: `${d.code} resets your Re·Form password`,
+        heading: "Reset your password",
+        lines: [`Enter this code to choose a new password: <strong style="font-size:28px;letter-spacing:6px">${d.code}</strong>`, "It expires in 10 minutes. If you didn't ask for it, you can ignore this email: your password stays the same."],
+        sms: `${d.code} resets your Re·Form password.`,
       };
     case "booking_confirmed":
       return {

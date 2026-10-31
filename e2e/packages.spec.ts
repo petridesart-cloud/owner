@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { completeWelcome, signIn, uniqueEmail } from "./helpers";
+import { adminSignIn, signUp, uniqueEmail } from "./helpers";
 
 const ADMIN = process.env.E2E_ADMIN_EMAIL ?? "studio@example.com";
 const CODE = process.env.E2E_ADMIN_CODE ?? "24681357";
@@ -8,8 +8,7 @@ test("client requests a pack, studio marks it paid, client books with a class cr
   const email = uniqueEmail("pack");
   const name = `Pack Tester ${Date.now() % 10000}`;
   const client = await (await browser.newContext()).newPage();
-  await signIn(client, email, "/packs");
-  await completeWelcome(client, name);
+  await signUp(client, email, "/packs", name);
   await client.getByRole("group", { name: "Reformer packages, valid 30 days" }).getByText("4 classes", { exact: true }).click();
   await client.getByText("Cash", { exact: true }).click();
   await client.locator("#accept").check();
@@ -18,12 +17,7 @@ test("client requests a pack, studio marks it paid, client books with a class cr
   await expect(client.getByText("Awaiting payment")).toBeVisible();
 
   const admin = await (await browser.newContext()).newPage();
-  await admin.goto("/login");
-  await admin.getByLabel("Email").fill(ADMIN);
-  await admin.getByRole("button", { name: "Send my code" }).click();
-  await admin.getByLabel("Studio password").fill(CODE);
-  await admin.getByRole("button", { name: "Continue" }).click();
-  await expect(admin).toHaveURL(/\/admin/);
+  await adminSignIn(admin, ADMIN, CODE);
   const row = admin.getByRole("listitem").filter({ hasText: name });
   await row.getByRole("button", { name: "Cash" }).click();
   await expect(row).toHaveCount(0); // settled: leaves the "Awaiting payment" list

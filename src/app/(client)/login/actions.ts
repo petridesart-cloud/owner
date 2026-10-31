@@ -1,117 +1,189 @@
 "use server";
-import { createHash } from "node:crypto";
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { safeNext } from "@/lib/safe-next";
 import { z } from "zod";
 import { db } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
-import { emailLive, env } from "@/lib/env";
-import { notify } from "@/lib/notifications";
-import { ensureProfile } from "@/lib/auth";
+import { env } from "@/lib/env";
+import { getSettings } from "@/lib/auth";
 import { clientIp, rateLimited } from "@/lib/rate-limit";
+import { dobSchema, nameSchema, phoneSchema } from "@/lib/profile";
+import { DEMO_CLIENT_PASSWORD, authUser, isStudioAdmin, landing, onboard, profileFor, sendCode, type SignupDetails } from "@/lib/auth-flow";
 
-const sha = (s: string) => createHash("sha256").update(s).digest("hex");
 const Email = z.string().trim().toLowerCase().email();
+const Password = z.string().min(8, "Use at least 8 characters.").max(72, "That's too long (72 characters at most).");
 
-/** Admins: emails in ADMIN_EMAILS (bootstrap) plus anyone she added under Studio team. */
-async function isStudioAdmin(email: string) {
-  if (env.adminEmails.includes(email)) return true;
-  const { data } = await db().from("profiles").select("id").ilike("email", email).eq("role", "admin").is("deleted_at", null).maybeSingle();
-  return !!data;
+export type AuthState = { ok: boolean; step?: "code"; email?: string; demoCode?: string; error?: string; errors?: Record<string, string> };
+
+/** Sign in with a one-off code we generate (used after a code check, and for the demo accounts). */
+async function signInWithCode(email: string, token: string) {
+  const supabase = await supabaseServer();
+  const { data, error } = await supabase.auth.verifyOtp({ email, token, type: "email" });
+  return error || !data.user ? null : data.user;
 }
 
-export type RequestState = { ok: boolean; email?: string; error?: string; demoCode?: string; adminCode?: boolean };
-
-/**
- * Step 1: email a 6-digit code. We generate the code with Supabase Auth's admin
- * API and deliver it ourselves (Resend), so links never have to open in
- * Instagram's in-app browser. Rate limited per email and per IP.
- */
-export async function requestCode(_: RequestState, form: FormData): Promise<RequestState> {
-  const parsed = Email.safeParse(form.get("email"));
-  if (!parsed.success) return { ok: false, error: "Please enter a valid email address." };
-  const email = parsed.data;
-  if (!env.demoMode && !emailLive()) {
-    console.error("Sign-in requested but email sending isn't configured (RESEND_API_KEY)");
-    return { ok: false, error: "Sign-in by email isn't switched on yet. Please message the studio on Instagram to book." };
-  }
-
-  const h = await headers();
-  const ip = (h.get("x-forwarded-for") ?? "").split(",")[0].trim() || "local";
-  const since = new Date(Date.now() - 15 * 60_000).toISOString();
-  const [byEmail, byIp] = await Promise.all([
-    db().from("otp_requests").select("id", { count: "exact", head: true }).eq("email_hash", sha(email)).gte("created_at", since),
-    db().from("otp_requests").select("id", { count: "exact", head: true }).eq("ip_hash", sha(ip)).gte("created_at", since),
-  ]);
-  if ((byEmail.count ?? 0) >= 5 || (byIp.count ?? 0) >= 20) {
-    return { ok: false, error: "Too many codes requested. Please wait 15 minutes and try again." };
-  }
-  await db().from("otp_requests").insert({ email_hash: sha(email), ip_hash: sha(ip) });
-
-  // Create the auth user on first visit (the DB trigger links any existing client record).
-  const created = await db().auth.admin.createUser({ email, email_confirm: true });
-  if (created.error && !/already/i.test(created.error.message)) {
-    console.error("createUser", created.error);
-    return { ok: false, error: "We couldn't start sign-in. Please try again." };
-  }
-  const { data, error } = await db().auth.admin.generateLink({ type: "magiclink", email });
-  const code = data?.properties?.email_otp;
-  if (error || !code) {
-    console.error("generateLink", error);
-    return { ok: false, error: "We couldn't create a code. Please try again." };
-  }
-
-  const { data: profile } = await db().from("profiles").select("id").ilike("email", email).maybeSingle();
-  const sent = await notify({ profileId: profile?.id, email }, "login_code", { code });
-  if (sent.email === "failed") return { ok: false, error: "We couldn't send the email just now. Please try again in a minute." };
-
-  // Demo mode shows client codes on screen. Never for admin emails: those need DEMO_ADMIN_CODE.
-  if (env.demoMode && (await isStudioAdmin(email))) return { ok: true, email, adminCode: true };
-  return { ok: true, email, demoCode: env.demoMode ? code : undefined };
+async function tooMany(email: string) {
+  const ip = await clientIp();
+  return (await rateLimited("signin", email, 10, 15)) || (await rateLimited("signin_ip", ip, 50, 15));
 }
 
-export type VerifyState = { ok: boolean; error?: string; redirect?: string };
+/** Sign in with email + password. The studio team lands in the studio. */
+export async function signIn(_: AuthState, form: FormData): Promise<AuthState> {
+  const email = Email.safeParse(form.get("email"));
+  const password = String(form.get("password") ?? "");
+  const next = String(form.get("next") ?? "/");
+  if (!email.success || !password) return { ok: false, error: "Enter your email and password." };
+  if (await tooMany(email.data)) return { ok: false, error: "Too many tries. Please wait 15 minutes, or reset your password." };
 
-/** Step 2: verify the code and start a session (httpOnly cookies). */
-export async function verifyCode(_: VerifyState, form: FormData): Promise<VerifyState> {
+  let user: { id: string; email?: string } | null = null;
+  if (env.demoMode && (await isStudioAdmin(email.data))) {
+    // Demo: the studio signs in with DEMO_ADMIN_CODE (no emails are sent in the demo).
+    if (env.demoAdminCode.length < 8 || password !== env.demoAdminCode) return { ok: false, error: "Email or password isn't right." };
+    await db().auth.admin.createUser({ email: email.data, email_confirm: true });
+    const link = await db().auth.admin.generateLink({ type: "magiclink", email: email.data });
+    user = await signInWithCode(email.data, link.data?.properties?.email_otp ?? "");
+  } else if (env.demoMode && password === DEMO_CLIENT_PASSWORD && email.data.endsWith("@example.com")) {
+    // Demo clients (elena@example.com…) share one password, shown on the sign-in page.
+    const { data: demo } = await db().from("profiles").select("id").ilike("email", email.data).is("deleted_at", null).maybeSingle();
+    if (!demo) return { ok: false, error: "Email or password isn't right." };
+    await db().auth.admin.createUser({ email: email.data, email_confirm: true });
+    const link = await db().auth.admin.generateLink({ type: "magiclink", email: email.data });
+    user = await signInWithCode(email.data, link.data?.properties?.email_otp ?? "");
+  } else {
+    const existing = await authUser(email.data);
+    if (existing && !existing.confirmed && existing.has_password) {
+      // Created an account but never confirmed the email: send a fresh code.
+      const sent = await sendCode(email.data, "verify_email");
+      return sent.ok ? { ok: true, step: "code", email: email.data, demoCode: sent.demoCode } : { ok: false, error: sent.error };
+    }
+    const supabase = await supabaseServer();
+    const { data, error } = await supabase.auth.signInWithPassword({ email: email.data, password });
+    if (error || !data.user) {
+      return {
+        ok: false,
+        error: existing && !existing.has_password
+          ? "This account doesn't have a password yet. Tap “Forgot password?” to set one."
+          : "Email or password isn't right.",
+      };
+    }
+    user = data.user;
+  }
+  if (!user) return { ok: false, error: "We couldn't sign you in. Please try again." };
+  const profile = await profileFor(user.id, email.data);
+  redirect(landing(profile, next));
+}
+
+/** Confirm the email of a new account (or one that wasn't confirmed) with the code we sent. */
+export async function confirmEmail(_: AuthState, form: FormData): Promise<AuthState> {
   const email = Email.safeParse(form.get("email"));
   const token = String(form.get("code") ?? "").replace(/\D/g, "");
-  const next = safeNext(String(form.get("next") ?? "/"));
-  if (!email.success || token.length < 6 || token.length > 12) return { ok: false, error: "Enter the code from your email." };
+  const next = String(form.get("next") ?? "/");
+  if (!email.success || token.length < 6 || token.length > 12) return { ok: false, step: "code", email: email.data, error: "Enter the code from your email." };
+  if (await tooMany(email.data)) return { ok: false, step: "code", email: email.data, error: "Too many tries. Please wait 15 minutes, then ask for a new code." };
+  const user = await signInWithCode(email.data, token);
+  if (!user) return { ok: false, step: "code", email: email.data, error: "That code didn't work or has expired. Check it, or ask for a new one." };
 
-  const ip = await clientIp();
-  let otp = token;
-  if (env.demoMode && (await isStudioAdmin(email.data))) {
-    if ((await rateLimited("admin_pw", email.data, 5, 15)) || (await rateLimited("admin_pw_ip", ip, 10, 15))) {
-      return { ok: false, error: "Too many tries. Please wait 15 minutes and try again." };
-    }
-    if (env.demoAdminCode.length < 8 || token !== env.demoAdminCode) {
-      return { ok: false, error: "That password isn't right." };
-    }
-    const link = await db().auth.admin.generateLink({ type: "magiclink", email: email.data });
-    otp = link.data?.properties?.email_otp ?? "";
+  let profile = await profileFor(user.id, email.data);
+  // Details typed when creating the account are kept on the login until the email is confirmed.
+  const meta = (user.user_metadata ?? {}) as Partial<SignupDetails> & { signup?: boolean };
+  if (profile && meta.signup && !profile.onboarded_at) {
+    profile = await onboard(profile, email.data, meta as SignupDetails, (await getSettings()).policy_version);
+    await db().auth.admin.updateUserById(user.id, { user_metadata: { signup: false } });
   }
-  if ((await rateLimited("verify", email.data, 10, 15)) || (await rateLimited("verify_ip", ip, 50, 15))) {
-    return { ok: false, error: "Too many tries. Please wait 15 minutes, then request a new code." };
-  }
-  const supabase = await supabaseServer();
-  const { data, error } = await supabase.auth.verifyOtp({ email: email.data, token: otp, type: "email" });
-  if (error || !data.user) return { ok: false, error: "That code didn't work or has expired. Check it, or request a new one." };
+  redirect(landing(profile, next));
+}
 
-  const profile = await ensureProfile(data.user.id, data.user.email);
-  if (profile && env.adminEmails.includes(email.data) && profile.role !== "admin") {
-    await db().from("profiles").update({ role: "admin" }).eq("id", profile.id);
-    profile.role = "admin";
+/** Ask for a new code (confirming an account). */
+export async function resendCode(_: AuthState, form: FormData): Promise<AuthState> {
+  const email = Email.safeParse(form.get("email"));
+  if (!email.success) return { ok: false, error: "Enter your email." };
+  const sent = await sendCode(email.data, "verify_email");
+  return sent.ok ? { ok: true, step: "code", email: email.data, demoCode: sent.demoCode } : { ok: false, step: "code", email: email.data, error: sent.error };
+}
+
+/** Forgot password, step 1: email a code. Says the same whether or not there's an account. */
+export async function requestReset(_: AuthState, form: FormData): Promise<AuthState> {
+  const email = Email.safeParse(form.get("email"));
+  if (!email.success) return { ok: false, error: "Enter the email you signed up with." };
+  if (env.demoMode && (await isStudioAdmin(email.data))) return { ok: false, error: "Demo: the studio signs in with the studio password." };
+  let existing = await authUser(email.data);
+  if (!existing) {
+    // A client the studio added (or imported), or a studio email from ADMIN_EMAILS: create their login now.
+    const { data: known } = await db().from("profiles").select("id").ilike("email", email.data).is("deleted_at", null).maybeSingle();
+    if (known || env.adminEmails.includes(email.data)) {
+      await db().auth.admin.createUser({ email: email.data, email_confirm: false });
+      existing = await authUser(email.data);
+    }
   }
-  // Redirect from the action itself: one navigation, no race with the login page re-rendering.
-  if (profile?.role === "admin" && next === "/") redirect("/admin");
-  if (!profile?.onboarded_at && profile?.role !== "admin") redirect(`/welcome?next=${encodeURIComponent(next)}`);
-  redirect(next);
+  if (!existing) return { ok: true, step: "code", email: email.data }; // don't reveal who has an account
+  const sent = await sendCode(email.data, "reset_code");
+  return sent.ok ? { ok: true, step: "code", email: email.data, demoCode: sent.demoCode } : { ok: false, error: sent.error };
+}
+
+/** Forgot password, step 2: the code plus a new password; signs them in. */
+export async function resetPassword(_: AuthState, form: FormData): Promise<AuthState> {
+  const email = Email.safeParse(form.get("email"));
+  const token = String(form.get("code") ?? "").replace(/\D/g, "");
+  const pw = Password.safeParse(String(form.get("password") ?? ""));
+  const next = String(form.get("next") ?? "/");
+  const back = { step: "code" as const, email: email.data };
+  if (!email.success || token.length < 6) return { ok: false, ...back, error: "Enter the code from your email." };
+  if (!pw.success) return { ok: false, ...back, errors: { password: pw.error.issues[0].message } };
+  if (pw.data !== String(form.get("confirm") ?? "")) return { ok: false, ...back, errors: { confirm: "The passwords don't match." } };
+  if (await tooMany(email.data)) return { ok: false, ...back, error: "Too many tries. Please wait 15 minutes, then ask for a new code." };
+  const user = await signInWithCode(email.data, token);
+  if (!user) return { ok: false, ...back, error: "That code didn't work or has expired. Check it, or ask for a new one." };
+  await db().auth.admin.updateUserById(user.id, { password: pw.data });
+  // Changing the password ends existing sessions, so sign in again with the new one.
+  await (await supabaseServer()).auth.signInWithPassword({ email: email.data, password: pw.data });
+  const profile = await profileFor(user.id, email.data);
+  redirect(landing(profile, next));
+}
+
+const Signup = z.object({
+  first_name: nameSchema, last_name: nameSchema, date_of_birth: dobSchema, email: Email, phone: phoneSchema, password: Password,
+});
+
+/** Create an account: details + password, then a one-time code confirms the email. */
+export async function signUp(_: AuthState, form: FormData): Promise<AuthState> {
+  const parsed = Signup.safeParse({
+    first_name: form.get("first_name"), last_name: form.get("last_name"), date_of_birth: form.get("date_of_birth") ?? "",
+    email: form.get("email"), phone: form.get("phone"), password: String(form.get("password") ?? ""),
+  });
+  const errors: Record<string, string> = {};
+  if (!parsed.success) for (const i of parsed.error.issues) errors[String(i.path[0])] ??= i.message;
+  if (String(form.get("password") ?? "") !== String(form.get("confirm") ?? "")) errors.confirm ??= "The passwords don't match.";
+  if (form.get("policy") !== "on") errors.policy = "Please accept the Studio Rules and Terms.";
+  if (form.get("fitness") !== "on") errors.fitness = "Please confirm the health declaration.";
+  if (Object.keys(errors).length || !parsed.success) return { ok: false, errors };
+  const d = parsed.data;
+  if (await tooMany(d.email)) return { ok: false, error: "Too many tries. Please wait 15 minutes and try again." };
+
+  const details: SignupDetails & { signup: true } = {
+    signup: true, first_name: d.first_name, last_name: d.last_name, date_of_birth: d.date_of_birth, phone: d.phone,
+    photo_consent: String(form.get("photo_consent") ?? ""), marketing_email: form.get("marketing_email") === "on",
+  };
+  const existing = await authUser(d.email);
+  if (existing?.confirmed) {
+    // Never set a password on a confirmed account before the email is proven: that's what "Forgot password" is for.
+    return { ok: false, errors: { email: existing.has_password
+      ? "There's already an account with this email. Sign in, or use “Forgot password?”."
+      : "You already have an account with this email. Use “Forgot password?” on the sign-in page to set your password." } };
+  }
+  if (existing) {
+    // A sign-up that was never confirmed: start again; they prove the email with the code.
+    await db().auth.admin.updateUserById(existing.id, { password: d.password, user_metadata: details });
+  } else {
+    const created = await db().auth.admin.createUser({ email: d.email, password: d.password, email_confirm: false, user_metadata: details });
+    if (created.error) {
+      console.error("createUser", created.error);
+      return { ok: false, error: "We couldn't create your account. Please try again." };
+    }
+  }
+  const sent = await sendCode(d.email, "verify_email");
+  return sent.ok ? { ok: true, step: "code", email: d.email, demoCode: sent.demoCode } : { ok: false, error: sent.error };
 }
 
 export async function signOut() {
   const supabase = await supabaseServer();
   await supabase.auth.signOut();
 }
-

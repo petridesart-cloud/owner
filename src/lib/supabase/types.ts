@@ -1447,6 +1447,14 @@ export type Database = {
       };
       apply_closure: { Args: { p_closure: string }; Returns: number };
       apply_late_fill_refund: { Args: { p_session: string }; Returns: string };
+      auth_user_by_email: {
+        Args: { p_email: string };
+        Returns: {
+          confirmed: boolean;
+          has_password: boolean;
+          id: string;
+        }[];
+      };
       book_session: {
         Args: {
           p_method?: string;

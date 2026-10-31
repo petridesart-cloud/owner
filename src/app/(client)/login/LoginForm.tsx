@@ -1,59 +1,109 @@
 "use client";
-import { useActionState, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
-import { Button, Field, Notice, inputClass } from "@/components/ui";
-import { requestCode, verifyCode, type RequestState, type VerifyState } from "./actions";
+import Link from "next/link";
+import { useActionState, useState } from "react";
+import { Button, ButtonLink, Field, Notice, inputClass } from "@/components/ui";
+import { keepValues } from "@/lib/keep-form";
+import { confirmEmail, requestReset, resendCode, resetPassword, signIn, type AuthState } from "./actions";
 
-export function LoginForm({ next }: { next: string }) {
-  const router = useRouter();
-  const [req, requestAction, requesting] = useActionState<RequestState, FormData>(requestCode, { ok: false });
-  const [ver, verifyAction, verifying] = useActionState<VerifyState, FormData>(verifyCode, { ok: false });
-  const [editing, setEditing] = useState(false);
-  const codeRef = useRef<HTMLInputElement>(null);
-  const step = req.ok && !editing ? "code" : "email";
+const codeClass = `${inputClass} text-center font-serif text-3xl tracking-[0.35em]`;
 
-  useEffect(() => { if (step === "code") codeRef.current?.focus(); }, [step]);
-  useEffect(() => { if (ver.ok && ver.redirect) { router.replace(ver.redirect); } }, [ver, router]);
+/** The 6-digit code from the email (confirming a new account). */
+export function CodeStep({ email, demoCode, next, onChange }: { email: string; demoCode?: string; next: string; onChange?: () => void }) {
+  const [state, action, pending] = useActionState<AuthState, FormData>(confirmEmail, { ok: false });
+  const [resent, resend, resending] = useActionState<AuthState, FormData>(resendCode, { ok: false });
+  const code = resent.demoCode ?? demoCode;
+  return (
+    <form onSubmit={keepValues(action)} className="space-y-4" noValidate>
+      <input type="hidden" name="email" value={email} />
+      <input type="hidden" name="next" value={next} />
+      <p className="text-sm leading-relaxed text-ink-soft" aria-live="polite">
+        We sent a code to <strong className="font-medium text-ink">{email}</strong> to confirm it&apos;s you. You only do this once.
+        {onChange && <> <button type="button" onClick={onChange} className="min-h-11 font-medium text-ink underline underline-offset-4">Change</button></>}
+      </p>
+      {code && <Notice>Demo: no email is sent. Your code is filled in below.</Notice>}
+      <Field id="code" label="Code from your email" error={state.error ?? resent.error}>
+        <input id="code" name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]*" maxLength={12} required
+          defaultValue={code} key={code ?? "code"} placeholder="••••••" className={codeClass} />
+      </Field>
+      <Button type="submit" disabled={pending} className="w-full">{pending ? "Checking…" : "Confirm"}</Button>
+      <button type="submit" formAction={resend} formNoValidate disabled={resending} className="mx-auto block min-h-11 text-sm font-medium text-ink underline underline-offset-4">
+        {resent.ok ? "New code sent" : "Send a new code"}
+      </button>
+    </form>
+  );
+}
 
-  if (step === "email") {
+function ForgotPassword({ next, email, onBack }: { next: string; email?: string; onBack: () => void }) {
+  const [req, request, requesting] = useActionState<AuthState, FormData>(requestReset, { ok: false });
+  const [res, reset, resetting] = useActionState<AuthState, FormData>(resetPassword, { ok: false });
+  if (!(req.ok && req.step === "code")) {
     return (
-      <form action={(f) => { setEditing(false); requestAction(f); }} className="space-y-4" noValidate>
-        <Field id="email" label="Email" error={req.error} hint="We'll email you a sign-in code. No password needed.">
-          <input
-            id="email" name="email" type="email" inputMode="email" autoComplete="email" required
-            defaultValue={req.email} placeholder="you@example.com" className={inputClass}
-            aria-invalid={!!req.error} aria-describedby={req.error ? "email-error" : "email-hint"}
-          />
+      <form onSubmit={keepValues(request)} className="space-y-4" noValidate>
+        <h2 className="text-center font-medium text-ink">Reset your password</h2>
+        <Field id="reset-email" label="Email" error={req.error} hint="We'll email you a code to choose a new password.">
+          <input id="reset-email" name="email" type="email" inputMode="email" autoComplete="email" required defaultValue={email} className={inputClass} />
         </Field>
-        <Button type="submit" disabled={requesting} className="w-full">{requesting ? "Sending…" : "Send my code"}</Button>
+        <Button type="submit" disabled={requesting} className="w-full">{requesting ? "Sending…" : "Email me a code"}</Button>
+        <button type="button" onClick={onBack} className="mx-auto block min-h-11 text-sm font-medium text-ink underline underline-offset-4">Back to sign in</button>
       </form>
     );
   }
-
+  const e = res.errors ?? {};
   return (
-    <form action={verifyAction} className="space-y-4" noValidate>
+    <form onSubmit={keepValues(reset)} className="space-y-4" noValidate>
       <input type="hidden" name="email" value={req.email} />
       <input type="hidden" name="next" value={next} />
       <p className="text-sm leading-relaxed text-ink-soft" aria-live="polite">
-        {req.adminCode ? "Studio sign-in for " : req.demoCode ? "Signing in as " : "We sent a code to "}
-        <strong className="font-medium text-ink">{req.email}</strong>.{" "}
-        <button type="button" onClick={() => setEditing(true)} className="min-h-11 font-medium text-ink underline underline-offset-4">Change</button>
+        If there&apos;s an account for <strong className="font-medium text-ink">{req.email}</strong>, we&apos;ve emailed a code. Enter it and choose a new password.
       </p>
-      {req.adminCode && <Notice>Enter your studio password.</Notice>}
-      {req.demoCode && <Notice>Demo: no email is sent. Your code is filled in below, just tap Continue.</Notice>}
-      <Field id="code" label={req.adminCode ? "Studio password" : "Code from your email"} error={ver.error}>
-        <input
-          ref={codeRef} id="code" name="code" inputMode="numeric" defaultValue={req.demoCode} key={req.demoCode ?? "code"} autoComplete="one-time-code" pattern="[0-9]*" maxLength={12} required
-          placeholder="••••••••" className={`${inputClass} text-center font-serif text-3xl tracking-[0.35em]`}
-          aria-invalid={!!ver.error} aria-describedby={ver.error ? "code-error" : undefined}
-        />
+      {req.demoCode && <Notice>Demo: no email is sent. Your code is filled in below.</Notice>}
+      <Field id="reset-code" label="Code from your email" error={res.error}>
+        <input id="reset-code" name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]*" maxLength={12} required defaultValue={req.demoCode} placeholder="••••••" className={codeClass} />
       </Field>
-      <Button type="submit" disabled={verifying} className="w-full">{verifying ? "Checking…" : "Continue"}</Button>
-      {!req.adminCode && !req.demoCode && (
-        <button type="submit" formAction={requestAction} formNoValidate className="mx-auto block min-h-11 text-sm font-medium text-ink underline underline-offset-4">
-          Send a new code
-        </button>
-      )}
+      {/* The hidden username lets password managers save the new password against the right email. */}
+      <input type="email" name="username" autoComplete="username" value={req.email} readOnly hidden />
+      <Field id="new-password" label="New password" error={e.password} hint="At least 8 characters.">
+        <input id="new-password" name="password" type="password" autoComplete="new-password" required minLength={8} className={inputClass} />
+      </Field>
+      <Field id="new-confirm" label="Confirm new password" error={e.confirm}>
+        <input id="new-confirm" name="confirm" type="password" autoComplete="new-password" required minLength={8} className={inputClass} />
+      </Field>
+      <Button type="submit" disabled={resetting} className="w-full">{resetting ? "Saving…" : "Save password and sign in"}</Button>
     </form>
+  );
+}
+
+export function LoginForm({ next, demo }: { next: string; demo: boolean }) {
+  const [state, action, pending] = useActionState<AuthState, FormData>(signIn, { ok: false });
+  const [mode, setMode] = useState<"signin" | "forgot">("signin");
+  const [email, setEmail] = useState("");
+
+  if (mode === "forgot") return <ForgotPassword next={next} email={email} onBack={() => setMode("signin")} />;
+  if (state.ok && state.step === "code" && state.email) return <CodeStep email={state.email} demoCode={state.demoCode} next={next} />;
+
+  return (
+    <div className="space-y-5">
+      <form onSubmit={keepValues(action)} className="space-y-4" noValidate>
+        <input type="hidden" name="next" value={next} />
+        {state.error && <Notice tone="error">{state.error}</Notice>}
+        <Field id="email" label="Email">
+          <input id="email" name="email" type="email" inputMode="email" autoComplete="username" required
+            onChange={(ev) => setEmail(ev.target.value)} placeholder="you@example.com" className={inputClass} />
+        </Field>
+        <Field id="password" label="Password">
+          <input id="password" name="password" type="password" autoComplete="current-password" required className={inputClass} />
+        </Field>
+        <Button type="submit" disabled={pending} className="w-full">{pending ? "Signing in…" : "Sign in"}</Button>
+        <button type="button" onClick={() => setMode("forgot")} className="mx-auto block min-h-11 text-sm font-medium text-ink underline underline-offset-4">Forgot password?</button>
+      </form>
+      {demo && (
+        <Notice>Demo: sign in as a demo client, e.g. <strong>elena@example.com</strong> with password <strong>reform-demo</strong>, or create your own account (codes appear on screen).</Notice>
+      )}
+      <div className="border-t border-line pt-5 text-center">
+        <p className="mb-3 text-sm text-ink-soft">New to Re·Form?</p>
+        <ButtonLink href={`/signup?next=${encodeURIComponent(next)}`} variant="soft" className="w-full">Create account</ButtonLink>
+      </div>
+      <p className="text-center text-xs text-ink-soft">Studio team: sign in here with your email and password; you&apos;ll go straight to the studio. <Link href="/legal/privacy" className="underline underline-offset-4">Privacy</Link></p>
+    </div>
   );
 }
