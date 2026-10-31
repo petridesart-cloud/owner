@@ -12,3 +12,6 @@ language sql stable security definer set search_path = public, auth as $$
 $$;
 revoke execute on function public.auth_user_by_email(text) from public, anon, authenticated;
 grant execute on function public.auth_user_by_email(text) to service_role;
+
+-- "Special event" is just "Event" everywhere (her note).
+update public.class_types set name = 'Event' where kind = 'event' and name = 'Special Event';

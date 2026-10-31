@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import Link from "next/link";
+import { ChevronRight, Repeat } from "lucide-react";
 import { BackButton } from "@/components/BackButton";
+import { recurringRules, slotLabel } from "@/lib/recurring";
 import { packageDates } from "@/components/PackageCard";
 import { Badge, Card, Section } from "@/components/ui";
 import { requireViewer } from "@/lib/auth";
@@ -18,6 +21,8 @@ export default async function PackagePage({ params }: { params: Promise<{ id: st
   const viewer = await requireViewer(`/bookings/package/${id}`);
   const [p] = await clientPackages(viewer.profile.id, id);
   if (!p) notFound();
+  // Weekly times for this package's class type only.
+  const weekly = (await recurringRules(viewer.profile.id)).filter((r) => r.class_types?.credit_kind === p.kind).map((r) => slotLabel(r.weekday, r.start_time));
 
   return (
     <div>
@@ -35,6 +40,12 @@ export default async function PackagePage({ params }: { params: Promise<{ id: st
               <Stat n={p.current ? p.remaining : p.expired} label={p.current ? "left" : "unused (expired)"} />
             </div>
           </div>
+          {p.current && (
+            <Link href={`/bookings/weekly?type=${p.kind}&from=${p.id}`} className="flex min-h-14 items-center justify-between gap-3 border-t border-line px-5 py-3 text-sm font-medium text-ink hover:bg-lilac-50">
+              <span className="flex items-center gap-2"><Repeat aria-hidden size={16} />{weekly.length ? `Every week: ${weekly.join(", ")}` : "Book the same days every week"}</span>
+              <ChevronRight aria-hidden size={16} className="text-ink-soft" />
+            </Link>
+          )}
         </Card>
       </div>
 

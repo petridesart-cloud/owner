@@ -6,10 +6,11 @@ import { keepValues } from "@/lib/keep-form";
 
 type Slot = { key: string; day: string; time: string; name: string; disabled: boolean };
 
-export function WeeklyForm({ groups, chosen }: { groups: { day: string; slots: Slot[] }[]; chosen: string[] }) {
+export function WeeklyForm({ groups, chosen, kind }: { groups: { day: string; slots: Slot[] }[]; chosen: string[]; kind?: "reformer" | "mat" }) {
   const [state, action, pending] = useActionState<WeeklyState, FormData>(saveWeekly, { ok: false });
   return (
     <form onSubmit={keepValues(action)} className="space-y-5">
+      {kind && <input type="hidden" name="kind" value={kind} />}
       {groups.map((g) => (
         <fieldset key={g.day}>
           <legend className="eyebrow mb-2">{g.day}</legend>

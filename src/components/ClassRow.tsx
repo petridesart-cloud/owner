@@ -27,7 +27,7 @@ export function ClassRow({ c, state, showDate = false, locked = false }: { c: Av
       </div>
       <div className="min-w-0 flex-1">
         <p className="truncate font-medium text-ink">
-          {locked ? "Special event" : c.kind === "reformer" ? (
+          {locked ? "Event" : c.kind === "reformer" ? (
             <><span className="font-script text-[1.35rem] font-normal leading-none text-plum-700">Reformer</span> Pilates</>
           ) : (
             c.title
@@ -49,7 +49,7 @@ export function ClassRow({ c, state, showDate = false, locked = false }: { c: Av
           ) : (
             <Badge tone="open">{spotsLabel(c)}</Badge>
           )}
-          {c.kind === "event" && !locked && <Badge tone="plain">Special event</Badge>}
+          {c.kind === "event" && !locked && <Badge tone="plain">Event</Badge>}
         </div>
       </div>
       {!locked && <ChevronRight aria-hidden size={18} className="shrink-0 text-ink-soft transition group-hover:translate-x-0.5" />}

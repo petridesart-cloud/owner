@@ -42,7 +42,7 @@ export default async function BookPage({ params, searchParams }: { params: Promi
         <div className="mt-4 grid h-64 place-items-center rounded-[var(--radius-card)] bg-gradient-to-br from-[#d9ecf3] via-lilac-100 to-mauve-soft p-6 text-center shadow-[var(--shadow-soft)]">
           <div className="rounded-[18px] bg-white/90 px-5 py-4 shadow-[var(--shadow-soft)] backdrop-blur">
             <h1 className="flex items-center justify-center gap-1.5 text-sm font-medium text-ink"><Lock aria-hidden size={15} />Clients only</h1>
-            <p className="mt-1 text-xs leading-relaxed text-ink-soft">A special event for clients with a Re·Form package.</p>
+            <p className="mt-1 text-xs leading-relaxed text-ink-soft">For clients with a Re·Form package.</p>
             {!viewer && <ButtonLink href={`/login?next=${encodeURIComponent(`/book/${id}`)}`} variant="soft" className="mt-3 w-full">Sign in</ButtonLink>}
           </div>
         </div>
@@ -112,7 +112,7 @@ export default async function BookPage({ params, searchParams }: { params: Promi
       <article className="animate-rise relative mx-2 mt-1 rounded-[var(--radius-sheet)] border border-line/80 bg-white/90 px-5 pb-8 pt-3 shadow-[var(--shadow-lift)] backdrop-blur-xl">
         <div className="flex items-start justify-between gap-3">
           <div>
-            {c.kind === "event" && <Eyebrow>Special event</Eyebrow>}
+            {c.kind === "event" && <Eyebrow>Event</Eyebrow>}
             <h1 className="mt-2 text-[2rem] leading-tight text-ink">
               {c.kind === "reformer" ? (
                 <><span className="font-script text-[2.6rem] text-plum-700">Reformer</span> <span className="display text-[1.6rem]">Pilates</span></>

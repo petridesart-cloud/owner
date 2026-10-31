@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { ArrowRight, MapPin } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { Bubbles } from "@/components/Bubbles";
 import { ClassRow } from "@/components/ClassRow";
-import { ButtonLink, Eyebrow, Section } from "@/components/ui";
+import { ButtonLink, Section } from "@/components/ui";
 import { getSettings, getViewer } from "@/lib/auth";
-import { availability, nextBooking, viewerSessionState } from "@/lib/data";
+import { availability, eventExtras, lockedEventIds, nextBooking, viewerSessionState } from "@/lib/data";
+import { EventCard, LockedEvent } from "@/components/EventCard";
 import { dayMonth, longDate, relativeHours, time, weekdayShort } from "@/lib/time";
 import { CalendarPlus, Hourglass } from "lucide-react";
 import { db } from "@/lib/supabase/admin";
@@ -27,13 +28,18 @@ export default async function Home() {
   const open = classes.filter((c) => c.status === "scheduled");
   const next = open.filter((c) => c.kind !== "event" && c.spots_left > 0).slice(0, 3);
   const event = open.find((c) => c.kind === "event");
+  // The next event, shown only when there is one; clients-only ones stay private (blurred, no details).
+  const [eventLockedIds, eventExtrasMap, eventCovers] = event
+    ? await Promise.all([lockedEventIds([event.id], viewer?.profile.id), eventExtras([event.id]), getMedia(`event-cover:${event.id}`)])
+    : [new Set<string>(), new Map(), []];
+  const eventLocked = !!event && eventLockedIds.has(event.id);
+  const eventClientsOnly = !!event && !!eventExtrasMap.get(event.id)?.clients_only;
+  const eventCover = eventCovers[0];
   const firstName = viewer?.profile.full_name?.split(" ")[0];
   const pid = viewer?.profile.id;
-  const [mine, logo, studioPics, eventPics, requested] = await Promise.all([
+  const [mine, logo, requested] = await Promise.all([
     pid ? nextBooking(pid) : null,
     logoSrc(),
-    getMedia("studio:"),
-    getMedia("event:"),
     pid ? db().from("payments").select("id, description, amount_cents").eq("profile_id", pid).eq("status", "pending").eq("provider", "offline").is("booking_id", null).limit(1).maybeSingle().then((r) => r.data) : null,
   ]);
 
@@ -85,8 +91,18 @@ export default async function Home() {
       )}
 
       <div className="mt-6">
-        <Bubbles covers={{ studio: studioPics[0]?.url, events: eventPics[0]?.url }} />
+        <Bubbles />
       </div>
+
+      {event && (
+        <Section title="Upcoming event" className="mt-8">
+          {eventLocked ? <LockedEvent cover={eventCover} signedIn={!!viewer} next="/" /> : (
+            <Link href={`/book/${event.id}`} className="block rounded-[var(--radius-card)] shadow-[var(--shadow-soft)] transition hover:shadow-[var(--shadow-lift)]">
+              <EventCard e={event} cover={eventCover} booked={state.booked.has(event.id)} clientsOnly={eventClientsOnly} />
+            </Link>
+          )}
+        </Section>
+      )}
 
       <Section
         title="Next available"
@@ -104,19 +120,6 @@ export default async function Home() {
         )}
       </Section>
 
-      {event && (
-        <section className="mt-8 px-5" aria-labelledby="event-title">
-          <Link href={`/book/${event.id}`} className="block overflow-hidden rounded-[var(--radius-card)] bg-gradient-to-br from-[#d9ecf3] via-lilac-100 to-mauve-soft p-6 shadow-[var(--shadow-soft)] transition hover:shadow-[var(--shadow-lift)]">
-            <Eyebrow>Special event</Eyebrow>
-            <h2 id="event-title" className="mt-2 font-script text-[2.6rem] leading-none text-ink">{event.title}</h2>
-            <p className="mt-3 text-sm font-medium text-ink">{longDate(event.starts_at)} · {time(event.starts_at)}</p>
-            {event.location && <p className="mt-1 flex items-center gap-1.5 text-sm text-ink-soft"><MapPin aria-hidden size={14} />{event.location}</p>}
-            <p className="mt-4 inline-flex items-center gap-2 text-[0.78rem] font-medium uppercase tracking-[0.18em] text-ink">
-              {event.spots_left ? `${event.spots_left} spots · ${eur(event.price_cents)}` : "Full · join waitlist"} <ArrowRight aria-hidden size={15} />
-            </p>
-          </Link>
-        </section>
-      )}
 
     </div>
   );

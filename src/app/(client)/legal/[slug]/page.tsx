@@ -49,7 +49,7 @@ const PAGES: Record<string, { title: string; body: (s: Settings) => React.ReactN
         <h2>Waitlist</h2>
         <p>When a spot opens up to {s.waitlist_close_minutes >= 60 ? `${s.waitlist_close_minutes / 60} hour${s.waitlist_close_minutes === 60 ? "" : "s"}` : `${s.waitlist_close_minutes} minutes`} before class, the first person on the waitlist with a class left in their package is booked in automatically and emailed. If they were booked in less than {s.cancellation_cutoff_hours} hours before class, they can still cancel for free within 30 minutes. Without a package class (or for events), the spot is held for them for {Math.round(s.waitlist_window_minutes / 60)} hours, then goes to the next person. Nobody is moved in after that point.</p>
         <h2>If we cancel</h2>
-        <p>If the studio cancels a class, you are notified and your credit is returned automatically. Special events paid by card are refunded to your card.</p>
+        <p>If the studio cancels a class, you are notified and your credit is returned automatically. Events paid by card are refunded to your card.</p>
         <h2>Right of withdrawal</h2>
         <p>[To confirm with a lawyer:] Under EU consumer law (Directive 2011/83/EU, art. 16(l)), the 14-day right of withdrawal does not apply to leisure services booked for a specific date or period. Class packs not tied to a date may be treated differently.</p>
       </>

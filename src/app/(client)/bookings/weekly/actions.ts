@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireOnboarded } from "@/lib/auth";
-import { saveRecurring, weeklySlots } from "@/lib/recurring";
+import { recurringRules, saveRecurring, weeklySlots } from "@/lib/recurring";
 import { TOO_MANY, bookingLimited } from "@/lib/rate-limit";
 
 export type WeeklyState = { ok: boolean; message?: string; error?: string };
@@ -18,6 +18,15 @@ export async function saveWeekly(_: WeeklyState, form: FormData): Promise<Weekly
     const [classTypeId, weekday, hhmm] = k.split("|");
     return { classTypeId, weekday: Number(weekday), hhmm };
   });
+  // Opened from one package (Reformer or Mat): only that type's weekly times change; the other type's stay.
+  const kind = form.get("kind") === "mat" ? "mat" : form.get("kind") === "reformer" ? "reformer" : null;
+  if (kind) {
+    const kindOf = new Map((await weeklySlots()).map((s) => [`${s.classTypeId}|${s.weekday}|${s.hhmm}`, s.creditKind]));
+    slots.splice(0, slots.length, ...slots.filter((s) => kindOf.get(`${s.classTypeId}|${s.weekday}|${s.hhmm}`) === kind));
+    for (const r of await recurringRules(viewer.profile.id)) {
+      if (r.class_types?.credit_kind !== kind) slots.push({ classTypeId: r.class_type_id, weekday: r.weekday, hhmm: r.start_time.slice(0, 5) });
+    }
+  }
   const { booked } = await saveRecurring(viewer.profile.id, slots);
   revalidatePath("/bookings");
   revalidatePath("/");

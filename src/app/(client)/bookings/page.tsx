@@ -1,12 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CalendarPlus, Repeat } from "lucide-react";
+import { CalendarPlus } from "lucide-react";
 import { Badge, ButtonLink, Card, Notice, PageTitle, Section } from "@/components/ui";
 import { AwaitingPayment } from "@/components/AwaitingPayment";
 import { PackageCard, PastPackageRow } from "@/components/PackageCard";
 import { getSettings, requireViewer } from "@/lib/auth";
 import { clientPackages } from "@/lib/packages";
-import { recurringSummary } from "@/lib/recurring";
 import { db } from "@/lib/supabase/admin";
 import { dayMonth, longDate, nowMs, relativeHours, time, weekdayShort } from "@/lib/time";
 import { CancelButton } from "./CancelButton";
@@ -20,9 +19,8 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
   const viewer = await requireViewer("/bookings");
   const p = viewer.profile;
   const settings = await getSettings();
-  const [packages, weekly, { data: bookings }, { data: waits }, { data: pending }] = await Promise.all([
+  const [packages, { data: bookings }, { data: waits }, { data: pending }] = await Promise.all([
     clientPackages(p.id),
-    recurringSummary(p.id),
     db().from("bookings").select("id, status, paid_with, late_refund_pending, payment:payments!bookings_payment_id_fkey(status, amount_cents, intended_method), class_sessions!inner(id, starts_at, ends_at, title, location, class_types(name, kind))")
       .eq("profile_id", p.id).eq("status", "confirmed").gt("class_sessions.starts_at", new Date().toISOString()),
     db().from("waitlist_entries").select("id, status, offer_expires_at, created_at, class_sessions!inner(id, starts_at, title, class_types(name))")
@@ -62,9 +60,6 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
                 </div>
               );
             })()}
-            <Link href="/bookings/weekly" className="flex min-h-11 items-center gap-2 text-sm font-medium text-ink underline-offset-4 hover:underline">
-              <Repeat aria-hidden size={16} /> {weekly.length ? `Every week: ${weekly.join(", ")}` : "Book the same days every week"}
-            </Link>
           </section>
         ) : !(pending ?? []).some((x) => !x.booking_id) && (
           <div className="px-5">
