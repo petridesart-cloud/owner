@@ -8,6 +8,7 @@ import { dayKey, longDate, time } from "@/lib/time";
 import { allowEventAccess, cancelSessionAction, manualBook, updateSession } from "../../actions";
 import { AccessRemove } from "./AccessRemove";
 import { CheckInToggle } from "../../RosterControls";
+import { Attendance } from "../../Attendance";
 import { AdminTitle } from "../../ui";
 import { SessionFields } from "../SessionFields";
 import { RosterActions } from "./RosterActions";
@@ -48,7 +49,7 @@ export default async function SessionAdmin({ params }: { params: Promise<{ id: s
         <ul className="divide-y divide-line">
           {roster.map((b) => (
             <li key={b.id} className="flex items-center gap-3 px-4 py-3">
-              <CheckInToggle bookingId={b.id} checked={!!b.checked_in_at} name={b.profiles?.full_name ?? "Client"} />
+              {!past && <CheckInToggle bookingId={b.id} checked={!!b.checked_in_at} name={b.profiles?.full_name ?? "Client"} />}
               <div className="min-w-0 flex-1">
                 <Link href={`/admin/clients/${b.profiles?.id}`} className="block truncate font-medium text-ink hover:underline">{b.profiles?.full_name ?? "Client"}</Link>
                 <p className="text-xs text-ink-soft">
@@ -61,8 +62,11 @@ export default async function SessionAdmin({ params }: { params: Promise<{ id: s
                 {b.answer && <p className="mt-1 text-xs text-ink"><span className="text-ink-soft">{s.signup_question ?? "Answer"}:</span> {b.answer}</p>}
                 {b.note && <p className="mt-1 text-xs text-ink"><span className="text-ink-soft">Note:</span> {b.note}</p>}
                 <HealthInfo h={b.profiles?.health_notes} />
+                {past && s.status === "scheduled" && (
+                  <Attendance bookingId={b.id} name={b.profiles?.full_name ?? "client"} state={b.status === "no_show" ? "no_show" : b.checked_in_at ? "attended" : "unmarked"} />
+                )}
               </div>
-              {b.status === "confirmed" && s.status === "scheduled" && <RosterActions bookingId={b.id} sessionId={s.id} name={b.profiles?.full_name ?? "client"} past={past} />}
+              {!past && b.status === "confirmed" && s.status === "scheduled" && <RosterActions bookingId={b.id} sessionId={s.id} name={b.profiles?.full_name ?? "client"} past={past} />}
             </li>
           ))}
           {roster.length === 0 && <li className="px-4 py-4 text-sm text-ink-soft">Nobody booked yet.</li>}

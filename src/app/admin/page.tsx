@@ -36,7 +36,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const isToday = key === todayKey();
   const [{ count: pendingRefunds }, { data: awaiting }, { data: renewals }] = await Promise.all([
     db().from("payments").select("id", { count: "exact", head: true }).eq("status", "needs_refund"),
-    db().from("payments").select("id, description, amount_cents, created_at, purpose, intended_method, profiles(id, full_name)").eq("status", "pending").eq("provider", "offline").order("created_at"),
+    db().from("payments").select("id, description, amount_cents, created_at, purpose, intended_method, discount_note, profiles(id, full_name)").eq("status", "pending").eq("provider", "offline").order("created_at"),
     db().from("memberships").select("id, current_period_end, status, profiles(id, full_name), products!memberships_product_id_fkey(name, price_cents)")
       .eq("provider", "offline").eq("cancel_at_period_end", false).in("status", ["active", "past_due"])
       .lte("current_period_end", new Date(nowMs() + 7 * 86_400_000).toISOString()).order("current_period_end"),
@@ -79,7 +79,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
               <li key={p.id} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center">
                 <div className="min-w-0 flex-1">
                   <Link href={`/admin/clients/${p.profiles?.id}`} className="block truncate text-sm font-medium text-ink hover:underline">{p.profiles?.full_name}</Link>
-                  <p className="truncate text-xs text-ink-soft">{p.description} · {eur(p.amount_cents)}</p>
+                  <p className="truncate text-xs text-ink-soft">{p.description} · {eur(p.amount_cents)}{p.discount_note ? ` · ${p.discount_note}` : ""}</p>
                   {p.intended_method && <p className="text-xs font-medium text-plum-700">Will pay: {METHOD[p.intended_method] ?? p.intended_method}</p>}
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5">

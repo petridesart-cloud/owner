@@ -4,6 +4,7 @@ import { BackButton } from "@/components/BackButton";
 import { Card, Notice, PageTitle, Section } from "@/components/ui";
 import { getSettings, getViewer } from "@/lib/auth";
 import { productPrice } from "@/lib/pricing";
+import { availableRewards } from "@/lib/rewards";
 import { db } from "@/lib/supabase/admin";
 import { eur } from "@/lib/money";
 import { PackagePicker, type Group } from "./PackagePicker";
@@ -21,6 +22,7 @@ export default async function PacksPage({ searchParams }: { searchParams: Promis
     db().from("products").select("*").eq("active", true).order("sort_order"),
   ]);
   const all = products ?? [];
+  const rewards = viewer ? (await availableRewards(viewer.profile.id)).map(({ id: _id, ...r }) => (void _id, r)) : [];
   const packs = all.filter((p) => p.tag === "package" && p.credit_kind === kind);
   const groups: Group[] = [...new Set(packs.map((p) => p.months ?? Math.round((p.validity_days ?? 30) / 30)))].sort().map((months) => ({
     months,
@@ -54,7 +56,7 @@ export default async function PacksPage({ searchParams }: { searchParams: Promis
 
       <div className="space-y-8">
         <div className="px-5">
-          {groups.length ? <PackagePicker key={kind} kind={label} groups={groups} methods={methods} online={s.online_payments_enabled} cutoff={s.cancellation_cutoff_hours} />
+          {groups.length ? <PackagePicker key={kind} kind={label} groups={groups} methods={methods} online={s.online_payments_enabled} cutoff={s.cancellation_cutoff_hours} rewards={rewards} signedIn={!!viewer} />
             : <Card className="px-5 py-6 text-sm text-ink-soft">{label} packages are coming soon.</Card>}
           {s.student_discount_pct > 0 && <p className="mt-3 text-xs leading-relaxed text-ink-soft">Students get {s.student_discount_pct}% off group packages: show your student card at the studio once and it&apos;s applied automatically.</p>}
         </div>

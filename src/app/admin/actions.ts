@@ -8,6 +8,8 @@ import { db } from "@/lib/supabase/admin";
 import { EVENT_POLICY, cancelBooking, cancelSession, notifyOffers, onPaymentPaid, policyLine, runTick, sessionInfo } from "@/lib/booking";
 import { notify } from "@/lib/notifications";
 import { applyRecurring } from "@/lib/recurring";
+import { rewardCode } from "@/lib/rewards";
+import { discountLabel, normaliseCode } from "@/lib/discount";
 import { friendlyError, type ActionResult } from "@/lib/errors";
 import { addDaysKey, localToUtc, spokenDateTime, todayKey } from "@/lib/time";
 import type { Json } from "@/lib/supabase/types";
@@ -23,6 +25,19 @@ export async function toggleCheckIn(bookingId: string, checked: boolean) {
   await admin("check_in", { bookingId, checked });
   await db().from("bookings").update({ checked_in_at: checked ? new Date().toISOString() : null }).eq("id", bookingId);
   revalidatePath("/admin");
+}
+
+/** Her answer: attendance stays editable (attended / no-show / not marked), in case of a mistake. */
+export async function setAttendance(bookingId: string, state: "attended" | "no_show" | "unmarked") {
+  await admin("attendance", { bookingId, state });
+  const { data: b } = await db().from("bookings").select("status, checked_in_at").eq("id", bookingId).single();
+  if (!b || !["confirmed", "no_show"].includes(b.status)) return;
+  await db().from("bookings").update(
+    state === "attended" ? { status: "confirmed", checked_in_at: b.checked_in_at ?? new Date().toISOString() }
+    : state === "no_show" ? { status: "no_show", checked_in_at: null }
+    : { status: "confirmed", checked_in_at: null },
+  ).eq("id", bookingId);
+  revalidatePath("/admin", "layout");
 }
 
 export async function markNoShow(bookingId: string) {
@@ -237,6 +252,7 @@ const LOT_ERRORS: Record<string, string> = {
   reason_required: "Please add a reason (it's kept in the client's history).",
   bad_days: "Enter a number of days between 1 and 365.",
   bad_date: "Pick a date from today on.",
+  booked_in_freeze: "They're booked into classes during those dates with this package. Cancel those first.",
   no_end_date: "These classes have no end date, so there is nothing to extend.",
   booked_after: "They're booked into classes after that date with this package. Cancel those first.",
   bad_credits: "Enter between 1 and 50 classes.",
@@ -248,8 +264,14 @@ export async function adjustLot(profileId: string, _: ActionResult, form: FormDa
   const viewer = await admin("adjust_lot", { profileId, action: form.get("action"), lot: form.get("lot") });
   const action = String(form.get("action") ?? "");
   const lot = String(form.get("lot") ?? "");
-  const n = Number(form.get("amount") || 0);
+  let n = Number(form.get("amount") || 0);
   const date = String(form.get("date") ?? "");
+  if (action === "freeze") {
+    // From–To (both included).
+    const to = String(form.get("to") ?? "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || to < date) return { ok: false, error: "Pick the first and last day of the freeze." };
+    n = Math.round((Date.parse(`${to}T12:00:00Z`) - Date.parse(`${date}T12:00:00Z`)) / 86_400_000) + 1;
+  }
   const reason = String(form.get("reason") ?? "").trim();
   if (!["extend", "freeze", "end", "add", "remove"].includes(action) || !/^[0-9a-f-]{36}$/.test(lot)) return { ok: false, error: "Choose a package and what to change." };
   const { data: owned } = await db().from("credit_lots").select("id").eq("id", lot).eq("profile_id", profileId).maybeSingle();
@@ -261,7 +283,7 @@ export async function adjustLot(profileId: string, _: ActionResult, form: FormDa
   if (error) return { ok: false, error: LOT_ERRORS[error.message] ?? "Couldn't change the package." };
   revalidatePath(`/admin/clients/${profileId}`);
   const done: Record<string, string> = {
-    extend: `Extended by ${n} day${n === 1 ? "" : "s"}.`, freeze: `Frozen for ${n} day${n === 1 ? "" : "s"}: the end date moved by the same.`,
+    extend: `Extended by ${n} day${n === 1 ? "" : "s"}.`, freeze: `Frozen for ${n} day${n === 1 ? "" : "s"}: no bookings with this package in those days, and the end date moved by the same.`,
     end: "The package now ends on that date.", add: `Added ${n} class${n === 1 ? "" : "es"}.`, remove: `Removed ${n} class${n === 1 ? "" : "es"}.`,
   };
   return { ok: true, message: done[action] };
@@ -299,6 +321,67 @@ export async function giveClasses(profileId: string, _: ActionResult, form: Form
   if (error) return { ok: false, error: "Couldn't add the classes." };
   revalidatePath(`/admin/clients/${profileId}`);
   return { ok: true, message: `Gave ${amount} ${kind} class${amount === 1 ? "" : "es"}, usable until ${until.split("-").reverse().join(".")}.` };
+}
+
+// ── Rewards and discount codes ─────────────────────────────────────────
+/** % (1–100), € (cents) or free classes (1–10), read from a form. */
+function readDiscount(form: FormData): { kind: "percent" | "amount" | "free_classes"; value: number } | string {
+  const kind = String(form.get("kind") ?? "");
+  const n = Number(String(form.get("value") ?? "").replace(",", "."));
+  if (kind === "percent") return Number.isInteger(n) && n >= 1 && n <= 100 ? { kind, value: n } : "Enter a percentage between 1 and 100.";
+  if (kind === "amount") return n > 0 && n <= 1000 ? { kind, value: Math.round(n * 100) } : "Enter an amount in euro, e.g. 10.";
+  if (kind === "free_classes") return Number.isInteger(n) && n >= 1 && n <= 10 ? { kind, value: n } : "Enter between 1 and 10 classes.";
+  return "Choose what the reward gives.";
+}
+const readDate = (form: FormData, key: string) => { const v = String(form.get(key) ?? ""); return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null; };
+
+/** A personal reward for one client: used once, on their next package, applied automatically. They get an email. */
+export async function giveReward(profileId: string, _: ActionResult, form: FormData): Promise<ActionResult> {
+  const viewer = await admin("give_reward", { profileId });
+  const d = readDiscount(form);
+  if (typeof d === "string") return { ok: false, error: d };
+  const until = readDate(form, "expires_on");
+  if (until && until < todayKey()) return { ok: false, error: "Pick an end date from today on, or leave it empty." };
+  const note = String(form.get("note") ?? "").trim().slice(0, 200) || null;
+  const { data: p } = await db().from("profiles").select("id, email, full_name").eq("id", profileId).is("deleted_at", null).maybeSingle();
+  if (!p) return { ok: false, error: "Client not found." };
+  const { error } = await db().from("discount_codes").insert({
+    code: rewardCode(), kind: d.kind, value: d.value, profile_id: p.id, note, expires_on: until, max_uses: 1, created_by: viewer.profile.id,
+  });
+  if (error) return { ok: false, error: "Couldn't save the reward. Please try again." };
+  const what = `${discountLabel(d.kind, d.value)}${d.kind === "free_classes" ? " added to" : ""} your next package${until ? `, until ${until.split("-").reverse().join(".")}` : ""}.`;
+  const sent = p.email && form.get("tell") === "on"
+    ? (await notify({ profileId: p.id, email: p.email }, "reward", { name: p.full_name ?? undefined, note: `You have ${what.charAt(0).toLowerCase()}${what.slice(1)}` })).email
+    : null;
+  revalidatePath(`/admin/clients/${profileId}`);
+  const told = sent === "sent" ? " We've emailed them." : sent === "failed" ? " The email couldn't be sent." : sent ? " The email is saved in Messages (not sent in the demo)." : "";
+  return { ok: true, message: `Saved: ${what}${told}` };
+}
+
+/** A code anyone can type on the Packages page (e.g. SUMMER10). Each client uses it once; optional total limit and end date. */
+export async function createCode(_: ActionResult, form: FormData): Promise<ActionResult> {
+  const viewer = await admin("create_code");
+  const code = normaliseCode(String(form.get("code") ?? ""));
+  if (code.length < 3 || code.length > 24) return { ok: false, error: "Codes are 3 to 24 letters or numbers, e.g. SUMMER10." };
+  const d = readDiscount(form);
+  if (typeof d === "string") return { ok: false, error: d };
+  const until = readDate(form, "expires_on");
+  const max = String(form.get("max_uses") ?? "").trim();
+  const maxUses = max ? Number(max) : null;
+  if (maxUses !== null && (!Number.isInteger(maxUses) || maxUses < 1 || maxUses > 1000)) return { ok: false, error: "Leave the limit empty, or enter a number of uses." };
+  const { error } = await db().from("discount_codes").insert({
+    code, kind: d.kind, value: d.value, note: String(form.get("note") ?? "").trim().slice(0, 200) || null, expires_on: until, max_uses: maxUses, created_by: viewer.profile.id,
+  });
+  if (error) return { ok: false, error: error.code === "23505" ? "That code already exists. Choose another." : "Couldn't save the code." };
+  revalidatePath("/admin/clients/codes");
+  return { ok: true, message: `${code} is live: ${discountLabel(d.kind, d.value)}.` };
+}
+
+export async function setCodeActive(id: string, active: boolean) {
+  await admin("code_active", { id, active });
+  const { data } = await db().from("discount_codes").update({ active }).eq("id", id).select("profile_id").maybeSingle();
+  revalidatePath("/admin/clients/codes");
+  if (data?.profile_id) revalidatePath(`/admin/clients/${data.profile_id}`);
 }
 
 // ── Payments (offline "Mark as paid" and memberships) ──────────────────

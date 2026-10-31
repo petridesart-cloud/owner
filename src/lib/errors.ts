@@ -19,6 +19,7 @@ const MESSAGES: Record<string, string> = {
   trial_not_available: "There's no trial for this class.",
   unpaid_limit: "You already have a class waiting for payment. Once it's settled you can reserve another, or get a package.",
   pay_later_off: "Please get a package first.",
+  package_frozen: "Your package is frozen on that date. You can book classes before or after the freeze.",
   not_free: "This event isn't free. Please refresh the page.",
   event_no_cancel: "Events can't be cancelled or refunded in the app. Please message the studio.",
   clients_only: "This event is for Re·Form clients. Come to a class or get a package to join the next one.",
@@ -26,6 +27,7 @@ const MESSAGES: Record<string, string> = {
 
 export function friendlyError(e: unknown): string {
   const msg = typeof e === "object" && e && "message" in e ? String((e as { message: string }).message) : String(e);
+  if (msg.includes("payments_one_code_per_client")) return "You've already used this code.";
   return MESSAGES[msg] ?? "Something went wrong. Please try again.";
 }
 

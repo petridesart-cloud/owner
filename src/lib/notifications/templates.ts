@@ -20,7 +20,8 @@ export type TemplateName =
   | "waitlist_booked"
   | "weekly_booked"
   | "weekly_full"
-  | "birthday";
+  | "birthday"
+  | "reward";
 
 export type TemplateData = {
   name?: string;
@@ -190,6 +191,14 @@ export function render(t: TemplateName, raw: TemplateData): Rendered {
         heading: "Happy birthday",
         lines: (d.note ?? "").split(/\n+/).filter(Boolean),
         sms: `Re·Form: happy birthday, ${first(d.name)}!`,
+      };
+    case "reward":
+      return {
+        subject: `A little something for you, ${first(d.name)}`,
+        heading: "Your reward",
+        lines: [`Hi ${first(d.name)}, thank you for being part of Re·Form.`, d.note ?? "", "It's applied automatically when you choose your next package in the app."].filter(Boolean),
+        cta: { label: "See packages", href: `${link}/packs` },
+        sms: `Re·Form: you have a reward: ${d.note ?? ""} ${link}/packs`,
       };
     case "weekly_full":
       return {

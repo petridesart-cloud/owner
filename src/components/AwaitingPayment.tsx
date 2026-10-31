@@ -4,7 +4,7 @@ import { dayMonth } from "@/lib/time";
 import type { Settings } from "@/lib/auth";
 import { Section } from "./ui";
 
-type Pending = { id: string; description: string | null; amount_cents: number; created_at: string; booking_id: string | null; intended_method: string | null };
+type Pending = { id: string; description: string | null; amount_cents: number; created_at: string; booking_id: string | null; intended_method: string | null; discount_note?: string | null };
 
 const METHOD: Record<string, string> = { cash: "Cash at the studio", revolut: "Revolut", bank_transfer: "Bank transfer", card_in_person: "Card at the studio" };
 
@@ -22,6 +22,7 @@ export function AwaitingPayment({ pending, settings }: { pending: Pending[]; set
                   {x.intended_method ? `${METHOD[x.intended_method] ?? x.intended_method} · ` : ""}
                   {x.booking_id ? "pay before class" : `requested ${dayMonth(x.created_at)}, held ${settings.unpaid_request_expiry_hours}h`}
                 </span>
+                {x.discount_note && <span className="block text-xs font-medium text-plum-700">{x.discount_note}</span>}
               </span>
               <span className="font-serif text-xl text-ink">{eur(x.amount_cents)}</span>
             </div>

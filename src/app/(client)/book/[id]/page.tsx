@@ -10,7 +10,7 @@ import { availability, creditBalance, eventExtras, lockedEventIds } from "@/lib/
 import { Lock } from "lucide-react";
 import { db } from "@/lib/supabase/admin";
 import { eur, vatLine } from "@/lib/money";
-import { longDate, nowMs, relativeHours, time } from "@/lib/time";
+import { dayKey, dotDate, longDate, nowMs, relativeHours, time } from "@/lib/time";
 import { BookActions } from "./BookActions";
 import { EVENT_POLICY } from "@/lib/booking";
 import { getTexts } from "@/lib/content";
@@ -75,7 +75,14 @@ export default async function BookPage({ params, searchParams }: { params: Promi
   // A Reformer package can't be used for Mat (and the other way round): say so instead of just "get a package".
   const otherKind = c.credit_kind === "mat" ? "reformer" : "mat";
   const otherCredits = profile && c.credit_kind && creditCount === 0 ? (await creditBalance(profile.id))[otherKind] : 0;
-  const blockedByExpiry = !!usable && usable.total > 0 && usable.usable === 0;
+  const classDay = dayKey(c.starts_at);
+  // A package frozen on this day (her rule): say so, rather than "after the expiry".
+  const { data: frozen } = profile && c.credit_kind && creditCount === 0
+    ? await db().from("lot_freezes").select("starts_on, ends_on, credit_lots!inner(profile_id, credit_kind, remaining)")
+        .eq("credit_lots.profile_id", profile.id).eq("credit_lots.credit_kind", c.credit_kind).gt("credit_lots.remaining", 0)
+        .lte("starts_on", classDay).gte("ends_on", classDay).limit(1).maybeSingle()
+    : { data: null };
+  const blockedByExpiry = !frozen && !!usable && usable.total > 0 && usable.usable === 0;
   const { data: closed } = await db().rpc("is_closed_on", { p_at: c.starts_at });
   const { data: ctype } = await db().from("class_types").select("credit_cost").eq("id", c.class_type_id).single();
   const next = `/book/${id}`;
@@ -201,6 +208,9 @@ export default async function BookPage({ params, searchParams }: { params: Promi
               {offered && <Notice tone="success">A spot opened up for you. It&apos;s held until {time(entry!.offer_expires_at!)} ({relativeHours(entry!.offer_expires_at!)} left).</Notice>}
               {otherCredits > 0 && (
                 <Notice>Your {otherKind === "reformer" ? "Reformer" : "Mat"} package is for {otherKind === "reformer" ? "Reformer" : "Mat"} classes only. For this {c.credit_kind === "mat" ? "Mat" : "Reformer"} class, book a drop-in or get a {c.credit_kind === "mat" ? "Mat" : "Reformer"} package.</Notice>
+              )}
+              {frozen && (
+                <Notice>Your package is frozen from {dotDate(frozen.starts_on)} to {dotDate(frozen.ends_on)}. You can book classes before or after these dates.</Notice>
               )}
               {blockedByExpiry && (
                 <Notice>Your package is valid until {longDate(new Date(new Date(usable!.latest_expiry!).getTime() - 1))}, so this class is after it. A new package will cover it.</Notice>

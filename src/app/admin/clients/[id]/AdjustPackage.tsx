@@ -9,7 +9,7 @@ type Act = "extend" | "freeze" | "end" | "add" | "remove" | "new";
 
 const ACTIONS: { value: Act; label: string; hint: string }[] = [
   { value: "extend", label: "Extend the end date", hint: "Adds days to the package." },
-  { value: "freeze", label: "Freeze", hint: "Pauses the package: the end date moves by the days frozen." },
+  { value: "freeze", label: "Freeze", hint: "No bookings with this package between these dates; the end date moves by the same days." },
   { value: "end", label: "End earlier", hint: "The package can be used until this date." },
   { value: "add", label: "Add classes to this package", hint: "They expire with the package." },
   { value: "remove", label: "Remove classes", hint: "Taken from this package." },
@@ -45,8 +45,9 @@ export function AdjustPackage({ lots, adjustLot, giveClasses }: {
           </Field>
         )}
         <div className="grid grid-cols-2 gap-3">
-          {(act === "extend" || act === "freeze") && <Field id="adj-n" label="Days"><input id="adj-n" name="amount" type="number" min={1} max={365} defaultValue={7} className={inputClass} /></Field>}
-          {act === "freeze" && <Field id="adj-date" label="From (optional)"><input id="adj-date" name="date" type="date" className={inputClass} /></Field>}
+          {act === "extend" && <Field id="adj-n" label="Days"><input id="adj-n" name="amount" type="number" min={1} max={365} defaultValue={7} className={inputClass} /></Field>}
+          {act === "freeze" && <Field id="adj-date" label="From"><input id="adj-date" name="date" type="date" required className={inputClass} /></Field>}
+          {act === "freeze" && <Field id="adj-to" label="To (included)"><input id="adj-to" name="to" type="date" required className={inputClass} /></Field>}
           {act === "end" && <Field id="adj-date" label="Last day"><input id="adj-date" name="date" type="date" required className={inputClass} /></Field>}
           {(act === "add" || act === "remove" || act === "new") && <Field id="adj-n" label="Classes"><input id="adj-n" name="amount" type="number" min={1} max={50} defaultValue={1} className={inputClass} /></Field>}
           {act === "new" && <Field id="adj-date" label="Valid until"><input id="adj-date" name="date" type="date" required className={inputClass} /></Field>}

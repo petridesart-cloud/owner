@@ -503,6 +503,64 @@ export type Database = {
           },
         ];
       };
+      discount_codes: {
+        Row: {
+          active: boolean;
+          code: string;
+          created_at: string;
+          created_by: string | null;
+          expires_on: string | null;
+          id: string;
+          kind: string;
+          max_uses: number | null;
+          note: string | null;
+          profile_id: string | null;
+          value: number;
+        };
+        ComputedFields: never;
+        Insert: {
+          active?: boolean;
+          code: string;
+          created_at?: string;
+          created_by?: string | null;
+          expires_on?: string | null;
+          id?: string;
+          kind: string;
+          max_uses?: number | null;
+          note?: string | null;
+          profile_id?: string | null;
+          value: number;
+        };
+        Update: {
+          active?: boolean;
+          code?: string;
+          created_at?: string;
+          created_by?: string | null;
+          expires_on?: string | null;
+          id?: string;
+          kind?: string;
+          max_uses?: number | null;
+          note?: string | null;
+          profile_id?: string | null;
+          value?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "discount_codes_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "discount_codes_profile_id_fkey";
+            columns: ["profile_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       event_access: {
         Row: {
           created_at: string;
@@ -647,6 +705,42 @@ export type Database = {
             columns: ["profile_id"];
             isOneToOne: true;
             referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      lot_freezes: {
+        Row: {
+          created_at: string;
+          ends_on: string;
+          id: string;
+          lot_id: string;
+          reason: string | null;
+          starts_on: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          ends_on: string;
+          id?: string;
+          lot_id: string;
+          reason?: string | null;
+          starts_on: string;
+        };
+        Update: {
+          created_at?: string;
+          ends_on?: string;
+          id?: string;
+          lot_id?: string;
+          reason?: string | null;
+          starts_on?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "lot_freezes_lot_id_fkey";
+            columns: ["lot_id"];
+            isOneToOne: false;
+            referencedRelation: "credit_lots";
             referencedColumns: ["id"];
           },
         ];
@@ -850,6 +944,7 @@ export type Database = {
           created_at: string;
           currency: string;
           description: string;
+          discount_code_id: string | null;
           discount_note: string | null;
           id: string;
           intended_method: string | null;
@@ -871,6 +966,7 @@ export type Database = {
           created_at?: string;
           currency?: string;
           description: string;
+          discount_code_id?: string | null;
           discount_note?: string | null;
           id?: string;
           intended_method?: string | null;
@@ -891,6 +987,7 @@ export type Database = {
           created_at?: string;
           currency?: string;
           description?: string;
+          discount_code_id?: string | null;
           discount_note?: string | null;
           id?: string;
           intended_method?: string | null;
@@ -911,6 +1008,13 @@ export type Database = {
             columns: ["booking_id"];
             isOneToOne: false;
             referencedRelation: "bookings";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "payments_discount_code_id_fkey";
+            columns: ["discount_code_id"];
+            isOneToOne: false;
+            referencedRelation: "discount_codes";
             referencedColumns: ["id"];
           },
           {
@@ -1648,6 +1752,23 @@ export type Database = {
         Returns: string;
       };
       spots_taken: { Args: { p_exclude_profile?: string; p_session: string }; Returns: number };
+      stats_months: {
+        Args: { p_year: number };
+        Returns: {
+          attended: number;
+          booked: number;
+          classes: number;
+          mat_booked: number;
+          mat_spots: number;
+          month: number;
+          new_clients: number;
+          packs_sold: number;
+          reformer_booked: number;
+          reformer_spots: number;
+          revenue_cents: number;
+          spots: number;
+        }[];
+      };
       tick: {
         Args: Record<PropertyKey, never>;
         Returns: {

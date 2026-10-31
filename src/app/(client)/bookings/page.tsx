@@ -25,7 +25,7 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
       .eq("profile_id", p.id).eq("status", "confirmed").gt("class_sessions.starts_at", new Date().toISOString()),
     db().from("waitlist_entries").select("id, status, offer_expires_at, created_at, class_sessions!inner(id, starts_at, title, class_types(name))")
       .eq("profile_id", p.id).in("status", ["waiting", "offered"]),
-    db().from("payments").select("id, description, amount_cents, created_at, booking_id, intended_method")
+    db().from("payments").select("id, description, amount_cents, created_at, booking_id, intended_method, discount_note")
       .eq("profile_id", p.id).eq("status", "pending").eq("provider", "offline").order("created_at"),
   ]);
 

@@ -27,7 +27,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
   const [{ data: client }, logo] = await Promise.all([db().from("profiles").select("full_name, email").eq("id", pay.profile_id!).single(), logoSrc()]);
   const pr = pay.products;
   const item = pr?.tag === "package" && pr.credit_kind
-    ? `${pr.credit_kind === "reformer" ? "Reformer" : "Mat"} · ${pr.credits} classes / ${pr.months ?? 1} month${(pr.months ?? 1) > 1 ? "s" : ""}`
+    ? `${pr.credit_kind === "reformer" ? "Reformer" : "Mat"} · ${pr.credits} classes · ${pr.months ?? 1} month${(pr.months ?? 1) > 1 ? "s" : ""}`
     : pay.description ?? receiptLabel(pay);
   return (
     <div className="px-5 pt-3">
@@ -44,7 +44,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
           <div className="flex justify-between"><dt className="text-ink-soft">Paid by</dt><dd className="text-ink">{METHOD[pay.method ?? "online"]}</dd></div>
         </dl>
         <div className="mt-6 flex items-baseline justify-between border-y border-line py-4">
-          <span className="text-ink">{item}</span>
+          <span className="text-ink">{item}{pay.discount_note && <span className="block text-xs text-ink-soft">{pay.discount_note}</span>}</span>
           <span className="font-serif text-2xl text-ink">{eur(pay.amount_cents)}</span>
         </div>
         {s.vat_registered && pay.vat_cents > 0 && <p className="mt-2 text-right text-xs text-ink-soft">incl. VAT {eur(pay.vat_cents)} · VAT no. {s.vat_number}</p>}

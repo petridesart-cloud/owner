@@ -11,7 +11,9 @@ import { PHOTO_CONSENT, type PhotoConsent } from "@/lib/photo-consent";
 import { ageOn } from "@/lib/profile";
 import { eur } from "@/lib/money";
 import { STATUS_LABEL, clientHistory, tally, type Group } from "@/lib/client-history";
-import { adjustLot, changeMembershipProduct, clearanceReceived, giveClasses, sendBirthday, setStudent, updateClient } from "../../actions";
+import { adjustLot, changeMembershipProduct, clearanceReceived, giveClasses, giveReward, sendBirthday, setCodeActive, setStudent, updateClient } from "../../actions";
+import { DiscountForm } from "../DiscountForm";
+import { discountLabel, type DiscountKind } from "@/lib/discount";
 import { MarkPaid, MembershipControls, RenewButtons } from "../../PaymentButtons";
 import { AdminTitle } from "../../ui";
 import { AdjustPackage } from "./AdjustPackage";
@@ -61,13 +63,14 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
   const { id } = await params;
   const { data: c } = await db().from("profiles").select("*, health_notes(note, injuries, medication, parq_yes, conditions, details, pregnancy, pregnancy_weeks, postpartum_months, bp_meds, clearance_needed, clearance_received_at, consent_at)").eq("id", id).maybeSingle();
   if (!c) notFound();
-  const [{ groups, totals }, { data: membership }, { data: monthly }, { data: ledger }, { data: payments }, { data: history }] = await Promise.all([
+  const [{ groups, totals }, { data: membership }, { data: monthly }, { data: ledger }, { data: payments }, { data: history }, { data: rewards }] = await Promise.all([
     clientHistory(id),
     db().from("memberships").select("*, products!memberships_product_id_fkey(name, credits, price_cents), next:products!memberships_next_product_id_fkey(name)").eq("profile_id", id).in("status", ["active", "paused", "past_due"]).maybeSingle(),
     db().from("products").select("id, name").eq("kind", "membership").eq("active", true).order("sort_order"),
     db().from("credit_ledger").select("id, delta, entry_type, credit_kind, note, created_at").eq("profile_id", id).order("created_at", { ascending: false }).limit(60),
-    db().from("payments").select("id, description, amount_cents, status, method, intended_method, paid_at, created_at").eq("profile_id", id).order("created_at", { ascending: false }).limit(40),
+    db().from("payments").select("id, description, amount_cents, status, method, intended_method, paid_at, created_at, discount_note").eq("profile_id", id).order("created_at", { ascending: false }).limit(40),
     db().from("health_history").select("*").eq("profile_id", id).order("created_at", { ascending: false }).limit(20),
+    db().from("discount_codes").select("id, code, kind, value, note, expires_on, active, created_at, payments(status, paid_at, created_at)").eq("profile_id", id).order("created_at", { ascending: false }),
   ]);
   const current = groups.filter((g) => g.current);
   const lots = groups.filter((g) => g.total != null && (g.current || (g.endsAt ?? "") > new Date(nowMs() - 60 * 86_400_000).toISOString()));
@@ -197,6 +200,35 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
           adjustLot={adjustLot.bind(null, id)} giveClasses={giveClasses.bind(null, id)} />
       </section>
 
+      <section className="card px-5 py-4">
+        <h2 className="display mb-1 text-[0.95rem]">Rewards</h2>
+        <p className="mb-3 text-sm text-ink-soft">A thank-you for {first || "them"}: used once, on their next package, and applied automatically when they request it.</p>
+        {(rewards ?? []).length > 0 && (
+          <ul className="mb-4 divide-y divide-line rounded-2xl border border-line">
+            {rewards!.map((r) => {
+              const used = r.payments.find((x) => x.status === "paid") ?? r.payments.find((x) => x.status === "pending");
+              const expired = !!r.expires_on && r.expires_on < todayKey();
+              const state = used ? (used.status === "paid" ? `Used ${dotDate(used.paid_at ?? used.created_at)}` : "On a package waiting for payment") : !r.active ? "Removed" : expired ? `Ended ${dotDate(r.expires_on!)}` : r.expires_on ? `Ready · until ${dotDate(r.expires_on)}` : "Ready";
+              return (
+                <li key={r.id} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm">
+                  <span className="min-w-0">
+                    <span className="block font-medium text-ink">{discountLabel(r.kind as DiscountKind, r.value)}</span>
+                    <span className="block text-xs text-ink-soft">{state}{r.note ? ` · ${r.note}` : ""}</span>
+                  </span>
+                  {!used && r.active && !expired && (
+                    <form action={setCodeActive.bind(null, r.id, false)}><button className="min-h-11 text-sm text-ink-soft underline underline-offset-4">Remove</button></form>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        <details className="rounded-2xl border border-line px-4 py-1">
+          <summary className="min-h-11 cursor-pointer py-2.5 text-sm font-medium text-ink">Give a reward</summary>
+          <div className="pb-4 pt-1"><DiscountForm action={giveReward.bind(null, id)} /></div>
+        </details>
+      </section>
+
       {membership && (
         <section className="card px-5 py-5">
           <h2 className="display mb-3 text-[0.95rem]">Membership</h2>
@@ -250,7 +282,7 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
         <ul className="divide-y divide-line text-sm">
           {(payments ?? []).map((p) => (
             <li key={p.id} className="flex justify-between gap-3 px-5 py-2.5">
-              <span className="text-ink">{p.description}<span className="block text-xs text-ink-soft">{dotDate(p.paid_at ?? p.created_at)}{p.method ? ` · ${METHOD[p.method] ?? p.method}` : ""}</span></span>
+              <span className="text-ink">{p.description}<span className="block text-xs text-ink-soft">{dotDate(p.paid_at ?? p.created_at)}{p.method ? ` · ${METHOD[p.method] ?? p.method}` : ""}{p.discount_note ? ` · ${p.discount_note}` : ""}</span></span>
               <span className="text-right text-ink-soft">{eur(p.amount_cents)}<span className="block text-xs">{p.status === "pending" ? "awaiting payment" : p.status}</span></span>
             </li>
           ))}

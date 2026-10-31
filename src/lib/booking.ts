@@ -153,7 +153,7 @@ export async function saveAnswer(profileId: string, sessionId: string, answer: s
  * studio isn't registered) this records a request to pay at the studio; the admin's
  * "Mark as paid" then grants the credits through the same ledger.
  */
-export async function buyProduct(profile: Profile, productId: string, method: "cash" | "revolut" | "bank_transfer" = "cash"): Promise<ActionResult<{ redirect: string }>> {
+export async function buyProduct(profile: Profile, productId: string, method: "cash" | "revolut" | "bank_transfer" = "cash", code?: string | null): Promise<ActionResult<{ redirect: string }>> {
   const { data: product } = await db().from("products").select("*").eq("id", productId).eq("active", true).single();
   if (!product) return { ok: false, error: "That package isn't available." };
   const cfg = await getSettings();
@@ -164,23 +164,48 @@ export async function buyProduct(profile: Profile, productId: string, method: "c
     if (live) return { ok: false, error: "You already have a monthly package. You can change it from your Membership page." };
   }
 
-  const price = productPrice(product, profile, cfg);
   if (!cfg.online_payments_enabled) {
-    const { data: existing } = await db().from("payments").select("id").eq("profile_id", profile.id).eq("product_id", product.id).eq("status", "pending").eq("provider", "offline").maybeSingle();
-    if (existing) await db().from("payments").update({ intended_method: method }).eq("id", existing.id);
-    if (!existing) {
-      const { data: pay } = await db().from("payments").insert({
-        profile_id: profile.id, provider: "offline", amount_cents: price.cents, purpose, product_id: product.id, intended_method: method,
-        description: product.name, status: "pending", discount_note: price.student ? `Student ${cfg.student_discount_pct}%` : null,
+    const { data: existing } = await db().from("payments").select("id, amount_cents").eq("profile_id", profile.id).eq("product_id", product.id).eq("status", "pending").eq("provider", "offline").maybeSingle();
+    const price = await packagePrice(profile, product, cfg, code, existing?.id);
+    if (!price.ok) return price;
+    const fields = { intended_method: method, amount_cents: price.cents, discount_code_id: price.codeId, discount_note: price.note };
+    let payId = existing?.id;
+    if (existing) {
+      const { error } = await db().from("payments").update(fields).eq("id", existing.id);
+      if (error) return { ok: false, error: friendlyError(error) };
+    } else {
+      const { data: pay, error } = await db().from("payments").insert({
+        ...fields, profile_id: profile.id, provider: "offline", purpose, product_id: product.id, description: product.name, status: "pending",
       }).select("id").single();
+      if (error) return { ok: false, error: friendlyError(error) };
+      payId = pay.id;
+    }
+    // A new request, or the same one at a new price (a code added or taken off): send the instructions again.
+    if (!existing || existing.amount_cents !== price.cents) {
       await notify({ profileId: profile.id, email: profile.email }, "payment_request",
-        { name: profile.full_name ?? undefined, className: product.name, note: paymentInstructions(cfg, price.cents, paymentReference(pay!.id)) },
-        { dedupeKey: `request:${pay!.id}` });
+        { name: profile.full_name ?? undefined, className: product.name, note: `${paymentInstructions(cfg, price.cents, paymentReference(payId!))}${price.note ? ` (${price.note})` : ""}` },
+        { dedupeKey: `request:${payId}:${price.cents}` });
     }
     return { ok: true, data: { redirect: "/bookings?requested=1" } };
   }
 
-  return product.kind === "membership" ? startSubscription(profile, product) : buyPack(profile, productId);
+  return product.kind === "membership" ? startSubscription(profile, product) : buyPack(profile, productId, code);
+}
+
+/** The real price of a package for this client: student price, or a reward / code when it's lower; free classes on top. */
+async function packagePrice(
+  profile: Profile, product: Parameters<typeof productPrice>[0] & { kind: string }, cfg: Awaited<ReturnType<typeof getSettings>>,
+  code: string | null | undefined, except?: string,
+): Promise<{ ok: true; cents: number; codeId: string | null; note: string | null } | { ok: false; error: string }> {
+  const base = productPrice(product, profile, cfg);
+  const studentNote = base.student ? `Student ${cfg.student_discount_pct}%` : null;
+  if (!code?.trim() || product.kind === "membership") return { ok: true, cents: base.cents, codeId: null, note: studentNote };
+  const found = await findCode(profile.id, code, except);
+  if (!found.ok) return found;
+  const d = withDiscount(product.price_cents, base.cents, found.discount);
+  if (!d.applies) return { ok: false, error: "Your student price is already lower than this code, so there's no need to use it." };
+  const note = `${found.discount.personal ? "Reward" : `Code ${found.discount.code}`}: ${found.discount.label}${d.extraClasses ? " added" : ""}`;
+  return { ok: true, cents: d.cents, codeId: found.discount.id, note: d.extraClasses && studentNote ? `${studentNote} · ${note}` : note };
 }
 
 async function startSubscription(profile: Profile, product: { id: string; name: string; price_cents: number; period_days: number | null }): Promise<ActionResult<{ redirect: string }>> {
@@ -204,21 +229,26 @@ async function startSubscription(profile: Profile, product: { id: string; name: 
 
 export { paymentReference, productPrice, paymentInstructions } from "@/lib/pricing";
 import { paymentInstructions, paymentReference, productPrice } from "@/lib/pricing";
+import { discountLabel, withDiscount } from "@/lib/discount";
+import { findCode } from "@/lib/rewards";
 
-export async function buyPack(profile: Profile, productId: string): Promise<ActionResult<{ redirect: string }>> {
+export async function buyPack(profile: Profile, productId: string, code?: string | null): Promise<ActionResult<{ redirect: string }>> {
   const { data: product } = await db().from("products").select("*").eq("id", productId).eq("active", true).single();
   if (!product) return { ok: false, error: "That pack isn't available." };
   const cfg = await getSettings();
-  const price = productPrice(product, profile, cfg);
-  const { data: pay } = await db()
+  const price = await packagePrice(profile, product, cfg, code);
+  if (!price.ok) return price;
+  if (price.cents < 50) return { ok: false, error: "This code can't be used with card checkout. Please message the studio." };
+  const { data: pay, error } = await db()
     .from("payments")
     .insert({
       profile_id: profile.id, provider: paymentProvider().name, amount_cents: price.cents,
       vat_cents: vatPortion(price.cents, Number(cfg.vat_rate), cfg.vat_registered),
-      purpose: "pack", product_id: product.id, description: product.name, discount_note: price.student ? `Student ${cfg.student_discount_pct}%` : null,
+      purpose: "pack", product_id: product.id, description: product.name, discount_code_id: price.codeId, discount_note: price.note,
     })
     .select("id")
     .single();
+  if (error) return { ok: false, error: friendlyError(error) };
   const checkout = await paymentProvider().createCheckout({
     paymentId: pay!.id, amountCents: price.cents, description: product.name, customerEmail: profile.email,
     successUrl: `${env.siteUrl}/bookings?purchased=${pay!.id}`,
@@ -247,11 +277,27 @@ export async function onPaymentPaid(paymentId: string, providerRef?: string, met
     await notify(to, "credits_added", { name: profile.full_name ?? undefined, note: `${pay.products.credits} ${pay.products.credit_kind} classes are in your account${m ? `, valid until ${spokenDateTime(m.current_period_end).split(",")[0]}` : ""}.` },
       { dedupeKey: `credits:${paymentId}` });
   } else if (res.status === "credits_added" && pay.products) {
-    await notify(to, "credits_added", { name: profile.full_name ?? undefined, note: `${pay.products.credits} ${pay.products.credit_kind} classes are in your account.` },
+    const extra = await rewardClasses(pay.id, pay.discount_code_id);
+    await notify(to, "credits_added", { name: profile.full_name ?? undefined, note: `${pay.products.credits + extra} ${pay.products.credit_kind} classes are in your account${extra ? `, including ${extra} free from your reward` : ""}.` },
       { dedupeKey: `credits:${paymentId}` });
   }
   if (res.status !== "confirmed") await applyRecurring(profile.id);
   return res;
+}
+
+/** A "free classes" reward: added to the package the payment just created, as a ledger entry. Runs once (only on credits_added). */
+async function rewardClasses(paymentId: string, codeId: string | null) {
+  if (!codeId) return 0;
+  const { data: c } = await db().from("discount_codes").select("code, kind, value, profile_id").eq("id", codeId).maybeSingle();
+  if (!c || c.kind !== "free_classes") return 0;
+  const { data: lot } = await db().from("credit_lots").select("id").eq("payment_id", paymentId).order("created_at").limit(1).maybeSingle();
+  if (!lot) return 0;
+  const { error } = await db().rpc("admin_adjust_lot", {
+    p_lot: lot.id, p_action: "add", p_credits: c.value, p_days: 0, p_date: null as unknown as string, p_actor: null as unknown as string,
+    p_reason: `${c.profile_id ? "Reward" : `Code ${c.code}`}: ${discountLabel("free_classes", c.value)}`,
+  });
+  if (error) { console.error("reward classes", error); return 0; }
+  return c.value;
 }
 
 // ---------------------------------------------------------------------------

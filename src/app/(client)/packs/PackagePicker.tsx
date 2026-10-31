@@ -1,8 +1,9 @@
 "use client";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Checkbox } from "@/components/ui";
-import { buyPackAction, type PayMethod } from "./actions";
+import { Button, Checkbox, inputClass } from "@/components/ui";
+import { withDiscount, type Discount } from "@/lib/discount";
+import { buyPackAction, checkCodeAction, type PayMethod } from "./actions";
 
 export type Option = { id: string; perWeek: number; credits: number; cents: number; listCents: number; student: boolean; validityDays: number };
 export type Group = { months: number; options: Option[] };
@@ -11,9 +12,17 @@ const eur = (c: number) => `€${(c / 100).toFixed(c % 100 ? 2 : 0)}`;
 const METHOD_LABEL: Record<PayMethod, string> = { cash: "Cash", revolut: "Revolut", bank_transfer: "Bank transfer" };
 
 /** Pick a package (per week × months), choose cash or Revolut, accept the terms, request it. */
-export function PackagePicker({ kind, groups, methods, online, cutoff }: { kind: string; groups: Group[]; methods: PayMethod[]; online: boolean; cutoff: number }) {
+export function PackagePicker({ kind, groups, methods, online, cutoff, rewards = [], signedIn = false }: {
+  kind: string; groups: Group[]; methods: PayMethod[]; online: boolean; cutoff: number; rewards?: Discount[]; signedIn?: boolean;
+}) {
   const router = useRouter();
   const [selected, setSelected] = useState<Option | null>(null);
+  const [discount, setDiscount] = useState<Discount | null>(rewards[0] ?? null);
+  const [codeOpen, setCodeOpen] = useState(false);
+  const [code, setCode] = useState("");
+  const [codeError, setCodeError] = useState<string | null>(null);
+  const [checking, check] = useTransition();
+  const price = (o: Option) => withDiscount(o.listCents, o.cents, discount);
   const [method, setMethod] = useState<PayMethod>("cash");
   const [accepted, setAccepted] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,8 +49,9 @@ export function PackagePicker({ kind, groups, methods, online, cutoff }: { kind:
                       <span className="block text-xs text-ink-soft">{o.credits} credits</span>
                     </span>
                     <span className="text-right">
-                      {o.student && <span className="block text-[0.7rem] text-ink-soft line-through">{eur(o.listCents)}</span>}
-                      <span className="font-serif text-[1.6rem] leading-none">{eur(o.cents)}</span>
+                      {(o.student || price(o).cents < o.cents) && <span className="block text-[0.7rem] text-ink-soft line-through">{eur(o.listCents)}</span>}
+                      <span className="font-serif text-[1.6rem] leading-none">{eur(price(o).cents)}</span>
+                      {price(o).extraClasses > 0 && <span className="block text-[0.7rem] font-medium text-plum-700">+{price(o).extraClasses} free</span>}
                     </span>
                   </span>
                 </label>
@@ -55,9 +65,38 @@ export function PackagePicker({ kind, groups, methods, online, cutoff }: { kind:
         <div className="card animate-rise space-y-4 px-5 py-5" aria-live="polite">
           <div className="flex items-baseline justify-between gap-3">
             <p className="font-medium text-ink">{kind} · {selected.credits} classes · valid {selected.validityDays} days</p>
-            <p className="font-serif text-2xl text-ink">{eur(selected.cents)}</p>
+            <p className="font-serif text-2xl text-ink">{eur(price(selected).cents)}</p>
           </div>
-          {selected.student && <p className="-mt-2 text-xs font-medium text-plum-700">Student price</p>}
+          {selected.student && !(discount && price(selected).applies && discount.kind !== "free_classes") && <p className="-mt-2 text-xs font-medium text-plum-700">Student price</p>}
+
+          {discount ? (
+            <div className="flex items-center justify-between gap-3 rounded-2xl bg-mauve-soft px-4 py-3">
+              <p className="text-sm text-ink">
+                <span className="font-medium">{discount.personal ? "Your reward" : `Code ${discount.code}`}: {discount.label}{discount.kind === "free_classes" ? " added to this package" : ""}</span>
+                {!price(selected).applies && <span className="block text-xs text-ink-soft">Your student price is already lower, so it won&apos;t be used.</span>}
+              </p>
+              <button type="button" onClick={() => setDiscount(null)} className="min-h-11 shrink-0 text-sm font-medium text-ink underline underline-offset-4">Remove</button>
+            </div>
+          ) : rewards.length > 0 ? (
+            <button type="button" onClick={() => setDiscount(rewards[0])} className="min-h-11 text-sm font-medium text-ink underline underline-offset-4">Use your reward: {rewards[0].label}</button>
+          ) : null}
+          {signedIn && !discount && (codeOpen ? (
+            <div>
+              <label htmlFor="code" className="mb-1.5 block text-sm font-medium text-ink">Discount code</label>
+              <div className="flex gap-2">
+                <input id="code" value={code} onChange={(e) => { setCode(e.target.value); setCodeError(null); }} autoCapitalize="characters" autoComplete="off" spellCheck={false}
+                  aria-invalid={!!codeError} aria-describedby={codeError ? "code-error" : undefined} className={`${inputClass} uppercase`} />
+                <Button type="button" variant="soft" disabled={checking || !code.trim()} className="shrink-0 px-5" onClick={() => check(async () => {
+                  const res = await checkCodeAction(code);
+                  if (!res.ok) return setCodeError(res.error);
+                  setDiscount(res.data!); setCodeOpen(false); setCode("");
+                })}>{checking ? "…" : "Apply"}</Button>
+              </div>
+              {codeError && <p id="code-error" role="alert" className="mt-1.5 text-xs font-medium text-burgundy">{codeError}</p>}
+            </div>
+          ) : (
+            <button type="button" onClick={() => setCodeOpen(true)} className="min-h-11 text-sm text-ink-soft underline underline-offset-4">Have a code?</button>
+          ))}
           {!online && (
             <fieldset>
               <legend className="mb-2 text-sm font-medium text-ink">How will you pay?</legend>
@@ -72,7 +111,7 @@ export function PackagePicker({ kind, groups, methods, online, cutoff }: { kind:
             </fieldset>
           )}
           <ul className="list-disc space-y-1 rounded-2xl bg-lilac-50 py-3 pl-8 pr-4 text-sm leading-relaxed text-ink">
-            <li>{selected.credits} {kind.toLowerCase()} classes ({selected.credits} credits), valid {selected.validityDays} days from the date of your first class. Use them whenever you like within that time.</li>
+            <li>{selected.credits + price(selected).extraClasses} {kind.toLowerCase()} classes ({selected.credits + price(selected).extraClasses} credits), valid {selected.validityDays} days from the date of your first class. Use them whenever you like within that time.</li>
             <li>Cancel at least {cutoff} hours before class and the credit goes straight back into your package. Cancellations within {cutoff} hours, and missed classes, use the credit and can&apos;t be refunded.</li>
             <li>Classes can&apos;t be booked after the expiry date; unused classes expire and are non-refundable.</li>
             <li>{online ? "Paid now by secure checkout." : "Paid in advance. Your classes appear as soon as your instructor confirms the payment."}</li>
@@ -82,7 +121,7 @@ export function PackagePicker({ kind, groups, methods, online, cutoff }: { kind:
             I accept these package terms and the <a href="/legal/terms" target="_blank" className="font-medium underline underline-offset-4">Terms</a>.
           </Checkbox>
           <Button className="w-full" disabled={pending || !accepted} onClick={() => start(async () => {
-            const res = await buyPackAction(selected.id, accepted, method);
+            const res = await buyPackAction(selected.id, accepted, method, discount && price(selected).applies ? discount.code : null);
             if (!res.ok) return setError(res.error);
             const url = res.data!.redirect;
             if (url.startsWith("http")) window.location.assign(url); else router.push(url);

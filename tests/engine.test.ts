@@ -506,14 +506,14 @@ describe("waitlist", () => {
     assert.equal((await book(c, sid)).error?.message, "full");
   });
 
-  test("inside the 6h cutoff they're still booked in, with 30 minutes to cancel for free", async () => {
+  test("inside the 6h cutoff they're still booked in, and the usual cancellation rules apply (her answer: no grace period)", async () => {
     const { sid, b, rows } = await waitFor(3 * H, 2);
     assert.equal(rows[0].profile_id, b);
     assert.equal(rows[0].offer_expires_at, null);
     const { data: bk } = await db.from("bookings").select("id, free_cancel_until").eq("session_id", sid).eq("profile_id", b).eq("status", "confirmed").single();
-    assert.ok(bk!.free_cancel_until && new Date(bk!.free_cancel_until).getTime() <= Date.now() + 31 * 60_000);
+    assert.equal(bk!.free_cancel_until, null);
     const { data: res } = await db.rpc("cancel_booking", { p_booking: bk!.id, p_profile: b, p_admin: false });
-    assert.equal((res as { status: string }).status, "cancelled"); // free: the class went back
+    assert.notEqual((res as { status: string }).status, "cancelled"); // a late cancel: the class isn't returned
   });
 
   test("in the last hour before class nobody is moved in", async () => {
@@ -589,7 +589,8 @@ describe("studio notes, round 1", () => {
     const lot = await grant(p, 4, 10 * 24 * H);
     const exp0 = new Date((await db.from("credit_lots").select("expires_at").eq("id", lot).single()).data!.expires_at!).getTime();
     assert.ifError((await adjust(lot, "extend", { days: 5 })).error);
-    assert.ifError((await adjust(lot, "freeze", { days: 2 })).error);
+    assert.equal((await adjust(lot, "freeze", { days: 2 })).error?.message, "bad_days"); // a freeze needs its dates
+    assert.ifError((await adjust(lot, "freeze", { days: 2, date: addDaysKey(todayKey(), 1) })).error);
     const exp1 = new Date((await db.from("credit_lots").select("expires_at").eq("id", lot).single()).data!.expires_at!).getTime();
     assert.equal(Math.round((exp1 - exp0) / 86_400_000), 7);
     assert.ifError((await adjust(lot, "add", { credits: 2 })).error);
@@ -671,5 +672,61 @@ describe("repeating timetable keeps her changes", () => {
     assert.equal(await live(day2), 0, "cancelled class came back");
     assert.equal(await live(day3), 0, "moved class came back at the old time");
     assert.ok(((await db.from("class_sessions").select("id", { count: "exact", head: true }).eq("template_id", tpl!.id).gte("starts_at", at(addDaysKey(t0, 30)))).count ?? 0) > 0, "new weeks were added");
+  });
+});
+
+describe("her notes, round 4", () => {
+  const adjust = (lot: string, action: string, o: { days?: number; date?: string; credits?: number } = {}) =>
+    db.rpc("admin_adjust_lot", { p_lot: lot, p_action: action, p_days: o.days ?? 0, p_date: (o.date ?? null) as string, p_credits: o.credits ?? 0, p_reason: "test", p_actor: null as unknown as string });
+  /** A class at 10:00 studio time, n days from today. */
+  const on = (days: number, type = reformer, price?: number) => {
+    const start = localToUtc(addDaysKey(todayKey(), days), "10:00");
+    return db.from("class_sessions").insert({ class_type_id: type, starts_at: start, ends_at: new Date(Date.parse(start) + 50 * 60_000).toISOString(), capacity: 3, title: "Round 4", ...(price == null ? {} : { price_cents: price }) })
+      .select("id").single().then((r) => r.data!.id);
+  };
+
+  test("a freeze blocks bookings with that package only between its dates", async () => {
+    const p = await client("r4-freeze");
+    const lot = await grant(p, 4, 30 * 24 * H);
+    assert.ifError((await adjust(lot, "freeze", { date: addDaysKey(todayKey(), 2), days: 2 })).error);
+    assert.equal((await book(p, await on(2))).error?.message, "package_frozen");
+    assert.equal((await book(p, await on(3))).error?.message, "package_frozen");
+    assert.ifError((await book(p, await on(1))).error);
+    assert.ifError((await book(p, await on(4))).error);
+    const { data: f } = await db.from("lot_freezes").select("starts_on, ends_on").eq("lot_id", lot).single();
+    assert.deepEqual(f, { starts_on: addDaysKey(todayKey(), 2), ends_on: addDaysKey(todayKey(), 3) });
+  });
+
+  test("a freeze over days they're already booked is refused", async () => {
+    const p = await client("r4-freeze-booked");
+    const lot = await grant(p, 4, 30 * 24 * H);
+    assert.ifError((await book(p, await on(6))).error);
+    assert.equal((await adjust(lot, "freeze", { date: addDaysKey(todayKey(), 5), days: 3 })).error?.message, "booked_in_freeze");
+    assert.ifError((await adjust(lot, "freeze", { date: addDaysKey(todayKey(), 7), days: 3 })).error);
+  });
+
+  test("free bookings online only for €0 events", async () => {
+    const event = (await db.from("class_types").select("id").eq("kind", "event").limit(1).single()).data!.id;
+    const p = await client("r4-free");
+    assert.equal((await book(p, await on(3, event, 2500), "free")).error?.message, "not_free");
+    assert.ifError((await book(p, await on(4, event, 0), "free")).error);
+  });
+
+  test("a client uses a discount code once; an expired request frees it again", async () => {
+    const p = await client("r4-code");
+    const { data: code } = await db.from("discount_codes").insert({ code: `T${Date.now().toString(36).toUpperCase()}`, kind: "percent", value: 10 }).select("id").single();
+    const pay = (status: "pending" | "paid") => db.from("payments").insert({ profile_id: p, provider: "offline", amount_cents: 6300, purpose: "pack", description: "Test package", status, discount_code_id: code!.id }).select("id").single();
+    const first = await pay("pending");
+    assert.ifError(first.error);
+    assert.match((await pay("pending")).error?.message ?? "", /payments_one_code_per_client/);
+    assert.ifError((await db.from("payments").update({ status: "cancelled" }).eq("id", first.data!.id)).error); // expired / removed
+    assert.ifError((await pay("pending")).error);
+  });
+
+  test("stats: twelve months for any year", async () => {
+    const { data, error } = await db.rpc("stats_months", { p_year: Number(todayKey().slice(0, 4)) });
+    assert.ifError(error);
+    assert.equal(data!.length, 12);
+    assert.ok(data!.every((m) => m.booked <= m.spots));
   });
 });

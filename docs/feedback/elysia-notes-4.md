@@ -79,3 +79,27 @@ Each note below is rewritten as a build prompt in her words, followed by what sh
   - Free classes are added on top.
   - Applied to package requests; used up when she marks the package paid.
   - If the request expires, the reward is free again.
+
+## Built (31 Oct)
+- **Everything above is live in the demo.**
+- **Rewards:**
+  - She gives a reward on the client's page; by default the client gets an email.
+  - The reward is applied by itself on their next package request.
+  - It shows on Today ("Reward: 10% off"), the client's Awaiting payment, Payments and the receipt.
+- **Free classes from a reward** are added to the package when she taps Mark as paid, as a ledger entry.
+- **Codes:**
+  - Created in Clients → Discount codes.
+  - Each client can use a code once; the database enforces this.
+  - A pending request counts as a use. When a request expires or is removed, the code is free again.
+- **Stats:**
+  - Week → Month (drop-down: numbers, Reformer vs Mat, package classes) → Year (drop-down plus "Show": one bar per month, and a year total).
+  - Payments by method follow the chosen year.
+- **Attendance:** past classes have Attended / No-show / Not marked on every client; she can change them at any time.
+- **Freeze:** set with a From–To date.
+  - Bookings with that package are refused only inside those dates.
+  - If the client is already booked on those days, the freeze is refused (cancel those classes first).
+
+## Open questions for her
+- **Rewards:** should a reward also work on a trial or drop-in? (Now: packages only.)
+- **Codes:** a code can't be combined with the student discount; the bigger one applies. OK?
+- **Pre-natal:** should it be paid with Reformer/Mat package classes, or does it need its own packages? (Own packages = a new class kind; we'd build it if she wants it.)
