@@ -35,7 +35,7 @@ function NewClassType({ onCreated, onCancel, create }: {
           const res = await create(v);
           if (!res.ok) return setError(res.error);
           onCreated(res.data!);
-        })}>{pending ? "Saving…" : "Save class type"}</Button>
+        })}>{pending ? "Saving…" : "Save"}</Button>
       </div>
     </div>
   );

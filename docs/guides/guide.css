@@ -1,0 +1,25 @@
+@page{size:A4;margin:14mm 16mm}
+*{box-sizing:border-box}
+body{margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-family:Inter,"Helvetica Neue",Arial,sans-serif;color:#2E2238;font-size:10.2pt;line-height:1.5;background:#fff}
+.hero{background:linear-gradient(160deg,#E9DDF5,#F6F0FB 60%,#FBF8FC);border-radius:18px;padding:9mm 10mm;text-align:center}
+.logo{width:22mm;height:22mm;border-radius:50%;display:block;margin:0 auto}
+h1{font-weight:400;letter-spacing:.2em;text-transform:uppercase;font-size:17pt;margin:4mm 0 1mm}
+.sub{color:#5E5566;margin:2mm auto 0;max-width:140mm}
+.link{display:inline-block;margin-top:4mm;background:#2E2238;color:#FBF8FC;padding:2.2mm 6mm;border-radius:99px;font-size:9.5pt;letter-spacing:.08em;text-decoration:none}
+h2{font-weight:500;letter-spacing:.16em;text-transform:uppercase;font-size:11.5pt;margin:7mm 0 2.5mm;padding-bottom:1.5mm;border-bottom:1px solid #E6DFE9;break-after:avoid}
+h2 .n{display:inline-block;width:7mm;height:7mm;line-height:7mm;text-align:center;border-radius:50%;background:#DCCAEE;margin-right:2mm;letter-spacing:0;font-size:9.5pt}
+h3{font-size:10.2pt;margin:3.5mm 0 1mm;color:#4A3759;break-after:avoid}
+p{margin:1mm 0 2mm;break-inside:avoid}
+ol,ul{margin:0 0 2mm;padding-left:6mm}li{margin:.8mm 0}
+.row{display:grid;grid-template-columns:1fr 46mm;gap:6mm;align-items:start;break-inside:avoid;margin-bottom:2mm}
+.row.two{grid-template-columns:1fr 46mm 46mm}
+.shot{width:46mm;border-radius:6mm;border:1px solid #E6DFE9;box-shadow:0 2mm 5mm rgba(46,34,56,.10);display:block}
+.tip{background:#F3E3EE;border-radius:10px;padding:2.5mm 4mm;margin:2.5mm 0;font-size:9.5pt;break-inside:avoid}
+.note{background:#F6F0FB;border-radius:10px;padding:2.5mm 4mm;margin:2.5mm 0;font-size:9.5pt;break-inside:avoid}
+.toc{columns:2;column-gap:8mm;margin:4mm 0 0;padding:0;list-style:none}
+.toc li{margin:1.2mm 0}
+.brk{break-before:page}
+b,strong{font-weight:600}
+.k{display:inline-block;border:1px solid #CFC3D8;border-radius:99px;padding:0 2.2mm;font-size:8.8pt;background:#fff;white-space:nowrap}
+table{width:100%;border-collapse:collapse;font-size:9.4pt;margin:1mm 0 3mm}td,th{border-bottom:1px solid #E6DFE9;padding:1.6mm 2mm 1.6mm 0;text-align:left;vertical-align:top}th{font-weight:600}
+.foot{margin-top:8mm;text-align:center;color:#5E5566;font-size:9pt}

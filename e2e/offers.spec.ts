@@ -15,7 +15,7 @@ test("the studio builds a new class type with a trial; clients see its own tab; 
   await admin.locator("#offer-for").selectOption({ label: "+ New class type…" });
   const box = admin.getByRole("group", { name: "New class type" });
   await box.locator("#nct-name").fill(label);
-  await box.getByRole("button", { name: "Save class type" }).click();
+  await box.getByRole("button", { name: "Save", exact: true }).click();
   await expect(admin.getByText(`${label} added. It's under Class types too.`)).toBeVisible();
   await expect(admin.locator("#offer-for")).toHaveValue(/pre_natal/);
   await admin.locator("#offer-price").fill("20");
