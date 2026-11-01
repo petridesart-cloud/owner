@@ -1,22 +1,25 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { BackButton } from "@/components/BackButton";
-import { PolicyCard } from "@/components/PolicyCard";
-import { getSettings } from "@/lib/auth";
+import { Prose } from "@/components/Prose";
+import { PageTitle } from "@/components/ui";
 import { getTexts } from "@/lib/content";
 
-export const metadata: Metadata = { title: "Studio Rules & Policies" };
+export const metadata: Metadata = { title: "Studio Rules" };
 
-export default async function PoliciesPage() {
-  const [s, t] = await Promise.all([getSettings(), getTexts()]);
+/** Her Studio Rules only, laid out like the Terms (her note: plain, no flowers). */
+export default async function StudioRulesPage() {
+  const t = await getTexts();
   return (
-    <div className="space-y-4">
+    <div>
       <div className="px-5 pt-3"><BackButton href="/" /></div>
-      <PolicyCard title="Studio Rules" items={t.studio_rules} />
-      <div id="payments">
-        <PolicyCard title="Payments, Cancellation & Membership Policy" items={t.payments_policy}
-          footnote={<>Cancel or reschedule in the app up to {s.cancellation_cutoff_hours} hours before class and your class goes back into your package. Full <Link href="/legal/terms" className="underline underline-offset-4">Terms</Link>.</>} />
-      </div>
+      <PageTitle eyebrow="Re·Form" title="Studio Rules" />
+      <Prose>
+        <ul>{t.studio_rules.map((r) => <li key={r}>{r}</li>)}</ul>
+        <p className="mt-5 text-sm text-ink-soft">
+          See also the <Link href="/policy/payments">Payments &amp; Cancellation Policy</Link> and the <Link href="/legal/terms">Terms &amp; Conditions</Link>.
+        </p>
+      </Prose>
     </div>
   );
 }

@@ -12,7 +12,7 @@ test("a discount code and a personal reward: right price, noted on the request, 
   await admin.getByLabel("Code", { exact: true }).fill(code);
   await admin.getByLabel("Percent").fill("15");
   await admin.getByRole("button", { name: "Create code" }).click();
-  await expect(admin.getByText(`${code} is live: 15% off.`)).toBeVisible();
+  await expect(admin.getByText(`${code} is live: 15% off on packages.`)).toBeVisible();
 
   // The client types the code: 4 classes €70 → €59.50.
   const name = `Reward Tester ${Date.now() % 10000}`;

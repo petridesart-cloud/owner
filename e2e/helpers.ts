@@ -28,7 +28,6 @@ export async function signUp(page: Page, email: string, next = "/", name = "Test
   await page.getByLabel("Password", { exact: true }).fill("test-pass-123");
   await page.getByLabel("Confirm password").fill("test-pass-123");
   await page.locator("#policy").check();
-  await page.locator("#fitness").check();
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(page.getByLabel("Code from your email")).toHaveValue(/^\d{6,10}$/);
   await page.getByRole("button", { name: "Confirm" }).click();

@@ -125,7 +125,7 @@ export default async function SessionAdmin({ params }: { params: Promise<{ id: s
           <SessionFields types={types ?? []} d={{
             class_type_id: s.class_type_id, date: dayKey(s.starts_at), time: time(s.starts_at), duration: mins, capacity: s.capacity,
             price: s.price_cents != null ? (s.price_cents / 100).toFixed(2) : "", title: s.title, location: s.location, description: s.description,
-            clients_only: s.clients_only, what_to_bring: s.what_to_bring, event_policy: s.event_policy, recap: s.recap, signup_question: s.signup_question,
+            clients_only: s.clients_only, what_to_bring: s.what_to_bring, event_policy: s.event_policy, recap: s.recap, signup_question: s.signup_question, title_font: s.title_font,
           }} event={s.class_types?.kind === "event"} />
         </ActionForm>
       </section>

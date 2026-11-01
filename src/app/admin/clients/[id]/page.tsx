@@ -13,10 +13,12 @@ import { eur } from "@/lib/money";
 import { STATUS_LABEL, clientHistory, tally, type Group } from "@/lib/client-history";
 import { adjustLot, changeMembershipProduct, clearanceReceived, giveClasses, giveReward, sendBirthday, setCodeActive, setStudent, updateClient } from "../../actions";
 import { DiscountForm } from "../DiscountForm";
-import { discountLabel, type DiscountKind } from "@/lib/discount";
+import { discountLabel, targetsLabel, type DiscountKind } from "@/lib/discount";
 import { MarkPaid, MembershipControls, RenewButtons } from "../../PaymentButtons";
 import { AdminTitle } from "../../ui";
 import { AdjustPackage } from "./AdjustPackage";
+import { getKinds, kindLabels } from "@/lib/kinds";
+import { labelOf } from "@/lib/kind-label";
 
 export const dynamic = "force-dynamic";
 
@@ -35,14 +37,15 @@ function Drop({ title, sub, children, open = false }: { title: string; sub?: str
   );
 }
 
-/** Reformer on top, mat underneath. */
-function TwoLine({ label, reformer, mat }: { label: string; reformer: number; mat: number }) {
+/** One line per class type: Reformer, Mat, then any other type with something to show. */
+function TwoLine({ label, counts, labels, show }: { label: string; counts: Record<string, number>; labels: Record<string, string>; show: string[] }) {
   return (
     <div className="card px-3.5 py-3">
       <p className="eyebrow">{label}</p>
       <dl className="mt-1.5 space-y-0.5 text-sm">
-        <div className="flex items-baseline justify-between gap-2"><dt className="text-ink-soft">Reformer</dt><dd className="font-serif text-2xl leading-none text-ink">{reformer}</dd></div>
-        <div className="flex items-baseline justify-between gap-2"><dt className="text-ink-soft">Mat</dt><dd className="font-serif text-2xl leading-none text-ink">{mat}</dd></div>
+        {show.map((k) => (
+          <div key={k} className="flex items-baseline justify-between gap-2"><dt className="min-w-0 truncate text-ink-soft">{labelOf(labels, k)}</dt><dd className="font-serif text-2xl leading-none text-ink">{counts[k] ?? 0}</dd></div>
+        ))}
       </dl>
     </div>
   );
@@ -70,9 +73,11 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
     db().from("credit_ledger").select("id, delta, entry_type, credit_kind, note, created_at").eq("profile_id", id).order("created_at", { ascending: false }).limit(60),
     db().from("payments").select("id, description, amount_cents, status, method, intended_method, paid_at, created_at, discount_note").eq("profile_id", id).order("created_at", { ascending: false }).limit(40),
     db().from("health_history").select("*").eq("profile_id", id).order("created_at", { ascending: false }).limit(20),
-    db().from("discount_codes").select("id, code, kind, value, note, expires_on, active, created_at, payments(status, paid_at, created_at)").eq("profile_id", id).order("created_at", { ascending: false }),
+    db().from("discount_codes").select("id, code, kind, value, note, expires_on, active, created_at, applies_to, payments(status, paid_at, created_at)").eq("profile_id", id).order("created_at", { ascending: false }),
   ]);
   const current = groups.filter((g) => g.current);
+  const labels = await kindLabels();
+  const showKinds = Object.keys(totals.packages).filter((k) => k === "reformer" || k === "mat" || totals.packages[k] + totals.attended[k] + totals.noShows[k] > 0);
   const lots = groups.filter((g) => g.total != null && (g.current || (g.endsAt ?? "") > new Date(nowMs() - 60 * 86_400_000).toISOString()));
   const birthday = isBirthday(c.date_of_birth, todayKey());
   const first = c.first_name ?? c.full_name?.split(" ")[0] ?? "";
@@ -98,9 +103,9 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
       )}
 
       <div className="grid grid-cols-3 gap-2">
-        <TwoLine label="Packages" {...totals.packages} />
-        <TwoLine label="Attended" {...totals.attended} />
-        <TwoLine label="No-shows" {...totals.noShows} />
+        <TwoLine label="Packages" counts={totals.packages} labels={labels} show={showKinds} />
+        <TwoLine label="Attended" counts={totals.attended} labels={labels} show={showKinds} />
+        <TwoLine label="No-shows" counts={totals.noShows} labels={labels} show={showKinds} />
       </div>
       <p className="-mt-3 text-xs text-ink-soft">No-shows: booked and didn&apos;t come, or cancelled less than the cutoff before (the class was used).</p>
 
@@ -197,12 +202,12 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
         <h2 className="display mb-3 text-[0.95rem]">Adjust package</h2>
         <AdjustPackage
           lots={lots.map((g) => ({ id: g.key, label: `${g.title} · ${g.remaining}/${g.total} left${g.endsAt ? ` · ends ${dotDate(lastDay(g.endsAt))}` : ""}` }))}
-          adjustLot={adjustLot.bind(null, id)} giveClasses={giveClasses.bind(null, id)} />
+          adjustLot={adjustLot.bind(null, id)} giveClasses={giveClasses.bind(null, id)} kinds={(await getKinds()).map(({ key, label }) => ({ key, label }))} />
       </section>
 
       <section className="card px-5 py-4">
         <h2 className="display mb-1 text-[0.95rem]">Rewards</h2>
-        <p className="mb-3 text-sm text-ink-soft">A thank-you for {first || "them"}: used once, on their next package, and applied automatically when they request it.</p>
+        <p className="mb-3 text-sm text-ink-soft">A thank-you for {first || "them"}: used once, on what you tick (a package, trial, drop-in or event), and applied automatically.</p>
         {(rewards ?? []).length > 0 && (
           <ul className="mb-4 divide-y divide-line rounded-2xl border border-line">
             {rewards!.map((r) => {
@@ -212,7 +217,7 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
               return (
                 <li key={r.id} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm">
                   <span className="min-w-0">
-                    <span className="block font-medium text-ink">{discountLabel(r.kind as DiscountKind, r.value)}</span>
+                    <span className="block font-medium text-ink">{discountLabel(r.kind as DiscountKind, r.value)} · {targetsLabel(r.applies_to)}</span>
                     <span className="block text-xs text-ink-soft">{state}{r.note ? ` · ${r.note}` : ""}</span>
                   </span>
                   {!used && r.active && !expired && (

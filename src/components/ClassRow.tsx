@@ -22,16 +22,12 @@ export function ClassRow({ c, state, showDate = false, locked = false }: { c: Av
   const body = (
     <>
       <div className="w-[4.3rem] shrink-0">
-        <p className="font-serif text-[1.65rem] leading-none text-ink">{time(c.starts_at)}</p>
+        <p className="font-serif text-[1.45rem] leading-none text-ink">{time(c.starts_at)}</p>
         <p className="mt-1 text-[0.7rem] text-ink-soft">{showDate ? longDate(c.starts_at).split(" ").slice(0, 3).join(" ") : `${mins} min`}</p>
       </div>
       <div className="min-w-0 flex-1">
         <p className="truncate font-medium text-ink">
-          {locked ? "Event" : c.kind === "reformer" ? (
-            <><span className="font-script text-[1.35rem] font-normal leading-none text-plum-700">Reformer</span> Pilates</>
-          ) : (
-            c.title
-          )}
+          {locked ? "Event" : c.title}
         </p>
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
           {cancelled ? (

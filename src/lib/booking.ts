@@ -65,6 +65,7 @@ export async function bookWithCredit(profile: Profile, sessionId: string): Promi
   const s = await sessionInfo(sessionId);
   await notify({ profileId: profile.id, email: profile.email, phone: profile.phone }, "booking_confirmed",
     { name: profile.full_name ?? undefined, ...tmpl(s), note: "1 credit used." }, { bookingId, sessionId });
+  await alertBooking(profile, sessionId, "with a class from their package", bookingId);
   return { ok: true, data: { redirect: `/bookings/${bookingId}/confirmed` } };
 }
 
@@ -92,6 +93,7 @@ export async function bookWithPayment(profile: Profile, sessionId: string): Prom
       cancelUrl: `${env.siteUrl}/book/${sessionId}?cancelled=1`,
     });
     await db().from("payments").update({ provider_ref: checkout.providerRef }).eq("id", pay!.id);
+    await alertBooking(profile, sessionId, `paying ${eur(s.price)} online`, bookingId);
     return { ok: true, data: { redirect: checkout.url } };
   } catch (e) {
     console.error("checkout failed", e);
@@ -113,20 +115,38 @@ export async function bookAtStudio(profile: Profile, sessionId: string): Promise
   const s = await sessionInfo(sessionId);
   await notify({ profileId: profile.id, email: profile.email, phone: profile.phone }, "booking_confirmed",
     { name: profile.full_name ?? undefined, ...tmpl(s), note: `Please pay ${eur(s.price)} at the studio (cash or card).` }, { bookingId, sessionId });
+  await alertBooking(profile, sessionId, `to pay ${eur(s.price)} at the studio`, bookingId);
   return { ok: true, data: { redirect: `/bookings/${bookingId}/confirmed` } };
 }
 
 /** Trial or drop-in (or a paid event): reserve the spot, pay by cash or Revolut, the studio marks it paid. */
-export async function bookSingle(profile: Profile, sessionId: string, mode: "trial" | "drop_in", method: "cash" | "revolut"): Promise<ActionResult<{ redirect: string }>> {
+export async function bookSingle(profile: Profile, sessionId: string, mode: "trial" | "drop_in", method: "cash" | "revolut", code?: string | null): Promise<ActionResult<{ redirect: string }>> {
+  // A code or reward (her ticks: trial / drop-in / event): checked before the spot is reserved.
+  let found: Awaited<ReturnType<typeof findCode>> | null = null;
+  if (code?.trim()) {
+    const first = await sessionInfo(sessionId);
+    found = await findCode(profile.id, code, undefined, first.type.kind === "event" ? "event" : mode);
+    if (!found.ok) return found;
+  }
   const { data, error } = await db().rpc("book_session", { p_profile: profile.id, p_session: sessionId, p_mode: mode, p_method: method });
   if (error) return { ok: false, error: friendlyError(error) };
   const bookingId = (data as { booking_id: string }).booking_id;
   const s = await sessionInfo(sessionId);
-  const { data: pay } = await db().from("payments").select("id, amount_cents").eq("booking_id", bookingId).single();
+  let { data: pay } = await db().from("payments").select("id, amount_cents").eq("booking_id", bookingId).single();
+  if (found?.ok && pay) {
+    const d = withDiscount(pay.amount_cents, pay.amount_cents, found.discount);
+    if (d.applies && d.cents < pay.amount_cents) {
+      const note = `${found.discount.personal ? "Reward" : `Code ${found.discount.code}`}: ${found.discount.label}`;
+      const { error: e } = await db().from("payments").update({ amount_cents: d.cents, discount_code_id: found.discount.id, discount_note: note }).eq("id", pay.id);
+      if (!e) pay = { ...pay, amount_cents: d.cents };
+    }
+  }
   const how = method === "revolut" ? "by Revolut" : "in cash at the studio";
   await notify({ profileId: profile.id, email: profile.email, phone: profile.phone }, "booking_confirmed",
     { name: profile.full_name ?? undefined, ...tmpl(s), note: `${mode === "trial" ? "Your trial class. " : ""}Please pay ${eur(pay?.amount_cents ?? s.price)} ${how} before class (reference ${paymentReference(pay!.id)}).` },
     { bookingId, sessionId });
+  const what = s.type.kind === "event" ? "a spot" : mode === "trial" ? "a trial" : "a drop-in";
+  await alertBooking(profile, sessionId, `${what}, paying ${eur(pay?.amount_cents ?? s.price)} ${method === "revolut" ? "by Revolut" : "in cash"}`, bookingId);
   return { ok: true, data: { redirect: `/bookings/${bookingId}/confirmed` } };
 }
 
@@ -138,6 +158,7 @@ export async function bookFree(profile: Profile, sessionId: string): Promise<Act
   const s = await sessionInfo(sessionId);
   await notify({ profileId: profile.id, email: profile.email, phone: profile.phone }, "booking_confirmed",
     { name: profile.full_name ?? undefined, ...tmpl(s) }, { bookingId, sessionId });
+  await alertBooking(profile, sessionId, "a free spot", bookingId);
   return { ok: true, data: { redirect: `/bookings/${bookingId}/confirmed` } };
 }
 
@@ -180,6 +201,9 @@ export async function buyProduct(profile: Profile, productId: string, method: "c
       if (error) return { ok: false, error: friendlyError(error) };
       payId = pay.id;
     }
+    if (!existing) await alertStudio("requests", `Package request: ${profile.full_name ?? profile.email ?? "a client"}`,
+      [`${product.name} · ${eur(price.cents)}${price.note ? ` (${price.note})` : ""}`, `They'll pay ${method === "revolut" ? "by Revolut" : method === "bank_transfer" ? "by bank transfer" : "in cash"}. Tap Mark as paid on Today once you have it.`],
+      { path: "/admin", dedupeKey: `request:${payId}` });
     // A new request, or the same one at a new price (a code added or taken off): send the instructions again.
     if (!existing || existing.amount_cents !== price.cents) {
       await notify({ profileId: profile.id, email: profile.email }, "payment_request",
@@ -200,7 +224,7 @@ async function packagePrice(
   const base = productPrice(product, profile, cfg);
   const studentNote = base.student ? `Student ${cfg.student_discount_pct}%` : null;
   if (!code?.trim() || product.kind === "membership") return { ok: true, cents: base.cents, codeId: null, note: studentNote };
-  const found = await findCode(profile.id, code, except);
+  const found = await findCode(profile.id, code, except, "package");
   if (!found.ok) return found;
   const d = withDiscount(product.price_cents, base.cents, found.discount);
   if (!d.applies) return { ok: false, error: "Your student price is already lower than this code, so there's no need to use it." };
@@ -231,6 +255,8 @@ export { paymentReference, productPrice, paymentInstructions } from "@/lib/prici
 import { paymentInstructions, paymentReference, productPrice } from "@/lib/pricing";
 import { discountLabel, withDiscount } from "@/lib/discount";
 import { findCode } from "@/lib/rewards";
+import { kindLabel } from "@/lib/kinds";
+import { alertBooking, alertStudio } from "@/lib/studio-alerts";
 
 export async function buyPack(profile: Profile, productId: string, code?: string | null): Promise<ActionResult<{ redirect: string }>> {
   const { data: product } = await db().from("products").select("*").eq("id", productId).eq("active", true).single();
@@ -278,7 +304,7 @@ export async function onPaymentPaid(paymentId: string, providerRef?: string, met
       { dedupeKey: `credits:${paymentId}` });
   } else if (res.status === "credits_added" && pay.products) {
     const extra = await rewardClasses(pay.id, pay.discount_code_id);
-    await notify(to, "credits_added", { name: profile.full_name ?? undefined, note: `${pay.products.credits + extra} ${pay.products.credit_kind} classes are in your account${extra ? `, including ${extra} free from your reward` : ""}.` },
+    await notify(to, "credits_added", { name: profile.full_name ?? undefined, note: `${pay.products.credits + extra} ${await kindLabel(pay.products.credit_kind)} classes are in your account${extra ? `, including ${extra} free from your reward` : ""}.` },
       { dedupeKey: `credits:${paymentId}` });
   }
   if (res.status !== "confirmed") await applyRecurring(profile.id);
@@ -327,6 +353,7 @@ export async function notifyOffers(rows: OfferRow[]) {
       const { data: b } = await db().from("bookings").select("id, free_cancel_until").eq("session_id", s.id).eq("profile_id", p.id).eq("status", "confirmed").maybeSingle();
       // Booked inside the cancellation window: they get a short grace period to cancel for free.
       const grace = b?.free_cancel_until ? ` Can't make it? Cancel in the app by ${time(b.free_cancel_until)} and the class goes back into your package.` : "";
+      await alertBooking(p, s.id, "from the waitlist, with a class from their package", b?.id);
       await notify({ profileId: p.id, email: p.email, phone: p.phone }, "waitlist_booked",
         { name: p.full_name ?? undefined, ...tmpl(s), note: `1 class from your package was used.${grace}`, ...(grace ? { policy: undefined } : {}) },
         { sms, sessionId: s.id, bookingId: b?.id, dedupeKey: `waitlist-booked:${r.entry_id}` });
@@ -363,6 +390,13 @@ export async function cancelBooking(profile: Profile, bookingId: string, asAdmin
         : "This was inside the cancellation window, so no credit is returned. Thank you for freeing the spot.";
     await notify({ profileId: owner.id, email: owner.email, phone: owner.phone }, "cancellation_confirmed",
       { name: owner.full_name ?? undefined, ...tmpl(s), note }, { bookingId, sessionId: s.id, dedupeKey: `cancel:${bookingId}` });
+  }
+  if (!asAdmin) {
+    const late = res.status !== "cancelled";
+    await alertStudio("cancellations", `Cancellation: ${s.name}, ${spokenDateTime(s.starts_at)}`,
+      [`${profile.full_name ?? profile.email ?? "A client"} cancelled${late ? ` inside the ${s.cutoff}-hour window (the class isn't returned)` : " in time (the class went back into their package)"}.`,
+       "Their spot is open again; the waitlist moves up if anyone is waiting."],
+      { path: `/admin/classes/${s.id}`, dedupeKey: `cancel:${bookingId}` });
   }
   const { data: offers } = await db().rpc("process_waitlist", { p_session: res.session_id });
   await notifyOffers((offers ?? []) as OfferRow[]);

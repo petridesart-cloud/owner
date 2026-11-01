@@ -19,7 +19,10 @@
   --color-burgundy: #7a2e3a;
   --color-burgundy-soft: #f6e7ea;
 
-  --font-serif: var(--font-cormorant), "Cormorant Garamond", Georgia, serif;
+  /* "serif" now means the light Inter used for big numbers and times (her round-5 note); Cormorant is only an event-title choice. */
+  --font-serif: var(--font-inter), Inter, ui-sans-serif, system-ui, sans-serif;
+  --font-elegant: var(--font-cormorant), "Cormorant Garamond", Georgia, serif;
+  --font-hand: var(--font-caveat), "Caveat", cursive;
   --font-script: var(--font-pinyon), "Pinyon Script", cursive;
   --font-sans: var(--font-inter), Inter, ui-sans-serif, system-ui, sans-serif;
   --font-label: var(--font-barlow), "Barlow Condensed", var(--font-inter), sans-serif;
@@ -81,13 +84,13 @@
     text-transform: uppercase;
     color: var(--color-ink-soft);
   }
-  /* Schedule-post heading: high-contrast serif, all caps, wide tracking */
+  /* Headings: clean sans, all caps, wide tracking (like "Secure your package") */
   .display {
-    font-family: var(--font-serif);
+    font-family: var(--font-sans);
     font-weight: 400;
     text-transform: uppercase;
-    letter-spacing: 0.14em;
-    line-height: 1.1;
+    letter-spacing: 0.16em;
+    line-height: 1.2;
   }
   .glass {
     background: rgb(251 248 252 / 0.72);
@@ -128,8 +131,16 @@
   }
 }
 
-/* Lining numerals for times and dates (Cormorant defaults to old-style). */
-.font-serif, .display { font-variant-numeric: lining-nums; }
+/* Big numbers, times and prices: light Inter with even-width figures. */
+.font-serif { font-weight: 300; letter-spacing: -0.01em; font-variant-numeric: lining-nums tabular-nums; }
+
+/* Event title fonts (she chooses one per event). */
+.title-calligraphy { font-family: var(--font-script); font-weight: 400; text-transform: none; letter-spacing: 0; }
+.title-handwritten { font-family: var(--font-hand); font-weight: 500; text-transform: none; letter-spacing: 0; }
+.title-minimal { font-family: var(--font-sans); font-weight: 300; text-transform: uppercase; letter-spacing: 0.22em; }
+.title-simple { font-family: var(--font-sans); font-weight: 500; text-transform: none; letter-spacing: -0.01em; }
+.title-elegant { font-family: var(--font-elegant); font-weight: 400; text-transform: uppercase; letter-spacing: 0.12em; }
+.title-bold { font-family: var(--font-label); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
 
 /* Confirmation moment (≤ 900ms) */
 .celebrate-pop { animation: pop 0.55s var(--ease-spring) both; }

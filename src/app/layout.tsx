@@ -1,13 +1,16 @@
 import type { Metadata, Viewport } from "next";
-import { Barlow_Condensed, Cormorant_Garamond, Inter, Pinyon_Script } from "next/font/google";
+import { Barlow_Condensed, Caveat, Cormorant_Garamond, Inter, Pinyon_Script } from "next/font/google";
 import "./globals.css";
 
 // Fonts trimmed for speed: only the weights the design uses, Latin only (add "greek" with the GR version).
-const cormorant = Cormorant_Garamond({ subsets: ["latin"], weight: ["300", "400"], variable: "--font-cormorant", display: "swap" });
+// Her note (round 5): clean and minimal everywhere, like the buttons: Inter for titles, names, times and numbers.
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 // Accent fonts load lazily (not preloaded); the page is readable with fallbacks meanwhile.
 const pinyon = Pinyon_Script({ subsets: ["latin"], weight: "400", variable: "--font-pinyon", display: "swap", preload: false });
-const barlow = Barlow_Condensed({ subsets: ["latin"], weight: "500", variable: "--font-barlow", display: "swap", preload: false });
+const barlow = Barlow_Condensed({ subsets: ["latin"], weight: ["500", "700"], variable: "--font-barlow", display: "swap", preload: false });
+// Event title fonts she can choose per event (only downloaded on pages that use them).
+const cormorant = Cormorant_Garamond({ subsets: ["latin"], weight: "400", variable: "--font-cormorant", display: "swap", preload: false });
+const caveat = Caveat({ subsets: ["latin"], weight: "500", variable: "--font-caveat", display: "swap", preload: false });
 
 export const metadata: Metadata = {
   title: { default: "Re·Form Pilates Studio · Limassol", template: "%s · Re·Form Pilates" },
@@ -28,7 +31,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${cormorant.variable} ${inter.variable} ${pinyon.variable} ${barlow.variable}`}>
+    <html lang="en" className={`${cormorant.variable} ${inter.variable} ${pinyon.variable} ${barlow.variable} ${caveat.variable}`}>
       <body className="antialiased">{children}</body>
     </html>
   );

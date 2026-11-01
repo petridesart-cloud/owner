@@ -1,6 +1,16 @@
 /** Rewards and discount codes: the maths shared by the Packages page (display) and the server (the real price). */
 export type DiscountKind = "percent" | "amount" | "free_classes";
-export type Discount = { code: string; kind: DiscountKind; value: number; label: string; personal: boolean; expiresOn: string | null };
+export type DiscountTarget = "package" | "trial" | "drop_in" | "event";
+export const TARGETS: { value: DiscountTarget; label: string }[] = [
+  { value: "trial", label: "Trial" }, { value: "drop_in", label: "Drop-in" }, { value: "package", label: "Package" }, { value: "event", label: "Event" },
+];
+export type Discount = { code: string; kind: DiscountKind; value: number; label: string; personal: boolean; expiresOn: string | null; appliesTo: DiscountTarget[] };
+
+/** "packages", "trials and drop-ins"… for her lists. */
+export const targetsLabel = (t: string[]) => {
+  const names = TARGETS.filter((x) => t.includes(x.value)).map((x) => `${x.label.toLowerCase()}s`);
+  return names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names[0] ?? "packages";
+};
 
 const euro = (c: number) => `€${(c / 100).toFixed(c % 100 ? 2 : 0)}`;
 

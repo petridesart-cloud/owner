@@ -7,6 +7,7 @@ import { db } from "@/lib/supabase/admin";
 import { dotDate, longDate } from "@/lib/time";
 import { eur } from "@/lib/money";
 import { receiptLabel } from "@/lib/receipts";
+import { kindLabels } from "@/lib/kinds";
 import { deleteAccount, signOutAction } from "./actions";
 import { ProfileForm } from "./Forms";
 import { Accordion } from "@/components/Accordion";
@@ -24,6 +25,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
   const { delete: del, dob, health } = await searchParams;
   const viewer = await requireViewer("/account");
   const p = viewer.profile;
+  const labels = await kindLabels();
   const [{ data: h }, { data: consents }, { data: receipts }] = await Promise.all([
     db().from("health_notes").select("conditions, pregnancy, pregnancy_weeks, postpartum_months, clearance_needed, clearance_received_at").eq("profile_id", p.id).maybeSingle(),
     db().from("consents").select("type, granted, version, created_at").eq("profile_id", p.id).order("created_at", { ascending: false }).limit(30),
@@ -65,7 +67,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
               {receipts!.map((r) => (
                 <li key={r.id}>
                   <Link href={`/receipts/${r.id}`} className="flex min-h-14 items-center justify-between gap-3 py-3 text-sm">
-                    <span><span className="block font-medium text-ink">{receiptLabel(r)} · {eur(r.amount_cents)}</span><span className="text-xs text-ink-soft">{r.paid_at ? dotDate(r.paid_at) : ""}</span></span>
+                    <span><span className="block font-medium text-ink">{receiptLabel(r, labels)} · {eur(r.amount_cents)}</span><span className="text-xs text-ink-soft">{r.paid_at ? dotDate(r.paid_at) : ""}</span></span>
                     <ChevronRight aria-hidden size={16} className="text-ink-soft" />
                   </Link>
                 </li>

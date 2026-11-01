@@ -1,4 +1,5 @@
 "use server";
+import { alertStudio } from "@/lib/studio-alerts";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/supabase/admin";
@@ -88,6 +89,8 @@ export async function confirmEmail(_: AuthState, form: FormData): Promise<AuthSt
   if (profile && meta.signup && !profile.onboarded_at) {
     profile = await onboard(profile, email.data, meta as SignupDetails, (await getSettings()).policy_version);
     await db().auth.admin.updateUserById(user.id, { user_metadata: { signup: false } });
+    if (profile) await alertStudio("signups", `New client: ${profile.full_name ?? email.data}`, [`${email.data}${profile.phone ? ` · ${profile.phone}` : ""}`, "They've created an account in the app."],
+      { path: `/admin/clients/${profile.id}`, dedupeKey: `signup:${profile.id}` });
   }
   redirect(landing(profile, next));
 }
@@ -153,7 +156,6 @@ export async function signUp(_: AuthState, form: FormData): Promise<AuthState> {
   if (!parsed.success) for (const i of parsed.error.issues) errors[String(i.path[0])] ??= i.message;
   if (String(form.get("password") ?? "") !== String(form.get("confirm") ?? "")) errors.confirm ??= "The passwords don't match.";
   if (form.get("policy") !== "on") errors.policy = "Please accept the Studio Rules and Terms.";
-  if (form.get("fitness") !== "on") errors.fitness = "Please confirm the health declaration.";
   if (Object.keys(errors).length || !parsed.success) return { ok: false, errors };
   const d = parsed.data;
   if (await tooMany(d.email)) return { ok: false, error: "Too many tries. Please wait 15 minutes and try again." };

@@ -20,10 +20,8 @@ export async function completeWelcome(_: WelcomeState, form: FormData): Promise<
   if (!parsed.success) for (const i of parsed.error.issues) errors[String(i.path[0])] ??= i.message;
 
   const policy = form.get("policy") === "on";
-  const fitness = form.get("fitness") === "on";
   const photos = String(form.get("photo_consent") ?? "");
   if (!policy) errors.policy = "Please accept the Studio Rules and Terms to book.";
-  if (!fitness) errors.fitness = "Please confirm the health declaration to book.";
   if (Object.keys(errors).length || !parsed.success) return { ok: false, errors };
 
   const p = viewer.profile;

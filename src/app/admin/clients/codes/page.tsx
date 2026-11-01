@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { db } from "@/lib/supabase/admin";
 import { dotDate, todayKey } from "@/lib/time";
-import { discountLabel, type DiscountKind } from "@/lib/discount";
+import { discountLabel, targetsLabel, type DiscountKind } from "@/lib/discount";
 import { createCode, setCodeActive } from "../../actions";
 import { AdminTitle } from "../../ui";
 import { DiscountForm } from "../DiscountForm";
@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 /** Codes anyone can type on the Packages page. Personal rewards live on each client's page. */
 export default async function CodesPage() {
-  const { data: codes } = await db().from("discount_codes").select("id, code, kind, value, note, expires_on, max_uses, active, created_at, payments(status)")
+  const { data: codes } = await db().from("discount_codes").select("id, code, kind, value, note, expires_on, max_uses, active, created_at, applies_to, payments(status)")
     .is("profile_id", null).order("created_at", { ascending: false });
   const today = todayKey();
   return (
@@ -37,7 +37,7 @@ export default async function CodesPage() {
                 <li key={c.id} className="flex items-center justify-between gap-3 py-3 text-sm">
                   <span className="min-w-0">
                     <span className="block font-mono font-medium tracking-wide text-ink">{c.code}</span>
-                    <span className="block text-ink">{discountLabel(c.kind as DiscountKind, c.value)}</span>
+                    <span className="block text-ink">{discountLabel(c.kind as DiscountKind, c.value)} · {targetsLabel(c.applies_to)}</span>
                     <span className="block text-xs text-ink-soft">
                       {state} · used {paid}{c.max_uses ? ` of ${c.max_uses}` : ""}{waiting ? ` · ${waiting} waiting for payment` : ""}{c.note ? ` · ${c.note}` : ""}
                     </span>

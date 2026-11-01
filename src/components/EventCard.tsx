@@ -5,9 +5,10 @@ import type { Availability } from "@/lib/data";
 import type { MediaItem } from "@/lib/media";
 import { eur } from "@/lib/money";
 import { longDate, time } from "@/lib/time";
+import { eventTitleClass } from "@/lib/event-font";
 
 /** Her background picture (or the soft gradient), with the details on a frosted panel so the text stays readable. */
-export function EventCard({ e, cover, booked, clientsOnly }: { e: Availability; cover?: MediaItem; booked: boolean; clientsOnly: boolean }) {
+export function EventCard({ e, cover, booked, clientsOnly, font }: { e: Availability; cover?: MediaItem; booked: boolean; clientsOnly: boolean; font?: string | null }) {
   return (
     <div className="relative overflow-hidden rounded-[var(--radius-card)] bg-gradient-to-br from-[#d9ecf3] via-lilac-100 to-mauve-soft">
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -15,7 +16,7 @@ export function EventCard({ e, cover, booked, clientsOnly }: { e: Availability; 
       <div className={`relative p-6 ${cover ? "pt-36" : ""}`}>
         <div className={cover ? "-mx-3 -mb-3 rounded-[18px] bg-white/85 p-4 backdrop-blur-md" : ""}>
           <Eyebrow>{longDate(e.starts_at)} · {time(e.starts_at)}</Eyebrow>
-          <h3 className="mt-2 font-script text-[2.4rem] leading-none text-ink">{e.title}</h3>
+          <h3 className={`mt-2 text-ink ${eventTitleClass(font)}`}>{e.title}</h3>
           {e.description && <p className="mt-3 text-sm leading-relaxed text-ink">{e.description}</p>}
           {e.location && <p className="mt-2 flex items-center gap-1.5 text-sm text-ink-soft"><MapPin aria-hidden size={14} />{e.location}</p>}
           <div className="mt-4 flex flex-wrap items-center gap-1.5">

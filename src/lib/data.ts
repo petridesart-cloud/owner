@@ -2,8 +2,8 @@ import "server-only";
 import { db } from "@/lib/supabase/admin";
 
 export type Availability = {
-  id: string; class_type_id: string; type_slug: string; type_name: string; kind: "reformer" | "mat" | "event";
-  credit_kind: "reformer" | "mat" | null; title: string; description: string | null; starts_at: string; ends_at: string;
+  id: string; class_type_id: string; type_slug: string; type_name: string; kind: "reformer" | "mat" | "event" | "other";
+  credit_kind: string | null; title: string; description: string | null; starts_at: string; ends_at: string;
   capacity: number; spots_left: number; waitlist_count: number; price_cents: number; location: string | null;
   status: "scheduled" | "cancelled";
 };
@@ -14,12 +14,12 @@ export async function availability(from: Date, to: Date): Promise<Availability[]
   return (data ?? []) as Availability[];
 }
 
-export type EventExtras = { clients_only: boolean; what_to_bring: string | null; event_policy: string | null; recap: string | null; signup_question: string | null };
+export type EventExtras = { clients_only: boolean; what_to_bring: string | null; event_policy: string | null; recap: string | null; signup_question: string | null; title_font: string | null };
 
 /** Her per-event options (clients only, what to bring, own terms), keyed by session id. */
 export async function eventExtras(ids: string[]): Promise<Map<string, EventExtras>> {
   if (!ids.length) return new Map();
-  const { data } = await db().from("class_sessions").select("id, clients_only, what_to_bring, event_policy, recap, signup_question").in("id", ids);
+  const { data } = await db().from("class_sessions").select("id, clients_only, what_to_bring, event_policy, recap, signup_question, title_font").in("id", ids);
   return new Map((data ?? []).map(({ id, ...x }) => [id, x]));
 }
 
@@ -54,12 +54,11 @@ export async function viewerSessionState(profileId: string | undefined) {
 
 export async function creditBalance(profileId: string) {
   const { data } = await db().rpc("credit_balance", { p_profile: profileId });
-  const out = { reformer: 0, mat: 0, reformerExpiry: null as string | null, matExpiry: null as string | null };
-  for (const r of data ?? []) {
-    if (r.credit_kind === "reformer") { out.reformer = r.remaining; out.reformerExpiry = r.next_expiry; }
-    if (r.credit_kind === "mat") { out.mat = r.remaining; out.matExpiry = r.next_expiry; }
-  }
-  return out;
+  // Classes left per class type ("reformer", "mat", or any type she added), plus the soonest expiry.
+  const out: Record<string, number> & { reformer: number; mat: number } = { reformer: 0, mat: 0 };
+  const expiry: Record<string, string | null> = {};
+  for (const r of data ?? []) { out[r.credit_kind] = r.remaining; expiry[r.credit_kind] = r.next_expiry; }
+  return Object.assign(out, { reformerExpiry: expiry.reformer ?? null, matExpiry: expiry.mat ?? null, expiry });
 }
 
 /** The viewer's next confirmed class, if any. */

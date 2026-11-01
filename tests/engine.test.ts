@@ -730,3 +730,42 @@ describe("her notes, round 4", () => {
     assert.ok(data!.every((m) => m.booked <= m.spots));
   });
 });
+
+describe("her notes, round 5", () => {
+  test("a class type with its own packages: trial, package and booking all work", async () => {
+    const label = `Pre natal ${Date.now().toString(36)}`;
+    const { data: key, error } = await db.rpc("add_credit_kind", { p_label: label });
+    assert.ifError(error);
+    assert.match(key as string, /^pre_natal_/);
+    assert.equal((await db.from("credit_kinds").select("label").eq("key", key as string).single()).data?.label, label);
+    const { data: type, error: e2 } = await db.from("class_types").insert({
+      slug: `t-${Date.now()}`, name: label, kind: "other" as never, credit_kind: key as string, default_capacity: 3, default_duration_minutes: 50, price_cents: 0,
+    }).select("id").single();
+    assert.ifError(e2);
+    await db.from("products").insert({ name: `${label} Trial`, kind: "single", tag: "trial", credit_kind: key as string, credits: 1, price_cents: 2000 });
+    const start = iso(48 * H);
+    const sid = (await db.from("class_sessions").insert({ class_type_id: type!.id, starts_at: start, ends_at: iso(48 * H + 50 * 60_000), capacity: 3 }).select("id").single()).data!.id;
+    // Trial: only for someone who hasn't booked this type before.
+    const p = await client("r5-kind");
+    assert.equal((await db.rpc("trial_eligible", { p_profile: p, p_kind: key as string })).data, true);
+    assert.ifError((await book(p, sid, "trial", "online", "cash")).error);
+    // A package of this type pays for its classes; a Reformer package doesn't.
+    const q = await client("r5-kind-pack");
+    await grant(q, 4, null);
+    assert.equal((await book(q, sid)).error?.message, "no_credits");
+    assert.ifError((await db.rpc("grant_lot", { p_profile: q, p_kind: key as string, p_credits: 2, p_expires: null as unknown as string, p_note: "test" })).error);
+    assert.ifError((await book(q, sid)).error);
+  });
+
+  test("codes say what they apply to (at least one)", async () => {
+    const mk = (applies: string[]) => db.from("discount_codes").insert({ code: `R5${Math.random().toString(36).slice(2, 8).toUpperCase()}`, kind: "percent", value: 10, applies_to: applies });
+    assert.ifError((await mk(["trial", "event"])).error);
+    assert.ok((await mk([])).error);
+    assert.ok((await mk(["nonsense"])).error);
+  });
+
+  test("the Terms can be saved as her own text", async () => {
+    assert.ifError((await db.from("site_content").upsert({ key: "terms", value: "## Test\nHello" })).error);
+    await db.from("site_content").delete().eq("key", "terms");
+  });
+});

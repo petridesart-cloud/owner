@@ -1,3 +1,7 @@
+import { kindLabels } from "@/lib/kinds";
+import { availableRewards } from "@/lib/rewards";
+import { eventTitleClass } from "@/lib/event-font";
+import { labelOf } from "@/lib/kind-label";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -73,8 +77,10 @@ export default async function BookPage({ params, searchParams }: { params: Promi
     : null;
   const creditCount = usable?.usable ?? 0;
   // A Reformer package can't be used for Mat (and the other way round): say so instead of just "get a package".
-  const otherKind = c.credit_kind === "mat" ? "reformer" : "mat";
-  const otherCredits = profile && c.credit_kind && creditCount === 0 ? (await creditBalance(profile.id))[otherKind] : 0;
+  const balance = profile && c.credit_kind && creditCount === 0 ? await creditBalance(profile.id) : null;
+  const otherKind = balance ? Object.keys(balance).find((k) => k !== c.credit_kind && typeof balance[k] === "number" && balance[k] > 0) : undefined;
+  const otherCredits = otherKind ? balance![otherKind] : 0;
+  const labels = await kindLabels();
   const classDay = dayKey(c.starts_at);
   // A package frozen on this day (her rule): say so, rather than "after the expiry".
   const { data: frozen } = profile && c.credit_kind && creditCount === 0
@@ -108,9 +114,13 @@ export default async function BookPage({ params, searchParams }: { params: Promi
       ])
     : [{ data: null }, { data: null }];
   const singles = unpaid && !(c.kind === "event" && c.price_cents === 0) ? [] : c.kind === "event"
-    ? [{ mode: "drop_in" as const, label: "Reserve your spot", price: eur(c.price_cents) }]
+    ? [{ mode: "drop_in" as const, target: "event" as const, label: "Reserve your spot", price: eur(c.price_cents), cents: c.price_cents }]
     : (singleProducts ?? []).filter((p) => p.tag === "drop_in" || trialOk)
-        .map((p) => ({ mode: p.tag as "trial" | "drop_in", label: p.tag === "trial" ? "Book your trial" : "Drop-in", price: eur(p.price_cents) }));
+        .map((p) => ({ mode: p.tag as "trial" | "drop_in", target: p.tag as "trial" | "drop_in", label: p.tag === "trial" ? "Book your trial" : "Drop-in", price: eur(p.price_cents), cents: p.price_cents }));
+  // Her rewards for this client that work on what's offered here (trial / drop-in / event), applied by themselves.
+  const singleRewards = profile && singles.length
+    ? (await availableRewards(profile.id)).filter((r) => r.kind !== "free_classes" && singles.some((o) => r.appliesTo.includes(o.target))).map(({ id: _id, ...r }) => (void _id, r))
+    : [];
 
   return (
     <div className="relative min-h-[70dvh]">
@@ -120,15 +130,9 @@ export default async function BookPage({ params, searchParams }: { params: Promi
         <div className="flex items-start justify-between gap-3">
           <div>
             {c.kind === "event" && <Eyebrow>Event</Eyebrow>}
-            <h1 className="mt-2 text-[2rem] leading-tight text-ink">
-              {c.kind === "reformer" ? (
-                <><span className="font-script text-[2.6rem] text-plum-700">Reformer</span> <span className="display text-[1.6rem]">Pilates</span></>
-              ) : c.kind === "event" ? (
-                <span className="font-script text-[2.6rem] text-plum-700">{c.title}</span>
-              ) : (
-                <span className="display text-[1.6rem]">{c.title}</span>
-              )}
-            </h1>
+            {c.kind === "event"
+              ? <h1 className={`mt-2 text-plum-700 ${eventTitleClass(ev?.title_font, "page")}`}>{c.title}</h1>
+              : <h1 className="display mt-2 text-[1.35rem] text-ink">{c.title}</h1>}
           </div>
         </div>
 
@@ -207,7 +211,7 @@ export default async function BookPage({ params, searchParams }: { params: Promi
             <div className="space-y-4">
               {offered && <Notice tone="success">A spot opened up for you. It&apos;s held until {time(entry!.offer_expires_at!)} ({relativeHours(entry!.offer_expires_at!)} left).</Notice>}
               {otherCredits > 0 && (
-                <Notice>Your {otherKind === "reformer" ? "Reformer" : "Mat"} package is for {otherKind === "reformer" ? "Reformer" : "Mat"} classes only. For this {c.credit_kind === "mat" ? "Mat" : "Reformer"} class, book a drop-in or get a {c.credit_kind === "mat" ? "Mat" : "Reformer"} package.</Notice>
+                <Notice>Your {labelOf(labels, otherKind)} package is for {labelOf(labels, otherKind)} classes only. For this {labelOf(labels, c.credit_kind)} class, book {singles.length ? "a single class" : "with the studio"} or get a {labelOf(labels, c.credit_kind)} package.</Notice>
               )}
               {frozen && (
                 <Notice>Your package is frozen from {dotDate(frozen.starts_on)} to {dotDate(frozen.ends_on)}. You can book classes before or after these dates.</Notice>
@@ -230,12 +234,12 @@ export default async function BookPage({ params, searchParams }: { params: Promi
                 <BookActions
                   mode="book" sessionId={id} priceLabel={eur(c.price_cents)} credits={creditCount}
                   creditKind={c.credit_kind} creditCost={ctype?.credit_cost ?? 1} offered={offered}
-                  online={settings.online_payments_enabled} payLater={settings.allow_pay_later} singles={singles}
+                  online={settings.online_payments_enabled} payLater={settings.allow_pay_later} singles={singles} rewards={singleRewards} creditLabel={labelOf(labels, c.credit_kind).toLowerCase()}
                   free={c.kind === "event" && c.price_cents === 0} question={ev?.signup_question}
                 />
               )}
               {c.credit_kind && creditCount === 0 && !requestedPack && (
-                <ButtonLink href={c.credit_kind === "mat" ? "/packs?type=mat" : "/packs"} variant={singles.length ? "soft" : "primary"} className="w-full">Secure your package</ButtonLink>
+                <ButtonLink href={`/packs?type=${c.credit_kind}`} variant={singles.length ? "soft" : "primary"} className="w-full">Secure your package</ButtonLink>
               )}
             </div>
           )}

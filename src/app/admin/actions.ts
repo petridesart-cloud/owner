@@ -2,14 +2,16 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { requireAdmin } from "@/lib/auth";
+import { getSettings, requireAdmin } from "@/lib/auth";
 import { env } from "@/lib/env";
 import { db } from "@/lib/supabase/admin";
 import { EVENT_POLICY, cancelBooking, cancelSession, notifyOffers, onPaymentPaid, policyLine, runTick, sessionInfo } from "@/lib/booking";
 import { notify } from "@/lib/notifications";
 import { applyRecurring } from "@/lib/recurring";
 import { rewardCode } from "@/lib/rewards";
-import { discountLabel, normaliseCode } from "@/lib/discount";
+import { defaultTerms } from "@/lib/terms";
+import { getKinds, kindLabel } from "@/lib/kinds";
+import { discountLabel, normaliseCode, targetsLabel } from "@/lib/discount";
 import { friendlyError, type ActionResult } from "@/lib/errors";
 import { addDaysKey, localToUtc, spokenDateTime, todayKey } from "@/lib/time";
 import type { Json } from "@/lib/supabase/types";
@@ -111,6 +113,7 @@ const SessionForm = z.object({
   event_policy: z.string().trim().max(1500).optional(),
   recap: z.string().trim().max(600).optional(),
   signup_question: z.string().trim().max(200).optional(),
+  title_font: z.enum(["calligraphy", "handwritten", "minimal", "simple", "elegant", "bold"]).optional(),
 });
 
 function sessionRow(form: FormData) {
@@ -131,6 +134,7 @@ function sessionRow(form: FormData) {
     event_policy: p.data.event_policy || null,
     recap: p.data.recap || null,
     signup_question: p.data.signup_question || null,
+    title_font: p.data.title_font ?? null,
   };
 }
 
@@ -307,7 +311,8 @@ export async function sendBirthday(profileId: string, _: ActionResult, form: For
 /** Classes outside their packages (goodwill, a missed holiday class) with their own end date. */
 export async function giveClasses(profileId: string, _: ActionResult, form: FormData): Promise<ActionResult> {
   const viewer = await admin("give_classes", { profileId });
-  const kind = form.get("kind") === "mat" ? "mat" : "reformer";
+  const kind = String(form.get("kind") ?? "");
+  if (!(await getKinds()).some((k) => k.key === kind)) return { ok: false, error: "Choose what the classes are for." };
   const amount = Number(form.get("amount"));
   const until = String(form.get("date") ?? "");
   const reason = String(form.get("reason") ?? "").trim();
@@ -325,12 +330,16 @@ export async function giveClasses(profileId: string, _: ActionResult, form: Form
 
 // ── Rewards and discount codes ─────────────────────────────────────────
 /** % (1–100), € (cents) or free classes (1–10), read from a form. */
-function readDiscount(form: FormData): { kind: "percent" | "amount" | "free_classes"; value: number } | string {
+function readDiscount(form: FormData): { kind: "percent" | "amount" | "free_classes"; value: number; applies_to: string[] } | string {
   const kind = String(form.get("kind") ?? "");
   const n = Number(String(form.get("value") ?? "").replace(",", "."));
-  if (kind === "percent") return Number.isInteger(n) && n >= 1 && n <= 100 ? { kind, value: n } : "Enter a percentage between 1 and 100.";
-  if (kind === "amount") return n > 0 && n <= 1000 ? { kind, value: Math.round(n * 100) } : "Enter an amount in euro, e.g. 10.";
-  if (kind === "free_classes") return Number.isInteger(n) && n >= 1 && n <= 10 ? { kind, value: n } : "Enter between 1 and 10 classes.";
+  // What it applies to (her ticks); free classes only make sense on a package.
+  const picked = [...new Set(form.getAll("applies_to").map(String))].filter((t) => ["package", "trial", "drop_in", "event"].includes(t));
+  const applies_to = kind === "free_classes" ? ["package"] : picked;
+  if (!applies_to.length) return "Tick at least one: trial, drop-in, package or event.";
+  if (kind === "percent") return Number.isInteger(n) && n >= 1 && n <= 100 ? { kind, value: n, applies_to } : "Enter a percentage between 1 and 100.";
+  if (kind === "amount") return n > 0 && n <= 1000 ? { kind, value: Math.round(n * 100), applies_to } : "Enter an amount in euro, e.g. 10.";
+  if (kind === "free_classes") return Number.isInteger(n) && n >= 1 && n <= 10 ? { kind, value: n, applies_to } : "Enter between 1 and 10 classes.";
   return "Choose what the reward gives.";
 }
 const readDate = (form: FormData, key: string) => { const v = String(form.get(key) ?? ""); return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null; };
@@ -346,10 +355,11 @@ export async function giveReward(profileId: string, _: ActionResult, form: FormD
   const { data: p } = await db().from("profiles").select("id, email, full_name").eq("id", profileId).is("deleted_at", null).maybeSingle();
   if (!p) return { ok: false, error: "Client not found." };
   const { error } = await db().from("discount_codes").insert({
-    code: rewardCode(), kind: d.kind, value: d.value, profile_id: p.id, note, expires_on: until, max_uses: 1, created_by: viewer.profile.id,
+    code: rewardCode(), kind: d.kind, value: d.value, applies_to: d.applies_to, profile_id: p.id, note, expires_on: until, max_uses: 1, created_by: viewer.profile.id,
   });
   if (error) return { ok: false, error: "Couldn't save the reward. Please try again." };
-  const what = `${discountLabel(d.kind, d.value)}${d.kind === "free_classes" ? " added to" : ""} your next package${until ? `, until ${until.split("-").reverse().join(".")}` : ""}.`;
+  const on = d.applies_to.length === 1 && d.applies_to[0] === "package" ? "your next package" : `your next ${targetsLabel(d.applies_to).replace(/s(?=,| and|$)/g, "").replace(/ and /g, " or ")}`;
+  const what = `${discountLabel(d.kind, d.value)}${d.kind === "free_classes" ? " added to" : " on"} ${on}${until ? `, until ${until.split("-").reverse().join(".")}` : ""}.`;
   const sent = p.email && form.get("tell") === "on"
     ? (await notify({ profileId: p.id, email: p.email }, "reward", { name: p.full_name ?? undefined, note: `You have ${what.charAt(0).toLowerCase()}${what.slice(1)}` })).email
     : null;
@@ -370,11 +380,11 @@ export async function createCode(_: ActionResult, form: FormData): Promise<Actio
   const maxUses = max ? Number(max) : null;
   if (maxUses !== null && (!Number.isInteger(maxUses) || maxUses < 1 || maxUses > 1000)) return { ok: false, error: "Leave the limit empty, or enter a number of uses." };
   const { error } = await db().from("discount_codes").insert({
-    code, kind: d.kind, value: d.value, note: String(form.get("note") ?? "").trim().slice(0, 200) || null, expires_on: until, max_uses: maxUses, created_by: viewer.profile.id,
+    code, kind: d.kind, value: d.value, applies_to: d.applies_to, note: String(form.get("note") ?? "").trim().slice(0, 200) || null, expires_on: until, max_uses: maxUses, created_by: viewer.profile.id,
   });
   if (error) return { ok: false, error: error.code === "23505" ? "That code already exists. Choose another." : "Couldn't save the code." };
   revalidatePath("/admin/clients/codes");
-  return { ok: true, message: `${code} is live: ${discountLabel(d.kind, d.value)}.` };
+  return { ok: true, message: `${code} is live: ${discountLabel(d.kind, d.value)} on ${targetsLabel(d.applies_to)}.` };
 }
 
 export async function setCodeActive(id: string, active: boolean) {
@@ -529,6 +539,12 @@ export async function saveSettings(_: ActionResult, form: FormData): Promise<Act
     waitlist_window_minutes: Math.round(num("waitlist_window_hours") * 60),
     waitlist_close_minutes: Math.min(720, Math.max(0, Math.round(num("waitlist_close_minutes") || 0))),
     waitlist_sms: form.get("waitlist_sms") === "on",
+    alert_bookings: form.get("alert_bookings") === "on",
+    alert_signups: form.get("alert_signups") === "on",
+    alert_cancellations: form.get("alert_cancellations") === "on",
+    alert_requests: form.get("alert_requests") === "on",
+    alert_details: form.get("alert_details") === "on",
+    alert_email: (() => { const e = String(form.get("alert_email") ?? "").trim(); return e && z.string().email().safeParse(e).success ? e : null; })(),
     hold_minutes: num("hold_minutes"),
     reminder_offsets_minutes: offsets.length ? offsets : [1440, 120],
     refund_late_cancel_if_filled: form.get("refund_late_cancel_if_filled") === "on",
@@ -552,64 +568,147 @@ export async function saveSettings(_: ActionResult, form: FormData): Promise<Act
   return { ok: true, message: "Settings saved." };
 }
 
+// ── Class types, packages and single classes (she builds them herself) ──
+const months = (m: number) => `${m} month${m === 1 ? "" : "s"}`;
+const priceCents = (v: FormDataEntryValue | null) => {
+  const c = Math.round(Number(String(v ?? "").replace(",", ".").trim()) * 100);
+  return Number.isFinite(c) && c >= 0 && c <= 1_000_000 && String(v ?? "").trim() !== "" ? c : null;
+};
+const ClassTypeInput = z.object({
+  name: z.string().trim().min(1, "Give it a name.").max(60),
+  default_capacity: z.coerce.number().int().min(1, "Spots: 1 to 100.").max(100, "Spots: 1 to 100."),
+  default_duration_minutes: z.coerce.number().int().min(10, "Minutes: 10 to 600.").max(600, "Minutes: 10 to 600."),
+  credit_cost: z.coerce.number().int().min(1, "Classes used: 1 to 10.").max(10, "Classes used: 1 to 10."),
+  default_location: z.string().trim().max(120).optional(),
+  description: z.string().trim().max(600).optional(),
+});
+const slugOf = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") + "-" + Date.now().toString(36);
+
+/** A class type with its own packages (e.g. "Pre and post natal"): creates what packages can be "for", then the type. */
+async function newOwnClassType(input: z.infer<typeof ClassTypeInput>, active = true) {
+  const { data: key, error } = await db().rpc("add_credit_kind", { p_label: input.name });
+  if (error || !key) return { error: "Couldn't create the class type." } as const;
+  const { error: e2 } = await db().from("class_types").insert({
+    ...input, default_location: input.default_location || null, description: input.description || null,
+    kind: "other" as never, credit_kind: key as string, slug: slugOf(input.name), price_cents: 0, active,
+    sort_order: 100,
+  });
+  if (e2) return { error: "Couldn't save the class type." } as const;
+  return { key: key as string, label: input.name } as const;
+}
+
+/** "+ New class type" inside the package / single class form: saved straight away, then chosen in "For". */
+export async function createClassType(raw: Record<string, string>): Promise<ActionResult<{ key: string; label: string }>> {
+  await admin("create_class_type", { name: raw?.name });
+  const p = ClassTypeInput.safeParse(raw ?? {});
+  if (!p.success) return { ok: false, error: p.error.issues[0].message };
+  const res = await newOwnClassType(p.data);
+  if ("error" in res) return { ok: false, error: res.error! };
+  revalidatePath("/admin/settings");
+  return { ok: true, data: res, message: `${res.label} added. It's under Class types too.` };
+}
+
 /**
- * A class type is what appears on the schedule and in the timetable (e.g. "Pre-natal"), and says which
- * package pays for it. No price: prices come from packages, trials and drop-ins. Events have no
- * capacity, length, price or credits here: each event sets its own.
+ * A class type is what appears on the schedule and in the timetable, and says which packages pay for it
+ * (Reformer, Mat, another type's, or its own). No price: prices come from packages, trials and drop-ins.
+ * Events have no capacity, length, price or credits here: each event sets its own.
  */
 export async function saveClassType(id: string | null, _: ActionResult, form: FormData): Promise<ActionResult> {
   await admin("save_class_type", { id });
-  const name = String(form.get("name") ?? "").trim();
-  const kind = String(form.get("kind")) as "reformer" | "mat" | "event";
-  if (!name || !["reformer", "mat", "event"].includes(kind)) return { ok: false, error: "Name and type are required." };
-  const isEvent = kind === "event";
+  const { data: cur } = id ? await db().from("class_types").select("kind, credit_kind").eq("id", id).maybeSingle() : { data: null };
+  const isEvent = cur?.kind === "event";
+  const active = form.get("active") === "on";
+  if (isEvent) {
+    const name = String(form.get("name") ?? "").trim();
+    if (!name) return { ok: false, error: "Give it a name." };
+    await db().from("class_types").update({
+      name, active, description: String(form.get("description") ?? "").trim() || null,
+      default_location: String(form.get("default_location") ?? "").trim() || null,
+    }).eq("id", id!);
+    revalidatePath("/admin/settings");
+    return { ok: true, message: "Saved." };
+  }
+  const p = ClassTypeInput.safeParse(Object.fromEntries(form));
+  if (!p.success) return { ok: false, error: p.error.issues[0].message };
+  const paidWith = String(form.get("paid_with") ?? "");
+  if (!id && paidWith === "own") {
+    const res = await newOwnClassType(p.data, active);
+    if ("error" in res) return { ok: false, error: res.error! };
+    revalidatePath("/admin/settings");
+    return { ok: true, message: `${res.label} added, with its own packages. Add them under Packages.` };
+  }
+  const kinds = await getKinds();
+  if (!kinds.some((k) => k.key === paidWith)) return { ok: false, error: "Choose which packages pay for it." };
   const row = {
-    name, kind,
-    credit_kind: isEvent ? null : kind,
-    description: String(form.get("description") ?? "").trim() || null,
-    default_location: String(form.get("default_location") ?? "").trim() || null,
-    active: form.get("active") === "on",
-    ...(isEvent ? {} : {
-      default_capacity: Number(form.get("default_capacity")),
-      default_duration_minutes: Number(form.get("default_duration_minutes")),
-      credit_cost: Math.max(1, Math.min(10, Number(form.get("credit_cost")) || 1)),
-    }),
+    ...p.data, default_location: p.data.default_location || null, description: p.data.description || null, active,
+    credit_kind: paidWith,
+    // Reformer and Mat keep their own wording ("2 reformers left"); anything else reads "spots".
+    kind: (paidWith === "reformer" || paidWith === "mat" ? paidWith : "other") as never,
   };
-  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") + "-" + Date.now().toString(36);
   const { error } = id
     ? await db().from("class_types").update(row).eq("id", id)
-    : await db().from("class_types").insert({ ...row, slug, price_cents: 0, default_capacity: row.default_capacity ?? 10, default_duration_minutes: row.default_duration_minutes ?? 90 });
+    : await db().from("class_types").insert({ ...row, slug: slugOf(p.data.name), price_cents: 0, sort_order: 100 });
   if (error) return { ok: false, error: "Couldn't save. Check the spots (1–100) and minutes." };
+  // A type with its own packages: renaming it renames what its packages are "for".
+  if (id && cur?.credit_kind && cur.credit_kind === paidWith && !["reformer", "mat"].includes(paidWith)) {
+    const { count } = await db().from("class_types").select("id", { count: "exact", head: true }).eq("credit_kind", paidWith).neq("id", id).is("archived_at", null);
+    if (!count) await db().from("credit_kinds").update({ label: p.data.name }).eq("key", paidWith);
+  }
   revalidatePath("/admin/settings");
+  revalidatePath("/schedule");
   return { ok: true, message: "Saved." };
 }
 
-const PackageForm = z.object({
-  credit_kind: z.enum(["reformer", "mat"]),
-  credits: z.coerce.number().int().min(1).max(200),
-  months: z.coerce.number().int().min(1).max(12),
-  validity_days: z.coerce.number().int().min(1).max(400),
-  price: z.string().trim().regex(/^\d+([.,]\d{1,2})?$/),
-});
+/** Delete a class type. Used before → kept for past classes but removed from every list; never with classes still to come. */
+export async function deleteClassType(id: string): Promise<ActionResult> {
+  await admin("delete_class_type", { id });
+  const { data: ct } = await db().from("class_types").select("kind, credit_kind, name").eq("id", id).maybeSingle();
+  if (!ct) return { ok: false, error: "Not found." };
+  if (ct.kind === "event") return { ok: false, error: "Events can't be deleted: turn them off instead (untick Active)." };
+  const { count: upcoming } = await db().from("class_sessions").select("id", { count: "exact", head: true })
+    .eq("class_type_id", id).eq("status", "scheduled").gt("starts_at", new Date().toISOString());
+  if (upcoming) return { ok: false, error: `${ct.name} has ${upcoming} class${upcoming === 1 ? "" : "es"} coming up. Cancel or change them in Classes first, then delete it.` };
+  // Stop it repeating: out of the timetable and clients' weekly picks.
+  await db().from("template_slots").delete().eq("class_type_id", id);
+  await db().from("recurring_rules").delete().eq("class_type_id", id);
+  const { count: used } = await db().from("class_sessions").select("id", { count: "exact", head: true }).eq("class_type_id", id);
+  if (used) await db().from("class_types").update({ archived_at: new Date().toISOString(), active: false }).eq("id", id);
+  else await db().from("class_types").delete().eq("id", id);
+  // Its own packages' "For" entry goes too, once nothing else uses it (no other type, package or client package).
+  if (ct.credit_kind && ct.credit_kind !== "reformer" && ct.credit_kind !== "mat") {
+    const [{ count: types }, { count: offers }, { count: lots }] = await Promise.all([
+      db().from("class_types").select("id", { count: "exact", head: true }).eq("credit_kind", ct.credit_kind).is("archived_at", null),
+      db().from("products").select("id", { count: "exact", head: true }).eq("credit_kind", ct.credit_kind).is("archived_at", null),
+      db().from("credit_lots").select("id", { count: "exact", head: true }).eq("credit_kind", ct.credit_kind),
+    ]);
+    if (!types && !offers && !lots) await db().from("credit_kinds").delete().eq("key", ct.credit_kind);
+  }
+  revalidatePath("/admin/settings");
+  revalidatePath("/schedule");
+  return { ok: true, message: used ? `${ct.name} is deleted. Past classes still show it in clients' history.` : `${ct.name} is deleted.` };
+}
 
-/** A package's details and price (packages, trials and drop-ins all live in one list). */
+/** A package's or single class's details and price. */
 export async function saveProduct(id: string, _: ActionResult, form: FormData): Promise<ActionResult> {
   await admin("save_product", { id });
-  const cents = Math.round(Number(String(form.get("price")).replace(",", ".")) * 100);
-  if (!Number.isFinite(cents) || cents < 0 || cents > 1_000_000) return { ok: false, error: "Please check the price (numbers only, e.g. 130)." };
+  const cents = priceCents(form.get("price"));
+  if (cents == null) return { ok: false, error: "Please check the price (numbers only, e.g. 130)." };
   const { data: cur } = await db().from("products").select("tag, credit_kind").eq("id", id).single();
   const credits = Number(form.get("credits"));
-  const months = Number(form.get("months")) || null;
+  const m = Number(form.get("months")) || null;
+  if (cur?.tag === "package" && (!Number.isInteger(credits) || credits < 1 || credits > 200 || !m || m > 12)) return { ok: false, error: "Please check the classes and months." };
+  const name = String(form.get("name") ?? "").trim();
+  if (cur?.tag !== "package" && !name) return { ok: false, error: "Give it a name." };
   const { error } = await db().from("products").update({
     price_cents: cents,
     description: String(form.get("description") ?? "").trim() || null,
     active: form.get("active") === "on",
     ...(cur?.tag === "package" ? {
-      credits, months, validity_days: Number(form.get("validity_days")) || null,
-      per_week: months ? Math.max(1, Math.round(credits / (4 * months))) : null,
+      credits, months: m, validity_days: Number(form.get("validity_days")) || null,
+      per_week: m ? Math.max(1, Math.min(7, Math.round(credits / (4 * m)))) : null,
       // The name follows the details: "Reformer · 8 classes · 1 month".
-      name: `${cur.credit_kind === "mat" ? "Mat" : "Reformer"} · ${credits} classes · ${months} month${months === 1 ? "" : "s"}`,
-    } : { name: String(form.get("name") ?? "").trim() || undefined }),
+      name: `${await kindLabel(cur.credit_kind)} · ${credits} classes · ${months(m!)}`,
+    } : { name }),
   }).eq("id", id);
   if (error) return { ok: false, error: "Couldn't save." };
   revalidatePath("/admin/settings");
@@ -617,24 +716,56 @@ export async function saveProduct(id: string, _: ActionResult, form: FormData): 
   return { ok: true, message: "Saved. Clients see it straight away." };
 }
 
-/** A new package on the Packages page. */
-export async function addPackage(_: ActionResult, form: FormData): Promise<ActionResult> {
-  await admin("add_package");
-  const p = PackageForm.safeParse(Object.fromEntries(form));
-  if (!p.success) return { ok: false, error: "Please check the classes, months, days valid and price." };
-  const { credit_kind, credits, months, validity_days } = p.data;
+/** A new package, or a single class (trial or drop-in) with her own name, for any class type. */
+export async function addProduct(_: ActionResult, form: FormData): Promise<ActionResult> {
+  await admin("add_product");
+  const type = form.get("type") === "single" ? "single" : "package";
+  const creditKind = String(form.get("credit_kind") ?? "");
+  if (!(await getKinds()).some((k) => k.key === creditKind)) return { ok: false, error: "Choose what it's for, or add a new class type." };
+  const cents = priceCents(form.get("price"));
+  if (cents == null) return { ok: false, error: "Please check the price (numbers only, e.g. 25)." };
+  const description = String(form.get("description") ?? "").trim().slice(0, 300) || null;
   const { data: last } = await db().from("products").select("sort_order").order("sort_order", { ascending: false }).limit(1).maybeSingle();
-  const { error } = await db().from("products").insert({
-    kind: "pack", tag: "package", credit_kind, credits, months, validity_days, is_group: true, active: true,
-    per_week: Math.max(1, Math.round(credits / (4 * months))),
-    price_cents: Math.round(Number(p.data.price.replace(",", ".")) * 100),
-    name: `${credit_kind === "mat" ? "Mat" : "Reformer"} · ${credits} classes · ${months} month${months === 1 ? "" : "s"}`,
-    sort_order: (last?.sort_order ?? 0) + 1,
-  });
-  if (error) return { ok: false, error: "Couldn't add the package." };
+  const sort_order = (last?.sort_order ?? 0) + 1;
+  const active = form.get("active") !== "off";
+  let error;
+  if (type === "single") {
+    const tag = form.get("tag") === "trial" ? "trial" : "drop_in";
+    const name = String(form.get("name") ?? "").trim().slice(0, 80);
+    if (!name) return { ok: false, error: "Give it a name, e.g. Pre and Post Natal Reformer Trial." };
+    ({ error } = await db().from("products").insert({
+      kind: "single", tag, credit_kind: creditKind, credits: 1, price_cents: cents, name, description, is_group: tag === "trial", active, sort_order,
+    }));
+  } else {
+    const credits = Number(form.get("credits")), m = Number(form.get("months")), valid = Number(form.get("validity_days"));
+    if (!Number.isInteger(credits) || credits < 1 || credits > 200 || !Number.isInteger(m) || m < 1 || m > 12 || !Number.isInteger(valid) || valid < 1 || valid > 400)
+      return { ok: false, error: "Please check the classes, months and days valid." };
+    ({ error } = await db().from("products").insert({
+      kind: "pack", tag: "package", credit_kind: creditKind, credits, months: m, validity_days: valid, is_group: true, active, description,
+      per_week: Math.max(1, Math.min(7, Math.round(credits / (4 * m)))), price_cents: cents,
+      name: `${await kindLabel(creditKind)} · ${credits} classes · ${months(m)}`, sort_order,
+    }));
+  }
+  if (error) return { ok: false, error: "Couldn't add it. Please try again." };
   revalidatePath("/admin/settings");
   revalidatePath("/packs");
-  return { ok: true, message: "Package added. Clients see it on the Packages page." };
+  return { ok: true, message: `${type === "single" ? "Single class" : "Package"} added. ${active ? "Clients see it on the Packages page." : "It's not on sale yet."}` };
+}
+
+/** Delete a package or single class. Already bought → kept on receipts and history, removed from every list. */
+export async function deleteProduct(id: string): Promise<ActionResult> {
+  await admin("delete_product", { id });
+  const [{ count: paid }, { count: members }] = await Promise.all([
+    db().from("payments").select("id", { count: "exact", head: true }).eq("product_id", id),
+    db().from("memberships").select("id", { count: "exact", head: true }).or(`product_id.eq.${id},next_product_id.eq.${id}`),
+  ]);
+  const { error } = paid || members
+    ? await db().from("products").update({ archived_at: new Date().toISOString(), active: false }).eq("id", id)
+    : await db().from("products").delete().eq("id", id);
+  if (error) return { ok: false, error: "Couldn't delete it." };
+  revalidatePath("/admin/settings");
+  revalidatePath("/packs");
+  return { ok: true, message: paid ? "Deleted. Past receipts still show it." : "Deleted." };
 }
 
 export async function toggleCompliance(key: string, done: boolean) {
@@ -735,6 +866,10 @@ export async function saveTexts(_: ActionResult, form: FormData): Promise<Action
     .filter((r) => r.value || OPTIONAL_TEXTS.includes(r.key));
   const { error } = await db().from("site_content").upsert(rows);
   if (error) return { ok: false, error: "Couldn't save the texts." };
+  // The Terms: kept only when she changed them; empty (or our default) goes back to the default, which follows her settings.
+  const terms = String(form.get("terms") ?? "").replace(/\r/g, "").trim().slice(0, 20000);
+  if (!terms || terms === defaultTerms(await getSettings()).trim()) await db().from("site_content").delete().eq("key", "terms");
+  else await db().from("site_content").upsert({ key: "terms", value: terms, updated_at: new Date().toISOString() });
   const intro = String(form.get("intro_line") ?? "").trim();
   if (intro) await db().from("studio_settings").update({ intro_line: intro.slice(0, 300) }).eq("id", 1);
   revalidatePath("/", "layout");

@@ -3,11 +3,12 @@ import { useState } from "react";
 import { ActionForm } from "@/components/ActionForm";
 import { Checkbox, Field, inputClass } from "@/components/ui";
 import type { ActionResult } from "@/lib/errors";
+import { TARGETS } from "@/lib/discount";
 
 type Kind = "percent" | "amount" | "free_classes";
 const KINDS: { value: Kind; label: string; unit: string; hint: string; def: number; max: number }[] = [
-  { value: "percent", label: "% off their next package", unit: "Percent", hint: "Off the full price. Doesn't add to the student discount: they get whichever is bigger.", def: 10, max: 100 },
-  { value: "amount", label: "€ off their next package", unit: "Euro", hint: "Taken off the full price.", def: 10, max: 1000 },
+  { value: "percent", label: "% off", unit: "Percent", hint: "Off the full price. Doesn't add to the student discount: they get whichever is bigger.", def: 10, max: 100 },
+  { value: "amount", label: "€ off", unit: "Euro", hint: "Taken off the full price.", def: 10, max: 1000 },
   { value: "free_classes", label: "Free classes with their next package", unit: "Classes", hint: "Added to the package when you mark it as paid.", def: 1, max: 10 },
 ];
 
@@ -22,6 +23,16 @@ export function DiscountForm({ action, code = false }: { action: (s: ActionResul
           <input id="dc-code" name="code" required maxLength={24} autoCapitalize="characters" autoComplete="off" spellCheck={false} className={`${inputClass} uppercase`} />
         </Field>
       )}
+      <fieldset>
+        <legend className="mb-1.5 text-sm font-medium text-ink">Applies to</legend>
+        <div className="grid grid-cols-2 gap-x-3">
+          {TARGETS.map((t) => (
+            <Checkbox key={`${kind}-${t.value}`} id={`dc-t-${t.value}`} name="applies_to" value={t.value}
+              defaultChecked={t.value === "package"} disabled={kind === "free_classes" && t.value !== "package"}>{t.label}</Checkbox>
+          ))}
+        </div>
+        {kind === "free_classes" && <p className="text-xs text-ink-soft">Free classes are added to a package, so this one is for packages only.</p>}
+      </fieldset>
       <Field id="dc-kind" label="What it gives" hint={k.hint}>
         <select id="dc-kind" name="kind" value={kind} onChange={(e) => setKind(e.target.value as Kind)} className={inputClass}>
           {KINDS.map((x) => <option key={x.value} value={x.value}>{x.label}</option>)}

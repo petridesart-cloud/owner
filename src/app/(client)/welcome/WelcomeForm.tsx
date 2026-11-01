@@ -46,11 +46,6 @@ export function WelcomeForm({ email, first, last, phone, next }: { email: string
           (and the <Link href="/legal/terms" target="_blank" className="font-medium underline underline-offset-4">Terms</Link>).
         </Checkbox>
         {e.policy && <p id="policy-error" className="pl-8 text-xs font-medium text-burgundy">{e.policy}</p>}
-        <Checkbox id="fitness" name="fitness" required aria-describedby={e.fitness ? "fitness-error" : undefined}>
-          I confirm I&apos;m fit to exercise and will tell my instructor about any injury, condition or pregnancy (
-          <Link href="/legal/health" target="_blank" className="font-medium underline underline-offset-4">Health &amp; Safety</Link>).
-        </Checkbox>
-        {e.fitness && <p id="fitness-error" className="pl-8 text-xs font-medium text-burgundy">{e.fitness}</p>}
       </fieldset>
 
       <fieldset className="space-y-1 border-t border-line pt-4">

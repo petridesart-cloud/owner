@@ -162,6 +162,7 @@ export type Database = {
           status: Database["public"]["Enums"]["session_status"];
           template_id: string | null;
           title: string | null;
+          title_font: string | null;
           what_to_bring: string | null;
         };
         ComputedFields: never;
@@ -183,6 +184,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["session_status"];
           template_id?: string | null;
           title?: string | null;
+          title_font?: string | null;
           what_to_bring?: string | null;
         };
         Update: {
@@ -203,6 +205,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["session_status"];
           template_id?: string | null;
           title?: string | null;
+          title_font?: string | null;
           what_to_bring?: string | null;
         };
         Relationships: [
@@ -225,6 +228,7 @@ export type Database = {
       class_types: {
         Row: {
           active: boolean;
+          archived_at: string | null;
           created_at: string;
           credit_cost: number;
           credit_kind: Database["public"]["Enums"]["credit_kind"] | null;
@@ -242,6 +246,7 @@ export type Database = {
         ComputedFields: never;
         Insert: {
           active?: boolean;
+          archived_at?: string | null;
           created_at?: string;
           credit_cost?: number;
           credit_kind?: Database["public"]["Enums"]["credit_kind"] | null;
@@ -258,6 +263,7 @@ export type Database = {
         };
         Update: {
           active?: boolean;
+          archived_at?: string | null;
           created_at?: string;
           credit_cost?: number;
           credit_kind?: Database["public"]["Enums"]["credit_kind"] | null;
@@ -362,6 +368,28 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      credit_kinds: {
+        Row: {
+          created_at: string;
+          key: string;
+          label: string;
+          sort: number;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          key: string;
+          label: string;
+          sort?: number;
+        };
+        Update: {
+          created_at?: string;
+          key?: string;
+          label?: string;
+          sort?: number;
+        };
+        Relationships: [];
       };
       credit_ledger: {
         Row: {
@@ -506,6 +534,7 @@ export type Database = {
       discount_codes: {
         Row: {
           active: boolean;
+          applies_to: string[];
           code: string;
           created_at: string;
           created_by: string | null;
@@ -520,6 +549,7 @@ export type Database = {
         ComputedFields: never;
         Insert: {
           active?: boolean;
+          applies_to?: string[];
           code: string;
           created_at?: string;
           created_by?: string | null;
@@ -533,6 +563,7 @@ export type Database = {
         };
         Update: {
           active?: boolean;
+          applies_to?: string[];
           code?: string;
           created_at?: string;
           created_by?: string | null;
@@ -1059,6 +1090,7 @@ export type Database = {
       products: {
         Row: {
           active: boolean;
+          archived_at: string | null;
           credit_kind: Database["public"]["Enums"]["credit_kind"] | null;
           credits: number;
           description: string | null;
@@ -1077,6 +1109,7 @@ export type Database = {
         ComputedFields: never;
         Insert: {
           active?: boolean;
+          archived_at?: string | null;
           credit_kind?: Database["public"]["Enums"]["credit_kind"] | null;
           credits?: number;
           description?: string | null;
@@ -1094,6 +1127,7 @@ export type Database = {
         };
         Update: {
           active?: boolean;
+          archived_at?: string | null;
           credit_kind?: Database["public"]["Enums"]["credit_kind"] | null;
           credits?: number;
           description?: string | null;
@@ -1283,6 +1317,12 @@ export type Database = {
       studio_settings: {
         Row: {
           address: string;
+          alert_bookings: boolean;
+          alert_cancellations: boolean;
+          alert_details: boolean;
+          alert_email: string | null;
+          alert_requests: boolean;
+          alert_signups: boolean;
           allow_pay_later: boolean;
           bank_account_name: string;
           bank_iban: string;
@@ -1326,6 +1366,12 @@ export type Database = {
         ComputedFields: never;
         Insert: {
           address?: string;
+          alert_bookings?: boolean;
+          alert_cancellations?: boolean;
+          alert_details?: boolean;
+          alert_email?: string | null;
+          alert_requests?: boolean;
+          alert_signups?: boolean;
           allow_pay_later?: boolean;
           bank_account_name?: string;
           bank_iban?: string;
@@ -1368,6 +1414,12 @@ export type Database = {
         };
         Update: {
           address?: string;
+          alert_bookings?: boolean;
+          alert_cancellations?: boolean;
+          alert_details?: boolean;
+          alert_email?: string | null;
+          alert_requests?: boolean;
+          alert_signups?: boolean;
           allow_pay_later?: boolean;
           bank_account_name?: string;
           bank_iban?: string;
@@ -1535,6 +1587,7 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      add_credit_kind: { Args: { p_label: string }; Returns: string };
       admin_adjust_credits: {
         Args: {
           p_actor: string;
@@ -1694,6 +1747,12 @@ export type Database = {
         Args: Record<PropertyKey, never>;
         Returns: {
           address: string;
+          alert_bookings: boolean;
+          alert_cancellations: boolean;
+          alert_details: boolean;
+          alert_email: string | null;
+          alert_requests: boolean;
+          alert_signups: boolean;
           allow_pay_later: boolean;
           bank_account_name: string;
           bank_iban: string;
@@ -1801,7 +1860,7 @@ export type Database = {
         | "studio_cancelled"
         | "expired"
         | "no_show";
-      class_kind: "reformer" | "mat" | "event";
+      class_kind: "reformer" | "mat" | "event" | "other";
       consent_type:
         | "policy"
         | "terms"
@@ -1810,7 +1869,7 @@ export type Database = {
         | "marketing_email"
         | "marketing_sms"
         | "photos";
-      credit_kind: "reformer" | "mat";
+      credit_kind: "reformer" | "mat" | (string & {});
       ledger_entry:
         | "grant"
         | "booking_debit"
@@ -1942,7 +2001,7 @@ export const Constants = {
     Enums: {
       booking_source: ["online", "manual"],
       booking_status: ["held", "confirmed", "cancelled", "late_cancelled", "studio_cancelled", "expired", "no_show"],
-      class_kind: ["reformer", "mat", "event"],
+      class_kind: ["reformer", "mat", "event", "other"],
       consent_type: [
         "policy",
         "terms",

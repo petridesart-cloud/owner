@@ -50,11 +50,6 @@ export function SignupForm({ next }: { next: string }) {
           <Link href="/legal/terms" target="_blank" className="font-medium underline underline-offset-4">Terms</Link>.
         </Checkbox>
         {e.policy && <p id="policy-error" className="pl-8 text-xs font-medium text-burgundy">{e.policy}</p>}
-        <Checkbox id="fitness" name="fitness" required aria-describedby={e.fitness ? "fitness-error" : undefined}>
-          I confirm I&apos;m fit to exercise and will tell my instructor about any injury, condition or pregnancy (
-          <Link href="/legal/health" target="_blank" className="font-medium underline underline-offset-4">Health &amp; Safety</Link>).
-        </Checkbox>
-        {e.fitness && <p id="fitness-error" className="pl-8 text-xs font-medium text-burgundy">{e.fitness}</p>}
         <Checkbox id="marketing_email" name="marketing_email">Send me news about new schedules and events (optional).</Checkbox>
       </fieldset>
 

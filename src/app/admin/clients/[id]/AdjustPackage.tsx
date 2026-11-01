@@ -17,8 +17,8 @@ const ACTIONS: { value: Act; label: string; hint: string }[] = [
 ];
 
 /** One place to change a client's package: dates or classes. Every change is kept in the class ledger. */
-export function AdjustPackage({ lots, adjustLot, giveClasses }: {
-  lots: Lot[];
+export function AdjustPackage({ lots, adjustLot, giveClasses, kinds = [{ key: "reformer", label: "Reformer" }, { key: "mat", label: "Mat" }] }: {
+  lots: Lot[]; kinds?: { key: string; label: string }[];
   adjustLot: (s: ActionResult, f: FormData) => Promise<ActionResult>;
   giveClasses: (s: ActionResult, f: FormData) => Promise<ActionResult>;
 }) {
@@ -41,7 +41,7 @@ export function AdjustPackage({ lots, adjustLot, giveClasses }: {
         )}
         {act === "new" && (
           <Field id="adj-kind" label="Type">
-            <select id="adj-kind" name="kind" className={inputClass}><option value="reformer">Reformer</option><option value="mat">Mat</option></select>
+            <select id="adj-kind" name="kind" className={inputClass}>{kinds.map((k) => <option key={k.key} value={k.key}>{k.label}</option>)}</select>
           </Field>
         )}
         <div className="grid grid-cols-2 gap-3">

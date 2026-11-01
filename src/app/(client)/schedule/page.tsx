@@ -35,8 +35,8 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   return (
     <div>
       <header className="animate-rise px-5 pb-4 pt-6">
-        <h1 className="display text-[1.9rem] text-ink">Schedule</h1>
-        <p className="mt-1 font-serif text-[1.7rem] leading-tight text-plum-700">{monthYear(keyToDate(selected))}</p>
+        <h1 className="display text-[1.4rem] text-ink">Schedule</h1>
+        <p className="mt-1 text-[1rem] leading-tight text-plum-700">{monthYear(keyToDate(selected))}</p>
         <p className="mt-2 text-[0.95rem] leading-relaxed text-ink-soft">
           Book up to {Math.round(DAYS / 7)} weeks ahead. Cancel free of charge up to {settings.cancellation_cutoff_hours} hours before class.
         </p>

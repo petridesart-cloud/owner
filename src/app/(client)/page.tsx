@@ -49,9 +49,10 @@ export default async function Home() {
         <div className="animate-rise mx-auto w-fit">
           <Logo size={136} src={logo} priority />
         </div>
-        <h1 className="display mx-auto mt-5 max-w-xs animate-rise text-[1.7rem] text-ink [animation-delay:100ms]">
-          {firstName ? <>Welcome back, <span className="font-script text-[2.1rem] normal-case tracking-normal text-plum-700">{firstName}</span></> : "Move well. Feel strong."}
-        </h1>
+        {/* Only her own words on Home (her note): a greeting for clients, her intro line for everyone. */}
+        {firstName
+          ? <h1 className="display mx-auto mt-5 max-w-xs animate-rise text-[1.25rem] text-ink [animation-delay:100ms]">Welcome back, {firstName}</h1>
+          : <h1 className="sr-only">{settings.studio_name || "Re·Form Pilates Studio"}</h1>}
         <p className="mx-auto mt-3 max-w-sm animate-rise text-[0.95rem] leading-relaxed text-ink-soft [animation-delay:140ms]">{settings.intro_line}</p>
         <ButtonLink href="/packs" className="mt-6 w-full max-w-xs animate-rise [animation-delay:180ms]">
           Secure your package
@@ -98,7 +99,7 @@ export default async function Home() {
         <Section title="Upcoming event" className="mt-8">
           {eventLocked ? <LockedEvent cover={eventCover} signedIn={!!viewer} next="/" /> : (
             <Link href={`/book/${event.id}`} className="block rounded-[var(--radius-card)] shadow-[var(--shadow-soft)] transition hover:shadow-[var(--shadow-lift)]">
-              <EventCard e={event} cover={eventCover} booked={state.booked.has(event.id)} clientsOnly={eventClientsOnly} />
+              <EventCard e={event} cover={eventCover} booked={state.booked.has(event.id)} clientsOnly={eventClientsOnly} font={eventExtrasMap.get(event.id)?.title_font} />
             </Link>
           )}
         </Section>

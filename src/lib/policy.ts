@@ -5,7 +5,8 @@ export const STUDIO_RULES = [
   "Wear clean, comfortable clothes, preferably form-fitting, so your instructor can see your alignment and give effective feedback.",
   "For Reformer classes, grip socks are advised for safety and hygiene.",
   "All mobile phones should be on silent and stored away.",
-  "Tell your instructor about any concerns, injuries, health conditions or limitations before class.",
+  "Tell your instructor about any concerns, injuries, health conditions, pregnancy or limitations before class.",
+  "By booking a class you confirm you're fit to exercise.",
 ];
 
 export const WHAT_TO_BRING = ["Grip socks (for reformer)", "Water", "Clean, form-fitting clothes", "Arrive 5–10 minutes early"];

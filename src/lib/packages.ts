@@ -1,9 +1,11 @@
 import "server-only";
 import { db } from "@/lib/supabase/admin";
+import { kindLabels } from "@/lib/kinds";
+import { labelOf } from "@/lib/kind-label";
 
 export type PackageClass = { bookingId: string; startsAt: string; name: string; status: "upcoming" | "attended" | "missed" };
 export type PackageView = {
-  id: string; title: string; subtitle: string; kind: "reformer" | "mat";
+  id: string; title: string; subtitle: string; kind: string; kindLabel: string;
   total: number; remaining: number; used: number; attended: number; missed: number; expired: number;
   startedAt: string | null; expiresAt: string | null; validityDays: number | null;
   current: boolean; classes: PackageClass[];
@@ -28,6 +30,7 @@ export async function clientPackages(profileId: string, lotId?: string): Promise
     .select("lot_id, delta, entry_type, booking_id, bookings(status, checked_in_at, class_sessions(starts_at, title, class_types(name)))")
     .in("lot_id", ids);
 
+  const labels = await kindLabels();
   const now = Date.now();
   return lots.map((l) => {
     const rows = (ledger ?? []).filter((e) => e.lot_id === l.id);
@@ -49,7 +52,7 @@ export async function clientPackages(profileId: string, lotId?: string): Promise
     classes.sort((a, b) => a.startsAt.localeCompare(b.startsAt));
     const expired = -rows.filter((e) => e.entry_type === "expiry").reduce((n, e) => n + e.delta, 0);
     const p = l.payments?.products;
-    const kindLabel = l.credit_kind === "reformer" ? "Reformer" : "Mat";
+    const kindLabel = labelOf(labels, l.credit_kind);
     const title = `${kindLabel} Package`;
     const subtitle = p?.per_week && p.months
       ? `${p.credits ?? l.total} classes · ${months(p.months)}`
@@ -57,7 +60,7 @@ export async function clientPackages(profileId: string, lotId?: string): Promise
     const expiredOut = !!l.expires_at && new Date(l.expires_at).getTime() <= now;
     const upcoming = classes.some((c) => c.status === "upcoming");
     return {
-      id: l.id, title, subtitle, kind: l.credit_kind, total: l.total, remaining: l.remaining,
+      id: l.id, title, subtitle, kind: l.credit_kind, kindLabel, total: l.total, remaining: l.remaining,
       used: classes.length, attended: classes.filter((c) => c.status === "attended").length,
       missed: classes.filter((c) => c.status === "missed").length, expired,
       startedAt: l.started_at, expiresAt: l.expires_at, validityDays: l.validity_days,

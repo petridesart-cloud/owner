@@ -19,7 +19,7 @@ export function Logo({ size = 120, src = "/logo-instagram.png", className = "", 
 
 export function Wordmark({ className = "" }: { className?: string }) {
   return (
-    <span className={`font-serif text-[1.65rem] font-light tracking-wide text-plum-700 ${className}`}>
+    <span className={`text-[1.05rem] font-normal uppercase tracking-[0.28em] text-plum-700 ${className}`}>
       Re<span aria-hidden className="mx-[1px]">·</span>Form
     </span>
   );

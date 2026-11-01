@@ -26,7 +26,7 @@ export async function checkCodeAction(code: string): Promise<ActionResult<Discou
   const viewer = await getViewer();
   if (!viewer) return { ok: false, error: "Please sign in first." };
   if (await rateLimited("code_check", viewer.profile.id, 10, 15)) return { ok: false, error: TOO_MANY };
-  const found = await findCode(viewer.profile.id, String(code ?? "").slice(0, 40));
+  const found = await findCode(viewer.profile.id, String(code ?? "").slice(0, 40), undefined, "package");
   if (!found.ok) return found;
   const { id: _id, ...discount } = found.discount;
   void _id;

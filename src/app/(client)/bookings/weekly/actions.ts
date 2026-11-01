@@ -1,4 +1,5 @@
 "use server";
+import { getKinds } from "@/lib/kinds";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireOnboarded } from "@/lib/auth";
@@ -19,7 +20,8 @@ export async function saveWeekly(_: WeeklyState, form: FormData): Promise<Weekly
     return { classTypeId, weekday: Number(weekday), hhmm };
   });
   // Opened from one package (Reformer or Mat): only that type's weekly times change; the other type's stay.
-  const kind = form.get("kind") === "mat" ? "mat" : form.get("kind") === "reformer" ? "reformer" : null;
+  const k = String(form.get("kind") ?? "");
+  const kind = (await getKinds()).some((x) => x.key === k) ? k : null;
   if (kind) {
     const kindOf = new Map((await weeklySlots()).map((s) => [`${s.classTypeId}|${s.weekday}|${s.hhmm}`, s.creditKind]));
     slots.splice(0, slots.length, ...slots.filter((s) => kindOf.get(`${s.classTypeId}|${s.weekday}|${s.hhmm}`) === kind));

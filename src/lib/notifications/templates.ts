@@ -21,7 +21,8 @@ export type TemplateName =
   | "weekly_booked"
   | "weekly_full"
   | "birthday"
-  | "reward";
+  | "reward"
+  | "studio_alert";
 
 export type TemplateData = {
   name?: string;
@@ -196,9 +197,18 @@ export function render(t: TemplateName, raw: TemplateData): Rendered {
       return {
         subject: `A little something for you, ${first(d.name)}`,
         heading: "Your reward",
-        lines: [`Hi ${first(d.name)}, thank you for being part of Re·Form.`, d.note ?? "", "It's applied automatically when you choose your next package in the app."].filter(Boolean),
+        lines: [`Hi ${first(d.name)}, thank you for being part of Re·Form.`, d.note ?? "", "It's applied automatically when you book in the app."].filter(Boolean),
         cta: { label: "See packages", href: `${link}/packs` },
         sms: `Re·Form: you have a reward: ${d.note ?? ""} ${link}/packs`,
+      };
+    case "studio_alert":
+      // To the studio itself: what happened, in one line, with a link to the studio app. Never health details.
+      return {
+        subject: d.className ?? "Studio update",
+        heading: d.className ?? "Studio update",
+        lines: (d.note ?? "").split(/\n+/).filter(Boolean),
+        cta: { label: "Open the studio", href: d.link ?? `${link}/admin` },
+        sms: `Re·Form: ${d.className ?? "update"}`,
       };
     case "weekly_full":
       return {

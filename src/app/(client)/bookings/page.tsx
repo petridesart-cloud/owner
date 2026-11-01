@@ -56,7 +56,7 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
               return (
                 <div className="flex items-center justify-between gap-3 rounded-2xl bg-mauve-soft px-4 py-3">
                   <p className="text-sm text-ink">{ending.remaining <= 1 ? `${ending.remaining ? "1 class" : "No classes"} left` : "Your package ends soon"}. Keep your rhythm going.</p>
-                  <ButtonLink href={ending.kind === "mat" ? "/packs?type=mat" : "/packs"} variant="primary" className="min-h-11 shrink-0 px-4 text-[0.7rem]">Renew</ButtonLink>
+                  <ButtonLink href={`/packs?type=${ending.kind}`} variant="primary" className="min-h-11 shrink-0 px-4 text-[0.7rem]">Renew</ButtonLink>
                 </div>
               );
             })()}

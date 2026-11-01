@@ -1,3 +1,4 @@
+import { alertStudio } from "@/lib/studio-alerts";
 import "server-only";
 import { db } from "@/lib/supabase/admin";
 import { getSettings } from "@/lib/auth";
@@ -38,7 +39,7 @@ export async function weeklySlots() {
     .eq("status", "scheduled").gt("starts_at", new Date().toISOString())
     .lt("starts_at", new Date(Date.now() + cfg.booking_window_days * 86_400_000).toISOString())
     .not("class_types.credit_kind", "is", null);
-  const slots = new Map<string, { classTypeId: string; name: string; kind: string; creditKind: "reformer" | "mat"; weekday: number; hhmm: string }>();
+  const slots = new Map<string, { classTypeId: string; name: string; kind: string; creditKind: string; weekday: number; hhmm: string }>();
   for (const s of data ?? []) {
     const { weekday, hhmm } = slotOf(s.starts_at);
     const key = `${s.class_type_id}|${weekday}|${hhmm}`;
@@ -100,6 +101,9 @@ export async function applyRecurring(profileId?: string) {
       total += booked.length;
       await notify({ profileId: pid, email: profile.email }, "weekly_booked",
         { name: profile.full_name ?? undefined, when: booked.join(", "), note: `Free cancellation up to ${cfg.cancellation_cutoff_hours}h before each class.` });
+      // One email to the studio for the batch, rather than one per class.
+      await alertStudio("bookings", `Weekly classes booked: ${profile.full_name ?? profile.email ?? "a client"}`,
+        [`Booked from their usual days and times: ${booked.join(", ")}.`], { path: `/admin/clients/${pid}` });
     }
   }
   return { booked: total };

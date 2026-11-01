@@ -51,7 +51,7 @@ export default async function EventsPage() {
                 <li key={e.id}>
                   {locked ? <LockedEvent cover={cover} signedIn={!!viewer} /> : (
                     <Link href={`/book/${e.id}`} className="block rounded-[var(--radius-card)] shadow-[var(--shadow-soft)] transition hover:shadow-[var(--shadow-lift)]">
-                      <EventCard e={e} cover={cover} clientsOnly={!!extras.get(e.id)?.clients_only} booked={state.booked.has(e.id)} />
+                      <EventCard e={e} cover={cover} clientsOnly={!!extras.get(e.id)?.clients_only} booked={state.booked.has(e.id)} font={extras.get(e.id)?.title_font} />
                     </Link>
                   )}
                 </li>

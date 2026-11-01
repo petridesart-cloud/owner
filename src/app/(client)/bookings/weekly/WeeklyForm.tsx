@@ -6,7 +6,7 @@ import { keepValues } from "@/lib/keep-form";
 
 type Slot = { key: string; day: string; time: string; name: string; disabled: boolean };
 
-export function WeeklyForm({ groups, chosen, kind }: { groups: { day: string; slots: Slot[] }[]; chosen: string[]; kind?: "reformer" | "mat" }) {
+export function WeeklyForm({ groups, chosen, kind }: { groups: { day: string; slots: Slot[] }[]; chosen: string[]; kind?: string }) {
   const [state, action, pending] = useActionState<WeeklyState, FormData>(saveWeekly, { ok: false });
   return (
     <form onSubmit={keepValues(action)} className="space-y-5">

@@ -1,8 +1,9 @@
 import { Checkbox, Field, inputClass } from "@/components/ui";
+import { TitleFont } from "./TitleFont";
 
 type Type = { id: string; name: string; default_capacity: number; default_duration_minutes: number };
 type Defaults = { class_type_id?: string; date?: string; time?: string; duration?: number; capacity?: number; price?: string; title?: string | null; location?: string | null; description?: string | null;
-  clients_only?: boolean; what_to_bring?: string | null; event_policy?: string | null; recap?: string | null; signup_question?: string | null };
+  clients_only?: boolean; what_to_bring?: string | null; event_policy?: string | null; recap?: string | null; signup_question?: string | null; title_font?: string | null };
 
 export function SessionFields({ types, d = {}, event = false }: { types: Type[]; d?: Defaults; event?: boolean }) {
   return (
@@ -25,6 +26,7 @@ export function SessionFields({ types, d = {}, event = false }: { types: Type[];
       <details open={event} className="col-span-2 rounded-2xl border border-line px-4 py-2">
         <summary className="min-h-11 cursor-pointer content-center text-sm font-medium text-ink">Event options</summary>
         <div className="space-y-4 pb-3 pt-2">
+          <TitleFont value={d.title_font} title={d.title} />
           <Checkbox id="clients_only" name="clients_only" defaultChecked={d.clients_only}>
             Clients only: only clients with an active package (and people you add on the event page) can see and book it. Everyone else sees it blurred.
           </Checkbox>

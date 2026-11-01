@@ -4,6 +4,7 @@ import { eur } from "@/lib/money";
 import { addDaysKey, localToUtc, monthYear, todayKey, weekdayShort } from "@/lib/time";
 import { AdminTitle } from "../ui";
 import { Pick } from "./Pick";
+import { getKinds } from "@/lib/kinds";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +29,7 @@ function Big({ label, value, after, hint }: { label: string; value: ReactNode; a
   );
 }
 
-type S = { starts_at: string; capacity: number; class_types: { kind: string } | null; bookings: { status: string; checked_in_at: string | null }[] };
+type S = { starts_at: string; capacity: number; class_types: { kind: string; credit_kind: string | null } | null; bookings: { status: string; checked_in_at: string | null }[] };
 const booked = (list: S[]) => list.reduce((n, s) => n + s.bookings.filter((b) => b.status === "confirmed" || b.status === "no_show").length, 0);
 const spots = (list: S[]) => list.reduce((n, s) => n + s.capacity, 0);
 const pct = (b: number, c: number) => (c ? `${Math.round((b / c) * 100)}%` : "–");
@@ -61,7 +62,7 @@ export default async function StatsPage({ searchParams }: { searchParams: Promis
   const mFrom = localToUtc(monthKey, "00:00"), mTo = localToUtc(nextMonth(monthKey), "00:00");
   const yFrom = localToUtc(`${year}-01-01`, "00:00"), yTo = localToUtc(`${year + 1}-01-01`, "00:00");
 
-  const sel = "starts_at, capacity, class_types(kind), bookings!bookings_session_id_fkey(status, checked_in_at)";
+  const sel = "starts_at, capacity, class_types(kind, credit_kind), bookings!bookings_session_id_fkey(status, checked_in_at)";
   const [{ data: week }, { data: monthRows }, { data: monthPay }, { count: newClients }, { data: yearPayments }, { data: monthLedger }, { data: board }] = await Promise.all([
     db().from("class_sessions").select(sel).eq("status", "scheduled").gte("starts_at", wFrom).lt("starts_at", wTo),
     db().from("class_sessions").select(sel).eq("status", "scheduled").gte("starts_at", mFrom).lt("starts_at", mTo),
@@ -77,11 +78,14 @@ export default async function StatsPage({ searchParams }: { searchParams: Promis
   const isThisMonth = month === thisMonth;
 
   // Reformer vs mat, the chosen month.
-  const kinds = (["reformer", "mat"] as const).map((k) => {
-    const list = M.filter((s) => s.class_types?.kind === k);
+  // Reformer vs Mat (and any class type she added with its own packages that had classes or sales).
+  const allKinds = await getKinds();
+  const shown = allKinds.filter((k) => k.key === "reformer" || k.key === "mat" || M.some((s) => s.class_types?.credit_kind === k.key) || (monthPay ?? []).some((p) => p.products?.credit_kind === k.key));
+  const kinds = shown.map(({ key: k, label }) => {
+    const list = M.filter((s) => s.class_types?.kind !== "event" && s.class_types?.credit_kind === k);
     const pays = (monthPay ?? []).filter((p) => p.products?.credit_kind === k);
     return {
-      k, label: k === "reformer" ? "Reformer" : "Mat", classes: list.length, booked: booked(list), spots: spots(list),
+      k, label, classes: list.length, booked: booked(list), spots: spots(list),
       attended: list.reduce((n, s) => n + s.bookings.filter((b) => b.checked_in_at).length, 0),
       packs: pays.filter((p) => p.purpose === "pack").length, revenue: pays.reduce((n, p) => n + p.amount_cents, 0),
     };
@@ -162,8 +166,8 @@ export default async function StatsPage({ searchParams }: { searchParams: Promis
           <Big label="New clients" value={newClients ?? 0} after="signed up" />
         </div>
 
-        <div className="card mt-3 px-4 py-4">
-          <h3 className="display mb-3 text-[0.95rem]">Reformer vs mat · {monthName}</h3>
+        <div className="card mt-3 overflow-x-auto px-4 py-4">
+          <h3 className="display mb-3 text-[0.95rem]">{kinds.length > 2 ? "By class type" : "Reformer vs mat"} · {monthName}</h3>
           <table className="w-full text-left text-sm">
             <thead><tr className="text-ink-soft"><th scope="col" className="py-1 font-normal"><span className="sr-only">Measure</span></th>{kinds.map((k) => <th key={k.k} scope="col" className="py-1 text-right font-medium text-ink">{k.label}</th>)}</tr></thead>
             <tbody>

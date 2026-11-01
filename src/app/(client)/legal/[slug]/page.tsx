@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import { business } from "@/lib/business";
+import { db } from "@/lib/supabase/admin";
+import { BackButton } from "@/components/BackButton";
+import { MarkedText, defaultTerms } from "@/lib/terms";
 import { notFound, redirect } from "next/navigation";
 import { DraftNotice, Prose } from "@/components/Prose";
 import { PageTitle } from "@/components/ui";
@@ -10,33 +13,7 @@ type Settings = Awaited<ReturnType<typeof getSettings>>;
 const PAGES: Record<string, { title: string; body: (s: Settings) => React.ReactNode }> = {
   terms: {
     title: "Terms & Conditions",
-    body: (s) => (
-      <>
-        <h2>Who we are</h2>
-        <p>{business(s).name} is run by {business(s).owner ?? "its owner"}, an individual trader, at {business(s).address ?? "Limassol, Cyprus"}.{business(s).email ? ` Contact: ${[business(s).email, business(s).phone].filter(Boolean).join(", ")}.` : ` Contact us on Instagram @${s.instagram_handle}.`}</p>
-        <h2>Bookings</h2>
-        <p>A booking is confirmed only after successful payment or after a class credit is deducted. Each booking is for one person, for the class, date and time shown.</p>
-        <h2>Prices &amp; payment</h2>
-        <p>Prices are in euro and are the final price you pay{s.vat_registered ? `, including VAT at ${Number(s.vat_rate)}%` : ""}. {s.online_payments_enabled ? "Online payments are processed by Stripe; we never see or store your card details." : "Payment is made at the studio by cash or card. You receive a payment confirmation (receipt)."}</p>
-        <h2>Packages, packs and classes (credits)</h2>
-        <ul>
-          <li>Each package gives a number of classes (credits) for a class type (reformer or mat). Some classes, such as private sessions, may use more than one credit; this is shown before you book.</li>
-          <li>Classes from a monthly package expire at the end of each period{s.rollover_max ? `, except up to ${s.rollover_max} unused classes, which roll over once` : ""}. Packages are valid for 30 or 60 days from the date of your first class, depending on the package; classes can&apos;t be booked beyond the expiry date.</li>
-          <li>Classes have no cash value, are personal and can&apos;t be transferred, and aren&apos;t refundable once expired, unless required by law.</li>
-          <li>{s.online_payments_enabled ? "Monthly packages renew automatically until cancelled. You can cancel renewal any time from your Membership page; it takes effect at the end of the current period. If a renewal payment fails, no new classes are added until it's paid." : "Monthly packages don't renew automatically; you renew at the studio. We'll remind you before the period ends."}</li>
-          <li>Changing package applies from the next period.</li>
-          <li>Packages active during studio closures (Christmas, Easter, Summer) are frozen for the closed days.</li>
-        </ul>
-        <h2>Late arrival &amp; no-shows</h2>
-        <p>For safety we may refuse entry more than 10 minutes after the start. Late arrivals and no-shows are treated as attended classes.</p>
-        <h2>Changes by the studio</h2>
-        <p>We may need to cancel or reschedule a class (for example, illness or too few participants). If we cancel, you receive your credit back or a refund; see the Cancellation &amp; Refund Policy.</p>
-        <h2>Health &amp; liability</h2>
-        <p>You take part at your own risk and must follow the instructor&apos;s guidance and the Health &amp; Safety terms. Nothing in these terms limits liability that cannot be limited by law, including for death or personal injury caused by negligence.</p>
-        <h2>Law</h2>
-        <p>These terms are governed by the laws of the Republic of Cyprus. You can also use the EU Online Dispute Resolution platform.</p>
-      </>
-    ),
+    body: () => null, // her editable text (Settings → Your texts), see below
   },
   cancellation: {
     title: "Cancellation & Refunds",
@@ -140,6 +117,17 @@ export default async function LegalPage({ params }: { params: Promise<{ slug: st
   const page = PAGES[slug];
   if (!page) notFound();
   const s = await getSettings();
+  if (slug === "terms") {
+    const { data: custom } = await db().from("site_content").select("value").eq("key", "terms").maybeSingle();
+    return (
+      <div>
+        <div className="px-5 pt-3"><BackButton href="/" /></div>
+        <PageTitle eyebrow="Legal" title={page.title} />
+        {!custom && <DraftNotice />}
+        <Prose><MarkedText text={custom?.value || defaultTerms(s)} /></Prose>
+      </div>
+    );
+  }
   return (
     <div>
       <PageTitle eyebrow="Legal" title={page.title} />

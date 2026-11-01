@@ -37,7 +37,7 @@ export function PageTitle({ eyebrow, title, script, children }: { eyebrow?: stri
 }
 
 // The three class states she asked for, used everywhere: booked = pink, spots = purple, full = light pink.
-export const stateColors = { booked: "bg-mauve", open: "bg-lilac-300", waitlist: "bg-mauve-soft" } as const;
+export const stateColors = { booked: "bg-mauve", open: "bg-lilac-200", waitlist: "bg-mauve-soft" } as const;
 
 export function Badge({ tone = "lilac", children }: { tone?: "lilac" | "full" | "mauve" | "plain" | keyof typeof stateColors; children: ReactNode }) {
   const tones = {

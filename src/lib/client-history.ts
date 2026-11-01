@@ -1,7 +1,8 @@
 import "server-only";
 import { db } from "@/lib/supabase/admin";
 
-export type Kind = "reformer" | "mat";
+/** A credit kind: "reformer", "mat" or any class type she added with its own packages. */
+export type Kind = string;
 export type ClassStatus = "attended" | "no_show" | "late_cancel" | "cancelled" | "upcoming" | "unmarked" | "studio_cancelled";
 
 export const STATUS_LABEL: Record<ClassStatus, string> = {
@@ -46,7 +47,7 @@ export async function clientHistory(profileId: string) {
     db().from("credit_lots").select("id, credit_kind, total, remaining, expires_at, started_at, created_at, note, payment_id, membership_id, payments(amount_cents, paid_at, method, description, products(name))")
       .eq("profile_id", profileId).order("created_at", { ascending: false }),
     db().from("credit_ledger").select("lot_id, booking_id, entry_type").eq("profile_id", profileId).eq("entry_type", "booking_debit"),
-    db().from("bookings").select("id, status, checked_in_at, paid_with, class_sessions(id, starts_at, title, class_types(name, kind)), payment:payments!bookings_payment_id_fkey(amount_cents, paid_at, method, status, products(tag, name))")
+    db().from("bookings").select("id, status, checked_in_at, paid_with, class_sessions(id, starts_at, title, class_types(name, kind, credit_kind)), payment:payments!bookings_payment_id_fkey(amount_cents, paid_at, method, status, products(tag, name))")
       .eq("profile_id", profileId).neq("status", "expired").neq("status", "held"),
   ]);
   const lotOf = new Map<string, string>();
@@ -76,7 +77,7 @@ export async function clientHistory(profileId: string) {
     if (lotOf.has(b.id) || b.paid_with === "credit") continue;
     const s = b.class_sessions;
     const tag = b.payment?.products?.tag;
-    const kind = (s?.class_types?.kind ?? "event") as Kind | "event";
+    const kind = s?.class_types?.kind === "event" || !s?.class_types ? "event" : (s.class_types.credit_kind ?? s.class_types.kind) as Kind;
     const r = row(b);
     if (!b.payment && kind !== "event") {
       const g = manual.get(kind) ?? {
@@ -103,13 +104,16 @@ export async function clientHistory(profileId: string) {
   groups.sort((a, b) => (b.startsAt ?? b.classes[0]?.startsAt ?? "9999").localeCompare(a.startsAt ?? a.classes[0]?.startsAt ?? "9999"));
 
   // Totals by type for the three boxes (events aside).
-  const all = (bookings ?? []).map((b) => ({ kind: b.class_sessions?.class_types?.kind, r: row(b) }));
+  const all = (bookings ?? []).map((b) => ({ kind: b.class_sessions?.class_types?.credit_kind as string | null | undefined, r: row(b) }));
   const count = (kind: Kind, st: ClassStatus[]) => all.filter((x) => x.kind === kind && st.includes(x.r.status)).length;
   const packages = (kind: Kind) => (lots ?? []).filter((l) => l.credit_kind === kind && (l.payment_id || l.membership_id)).length;
+  // Reformer and Mat always; other class types once they have something to show.
+  const kinds = [...new Set<string>(["reformer", "mat", ...(lots ?? []).map((l) => l.credit_kind as string), ...all.map((x) => x.kind ?? "").filter(Boolean)])];
+  const by = (f: (k: Kind) => number) => Object.fromEntries(kinds.map((k) => [k, f(k)])) as Record<string, number>;
   const totals = {
-    packages: { reformer: packages("reformer"), mat: packages("mat") },
-    attended: { reformer: count("reformer", ["attended"]), mat: count("mat", ["attended"]) },
-    noShows: { reformer: count("reformer", ["no_show", "late_cancel"]), mat: count("mat", ["no_show", "late_cancel"]) },
+    packages: by(packages),
+    attended: by((k) => count(k, ["attended"])),
+    noShows: by((k) => count(k, ["no_show", "late_cancel"])),
   };
   return { groups, totals };
 }

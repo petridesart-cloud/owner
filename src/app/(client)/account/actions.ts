@@ -1,4 +1,5 @@
 "use server";
+import { alertStudio } from "@/lib/studio-alerts";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -42,6 +43,16 @@ export async function saveProfile(_: SaveState, form: FormData): Promise<SaveSta
   if (me !== p.marketing_email) changes.push({ profile_id: p.id, type: "marketing_email", granted: me, version: settings.policy_version });
   if (photoConsent && photoConsent !== p.photo_consent) changes.push({ profile_id: p.id, type: "photos", granted: photoConsent !== "none", version: `${settings.policy_version}:${photoConsent}` });
   if (changes.length) await db().from("consents").insert(changes);
+  // Her note: an email when a client changes their details (which ones, not the values of anything sensitive).
+  const LABELS: [string, unknown, unknown][] = [
+    ["name", fullName(d.first_name, d.last_name), p.full_name], ["mobile number", d.phone, p.phone], ["date of birth", d.date_of_birth, p.date_of_birth],
+    ["goal", d.goal || null, p.goal], ["emergency contact", `${d.emergency_contact_name}|${d.emergency_contact_phone}|${d.emergency_contact_relation}`,
+      `${p.emergency_contact_name ?? ""}|${p.emergency_contact_phone ?? ""}|${p.emergency_contact_relation ?? ""}`],
+    ["photo consent", photoConsent, p.photo_consent],
+  ];
+  const changed = LABELS.filter(([, a, b]) => (a ?? "") !== (b ?? "")).map(([l]) => l);
+  if (changed.length) await alertStudio("details", `Details updated: ${fullName(d.first_name, d.last_name)}`,
+    [`Changed: ${changed.join(", ")}.`, changed.includes("mobile number") ? `New mobile number: ${d.phone}` : ""], { path: `/admin/clients/${p.id}` });
   revalidatePath("/account");
   return { ok: true, message: "Saved." };
 }

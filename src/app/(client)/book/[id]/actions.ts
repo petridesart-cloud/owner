@@ -3,7 +3,10 @@ import { revalidatePath } from "next/cache";
 import { getViewer } from "@/lib/auth";
 import { bookAtStudio, bookFree, bookSingle, bookWithCredit, bookWithPayment, joinWaitlist, leaveWaitlist, saveAnswer } from "@/lib/booking";
 import type { ActionResult } from "@/lib/errors";
-import { TOO_MANY, bookingLimited } from "@/lib/rate-limit";
+import { TOO_MANY, bookingLimited, rateLimited } from "@/lib/rate-limit";
+import { findCode } from "@/lib/rewards";
+import { db } from "@/lib/supabase/admin";
+import type { Discount } from "@/lib/discount";
 
 async function onboardedProfile() {
   const viewer = await getViewer();
@@ -16,7 +19,7 @@ async function onboardedProfile() {
 }
 
 export async function bookAction(
-  sessionId: string, method: "credit" | "pay" | "studio" | "trial" | "drop_in" | "free", payBy: "cash" | "revolut" = "cash", answer = "",
+  sessionId: string, method: "credit" | "pay" | "studio" | "trial" | "drop_in" | "free", payBy: "cash" | "revolut" = "cash", answer = "", code: string | null = null,
 ): Promise<ActionResult<{ redirect: string }>> {
   const v = await onboardedProfile();
   if ("error" in v) return { ok: false, error: v.error! };
@@ -24,11 +27,31 @@ export async function bookAction(
   const res = method === "credit" ? await bookWithCredit(v.profile, sessionId)
     : method === "studio" ? await bookAtStudio(v.profile, sessionId)
     : method === "free" ? await bookFree(v.profile, sessionId)
-    : method === "trial" || method === "drop_in" ? await bookSingle(v.profile, sessionId, method, payBy)
+    : method === "trial" || method === "drop_in" ? await bookSingle(v.profile, sessionId, method, payBy, typeof code === "string" ? code.slice(0, 40) : null)
     : await bookWithPayment(v.profile, sessionId);
   if (res.ok && typeof answer === "string") await saveAnswer(v.profile.id, sessionId, answer);
   revalidatePath("/schedule");
   return res;
+}
+
+/** "Have a code?" on a class or event: what it gives here (the real price is worked out again when booking). */
+export async function checkSingleCodeAction(sessionId: string, modes: ("trial" | "drop_in")[], code: string): Promise<ActionResult<Discount>> {
+  const viewer = await getViewer();
+  if (!viewer) return { ok: false, error: "Please sign in first." };
+  if (await rateLimited("code_check", viewer.profile.id, 10, 15)) return { ok: false, error: TOO_MANY };
+  const { data: s } = await db().from("class_sessions").select("class_types(kind)").eq("id", sessionId).maybeSingle();
+  // Any of what's offered here: the code may be for drop-ins but not trials, for example.
+  const targets = s?.class_types?.kind === "event" ? ["event" as const] : [...new Set((Array.isArray(modes) ? modes : []).filter((m) => m === "trial" || m === "drop_in"))];
+  let found: Awaited<ReturnType<typeof findCode>> = { ok: false, error: "That code isn't valid." };
+  for (const t of targets) {
+    found = await findCode(viewer.profile.id, String(code ?? "").slice(0, 40), undefined, t);
+    if (found.ok) break;
+  }
+  if (!found.ok) return found;
+  if (found.discount.kind === "free_classes") return { ok: false, error: "Free classes are added to a package. Use this code on the Packages page." };
+  const { id: _id, ...discount } = found.discount;
+  void _id;
+  return { ok: true, data: discount };
 }
 
 export async function joinWaitlistAction(sessionId: string): Promise<ActionResult<{ position: number }>> {

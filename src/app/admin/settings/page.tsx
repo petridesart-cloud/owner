@@ -4,7 +4,9 @@ import { ActionForm } from "@/components/ActionForm";
 import { Checkbox, Field, inputClass } from "@/components/ui";
 import { getSettings } from "@/lib/auth";
 import { db } from "@/lib/supabase/admin";
-import { addPackage, paymentsUnlocked, resetDemoData, saveClassType, saveProduct, saveSettings } from "../actions";
+import { addProduct, createClassType, deleteClassType, deleteProduct, paymentsUnlocked, resetDemoData, saveClassType, saveProduct, saveSettings } from "../actions";
+import { AddOffer } from "./Offers";
+import { getKinds } from "@/lib/kinds";
 import { env, smsLive } from "@/lib/env";
 import { AdminTitle } from "../ui";
 import { Readiness } from "../Readiness";
@@ -26,13 +28,16 @@ function Group({ title, sub, children }: { title: string; sub: string; children:
 }
 
 export default async function SettingsPage() {
-  const [s, { data: types }, { data: products }, unlocked, readiness] = await Promise.all([
+  const [s, { data: types }, { data: products }, unlocked, readiness, kindRows] = await Promise.all([
     getSettings(),
-    db().from("class_types").select("*").order("sort_order"),
-    db().from("products").select("*").or("active.eq.true,kind.neq.membership").order("sort_order"),
+    db().from("class_types").select("*").is("archived_at", null).order("sort_order"),
+    db().from("products").select("*").is("archived_at", null).or("active.eq.true,kind.neq.membership").order("sort_order"),
     paymentsUnlocked(),
     getSettings().then(launchReadiness),
+    getKinds(),
   ]);
+  const kinds = kindRows.map(({ key, label }) => ({ key, label }));
+  const kindName = (k: string | null) => kinds.find((x) => x.key === k)?.label ?? k ?? "";
   const n = (id: string, label: string, value: number, hint?: string, step = 1) => (
     <Field id={id} label={label} hint={hint}><input id={id} name={id} type="number" step={step} min={0} defaultValue={value} className={inputClass} /></Field>
   );
@@ -112,6 +117,21 @@ export default async function SettingsPage() {
 
           </Group>
 
+          <Group title="Studio emails" sub="Emails to you when clients book, sign up, cancel…">
+            <Field id="alert_email" label="Send them to" hint={`Leave empty to use your contact email${s.contact_email ? ` (${s.contact_email})` : ""}.`}>
+              <input id="alert_email" name="alert_email" type="email" defaultValue={s.alert_email ?? ""} className={inputClass} />
+            </Field>
+            <fieldset className="space-y-0.5">
+              <legend className="mb-1 text-sm font-medium text-ink">Email me when a client…</legend>
+              <Checkbox id="alert_bookings" name="alert_bookings" defaultChecked={s.alert_bookings}>books a class or an event (says when a class was empty)</Checkbox>
+              <Checkbox id="alert_signups" name="alert_signups" defaultChecked={s.alert_signups}>creates an account</Checkbox>
+              <Checkbox id="alert_cancellations" name="alert_cancellations" defaultChecked={s.alert_cancellations}>cancels a class</Checkbox>
+              <Checkbox id="alert_requests" name="alert_requests" defaultChecked={s.alert_requests}>requests a package</Checkbox>
+              <Checkbox id="alert_details" name="alert_details" defaultChecked={s.alert_details}>changes their details or health answers</Checkbox>
+            </fieldset>
+            <p className="text-xs text-ink-soft">Changes you make yourself in the studio don&apos;t email you. Health answers are never put in an email.</p>
+          </Group>
+
           <Group title="Message on every page" sub="A banner for news, e.g. a closed week">
           {t("status_banner", "Status banner (optional)", s.status_banner, "e.g. “Studio closed this week, see you Monday!” Leave empty to hide.")}
           </Group>
@@ -146,39 +166,45 @@ export default async function SettingsPage() {
       <section>
         <h2 className="display mb-1 text-[0.95rem]">Class types</h2>
         <p className="mb-3 text-sm text-ink-soft">
-          What clients see on the schedule and what you choose in the timetable, e.g. Reformer, Mat or a new &ldquo;Pre-natal&rdquo; class.
-          Each type says which package pays for it. Prices aren&apos;t set here: they come from your packages, trials and drop-ins. Events set their own price, spots and time.
+          What clients see on the schedule and what you choose in the timetable. Each type says which packages pay for it: Reformer, Mat, or its own
+          (e.g. &ldquo;Pre and post natal&rdquo;). Prices come from your packages, trials and drop-ins. Events set their own price, spots and time.
         </p>
         <div className="space-y-3">
           {[...(types ?? []), null].map((ct) => {
             const isEvent = ct?.kind === "event";
+            const k = ct?.id ?? "new";
             return (
-              <details key={ct?.id ?? "new"} className="card px-5 py-3">
-                <summary className="flex min-h-11 cursor-pointer items-center justify-between font-medium text-ink">
+              <details key={k} className="card px-5 py-3">
+                <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-3 font-medium text-ink">
                   {ct ? ct.name : "+ Add a class type"}
-                  {ct && <span className="text-sm font-normal text-ink-soft">{isEvent ? "events" : `${ct.default_capacity} spots · ${ct.default_duration_minutes} min · ${ct.kind === "mat" ? "Mat" : "Reformer"} package`}{ct.active ? "" : " · hidden"}</span>}
+                  {ct && <span className="text-right text-sm font-normal text-ink-soft">{isEvent ? "events" : `${ct.default_capacity} spots · ${ct.default_duration_minutes} min · ${kindName(ct.credit_kind)} packages`}{ct.active ? "" : " · off"}</span>}
                 </summary>
-                <div className="pb-3 pt-3">
+                <div className="space-y-3 pb-3 pt-3">
                   <ActionForm action={saveClassType.bind(null, ct?.id ?? null)} submit={ct ? "Save" : "Add class type"} variant="soft">
-                    <Field id={`name-${ct?.id}`} label="Name"><input id={`name-${ct?.id}`} name="name" defaultValue={ct?.name ?? ""} placeholder="e.g. Pre-natal" className={inputClass} /></Field>
-                    {isEvent ? (
-                      <input type="hidden" name="kind" value="event" />
-                    ) : (
-                      <Field id={`kind-${ct?.id}`} label="Paid with" hint="Which package's classes are used to book it. Trials and drop-ins follow the same type.">
-                        <select id={`kind-${ct?.id}`} name="kind" defaultValue={ct?.kind ?? "reformer"} className={inputClass}><option value="reformer">Reformer package</option><option value="mat">Mat package</option></select>
+                    <Field id={`name-${k}`} label="Name"><input id={`name-${k}`} name="name" defaultValue={ct?.name ?? ""} placeholder="e.g. Pre and post natal" className={inputClass} /></Field>
+                    {!isEvent && (
+                      <Field id={`kind-${k}`} label="Paid with" hint="Which packages' classes book it. Its trials and drop-ins follow the same choice.">
+                        <select id={`kind-${k}`} name="paid_with" defaultValue={ct?.credit_kind ?? "reformer"} className={inputClass}>
+                          {kinds.map((x) => <option key={x.key} value={x.key}>{x.label} packages</option>)}
+                          {!ct && <option value="own">Its own packages (a new class type)</option>}
+                        </select>
                       </Field>
                     )}
                     {!isEvent && (
                       <div className="grid grid-cols-3 gap-3">
-                        <Field id={`cap-${ct?.id}`} label="Spots"><input id={`cap-${ct?.id}`} name="default_capacity" type="number" min={1} max={100} defaultValue={ct?.default_capacity ?? 3} className={inputClass} /></Field>
-                        <Field id={`dur-${ct?.id}`} label="Minutes"><input id={`dur-${ct?.id}`} name="default_duration_minutes" type="number" min={10} defaultValue={ct?.default_duration_minutes ?? 50} className={inputClass} /></Field>
-                        <Field id={`cost-${ct?.id}`} label="Classes used" hint="e.g. 2 for a private"><input id={`cost-${ct?.id}`} name="credit_cost" type="number" min={1} max={10} defaultValue={ct?.credit_cost ?? 1} className={inputClass} /></Field>
+                        <Field id={`cap-${k}`} label="Spots"><input id={`cap-${k}`} name="default_capacity" type="number" min={1} max={100} defaultValue={ct?.default_capacity ?? 3} className={inputClass} /></Field>
+                        <Field id={`dur-${k}`} label="Minutes"><input id={`dur-${k}`} name="default_duration_minutes" type="number" min={10} max={600} defaultValue={ct?.default_duration_minutes ?? 50} className={inputClass} /></Field>
+                        <Field id={`cost-${k}`} label="Classes used" hint="e.g. 2 for a private"><input id={`cost-${k}`} name="credit_cost" type="number" min={1} max={10} defaultValue={ct?.credit_cost ?? 1} className={inputClass} /></Field>
                       </div>
                     )}
-                    <Field id={`loc-${ct?.id}`} label="Default location"><input id={`loc-${ct?.id}`} name="default_location" defaultValue={ct?.default_location ?? ""} className={inputClass} /></Field>
-                    <Field id={`desc-${ct?.id}`} label="Description"><textarea id={`desc-${ct?.id}`} name="description" rows={2} defaultValue={ct?.description ?? ""} className={`${inputClass} py-3`} /></Field>
-                    <Checkbox id={`active-${ct?.id}`} name="active" defaultChecked={ct?.active ?? true}>Active</Checkbox>
+                    <Field id={`loc-${k}`} label="Default location"><input id={`loc-${k}`} name="default_location" defaultValue={ct?.default_location ?? ""} className={inputClass} /></Field>
+                    <Field id={`desc-${k}`} label="Description"><textarea id={`desc-${k}`} name="description" rows={2} defaultValue={ct?.description ?? ""} className={`${inputClass} py-3`} /></Field>
+                    <Checkbox id={`active-${k}`} name="active" defaultChecked={ct?.active ?? true}>Active (shows in the timetable and when adding classes)</Checkbox>
                   </ActionForm>
+                  {ct && !isEvent && (
+                    <ActionForm action={deleteClassType.bind(null, ct.id)} submit={`Delete ${ct.name}`} variant="ghost"
+                      confirm={`Delete ${ct.name}? It's removed from your timetable and lists. Past classes keep it in clients' history.`} />
+                  )}
                 </div>
               </details>
             );
@@ -187,46 +213,46 @@ export default async function SettingsPage() {
       </section>
 
       <section>
-        <h2 className="display mb-1 text-[0.95rem]">Packages</h2>
-        <p className="mb-3 text-sm text-ink-soft">Your packages, trials and drop-ins. Change a price or details and clients see it straight away.</p>
-        <div className="space-y-3">
-          {(products ?? []).filter((p) => p.kind !== "membership").map((p) => (
-            <details key={p.id} className="card px-5 py-3">
-              <summary className="flex min-h-11 cursor-pointer items-center justify-between font-medium text-ink">{p.name}<span className="text-sm font-normal text-ink-soft">€{(p.price_cents / 100).toFixed(2)}{p.active ? "" : " · hidden"}</span></summary>
-              <div className="pb-3 pt-3">
-                <ActionForm action={saveProduct.bind(null, p.id)} submit="Save" variant="soft">
-                  {p.tag === "package" ? (
-                    <div className="grid grid-cols-2 gap-3">
-                      <Field id={`pc-${p.id}`} label="Classes"><input id={`pc-${p.id}`} name="credits" type="number" min={1} defaultValue={p.credits} className={inputClass} /></Field>
-                      <Field id={`pm-${p.id}`} label="Months"><input id={`pm-${p.id}`} name="months" type="number" min={1} max={12} defaultValue={p.months ?? 1} className={inputClass} /></Field>
-                      <Field id={`pv-${p.id}`} label="Valid (days)" hint="From the first class"><input id={`pv-${p.id}`} name="validity_days" type="number" min={1} defaultValue={p.validity_days ?? ""} className={inputClass} /></Field>
-                      <Field id={`pp-${p.id}`} label="Price €"><input id={`pp-${p.id}`} name="price" inputMode="decimal" defaultValue={(p.price_cents / 100).toFixed(2)} className={inputClass} /></Field>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-3">
-                      <Field id={`pn-${p.id}`} label="Name"><input id={`pn-${p.id}`} name="name" defaultValue={p.name} className={inputClass} /></Field>
-                      <Field id={`pp-${p.id}`} label="Price €"><input id={`pp-${p.id}`} name="price" inputMode="decimal" defaultValue={(p.price_cents / 100).toFixed(2)} className={inputClass} /></Field>
-                    </div>
-                  )}
-                  <Field id={`pdesc-${p.id}`} label="Short description (optional)"><input id={`pdesc-${p.id}`} name="description" defaultValue={p.description ?? ""} className={inputClass} /></Field>
-                  <Checkbox id={`pa-${p.id}`} name="active" defaultChecked={p.active}>On sale</Checkbox>
-                </ActionForm>
-              </div>
-            </details>
+        <h2 className="display mb-1 text-[0.95rem]">Packages &amp; single classes</h2>
+        <p className="mb-3 text-sm text-ink-soft">Packages, trials and drop-ins for each class type. Change a price or details and clients see it straight away.</p>
+        <div className="space-y-5">
+          {kinds.filter((x) => (products ?? []).some((p) => p.kind !== "membership" && p.credit_kind === x.key)).map((x) => (
+            <div key={x.key} className="space-y-2">
+              <h3 className="eyebrow px-1">{x.label}</h3>
+              {(products ?? []).filter((p) => p.kind !== "membership" && p.credit_kind === x.key)
+                .sort((a, b) => Number(a.tag !== "package") - Number(b.tag !== "package") || a.sort_order - b.sort_order).map((p) => (
+                <details key={p.id} className="card px-5 py-3">
+                  <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-3 font-medium text-ink">
+                    <span>{p.name}{p.tag !== "package" && <span className="block text-xs font-normal text-ink-soft">{p.tag === "trial" ? "Trial" : "Drop-in"}</span>}</span>
+                    <span className="shrink-0 text-sm font-normal text-ink-soft">€{(p.price_cents / 100).toFixed(2)}{p.active ? "" : " · not on sale"}</span>
+                  </summary>
+                  <div className="space-y-3 pb-3 pt-3">
+                    <ActionForm action={saveProduct.bind(null, p.id)} submit="Save" variant="soft">
+                      {p.tag === "package" ? (
+                        <div className="grid grid-cols-2 gap-3">
+                          <Field id={`pc-${p.id}`} label="Classes"><input id={`pc-${p.id}`} name="credits" type="number" min={1} defaultValue={p.credits} className={inputClass} /></Field>
+                          <Field id={`pm-${p.id}`} label="Months"><input id={`pm-${p.id}`} name="months" type="number" min={1} max={12} defaultValue={p.months ?? 1} className={inputClass} /></Field>
+                          <Field id={`pv-${p.id}`} label="Valid (days)" hint="From the first class"><input id={`pv-${p.id}`} name="validity_days" type="number" min={1} defaultValue={p.validity_days ?? ""} className={inputClass} /></Field>
+                          <Field id={`pp-${p.id}`} label="Price €"><input id={`pp-${p.id}`} name="price" inputMode="decimal" defaultValue={(p.price_cents / 100).toFixed(2)} className={inputClass} /></Field>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-3">
+                          <Field id={`pn-${p.id}`} label="Name"><input id={`pn-${p.id}`} name="name" defaultValue={p.name} className={inputClass} /></Field>
+                          <Field id={`pp-${p.id}`} label="Price €"><input id={`pp-${p.id}`} name="price" inputMode="decimal" defaultValue={(p.price_cents / 100).toFixed(2)} className={inputClass} /></Field>
+                        </div>
+                      )}
+                      <Field id={`pdesc-${p.id}`} label="Short description (optional)"><input id={`pdesc-${p.id}`} name="description" defaultValue={p.description ?? ""} className={inputClass} /></Field>
+                      <Checkbox id={`pa-${p.id}`} name="active" defaultChecked={p.active}>On sale</Checkbox>
+                    </ActionForm>
+                    <ActionForm action={deleteProduct.bind(null, p.id)} submit="Delete" variant="ghost" confirm={`Delete ${p.name}? Clients who already bought it keep it.`} />
+                  </div>
+                </details>
+              ))}
+            </div>
           ))}
           <details className="card px-5 py-3">
-            <summary className="flex min-h-11 cursor-pointer items-center font-medium text-ink">+ Add a package</summary>
-            <div className="pb-3 pt-3">
-              <ActionForm action={addPackage} submit="Add package" variant="soft">
-                <Field id="np-kind" label="For"><select id="np-kind" name="credit_kind" className={inputClass}><option value="reformer">Reformer classes</option><option value="mat">Mat classes</option></select></Field>
-                <div className="grid grid-cols-2 gap-3">
-                  <Field id="np-credits" label="Classes"><input id="np-credits" name="credits" type="number" min={1} defaultValue={10} className={inputClass} /></Field>
-                  <Field id="np-months" label="Months"><input id="np-months" name="months" type="number" min={1} max={12} defaultValue={1} className={inputClass} /></Field>
-                  <Field id="np-valid" label="Valid (days)" hint="From the first class"><input id="np-valid" name="validity_days" type="number" min={1} defaultValue={30} className={inputClass} /></Field>
-                  <Field id="np-price" label="Price €"><input id="np-price" name="price" inputMode="decimal" placeholder="e.g. 150" className={inputClass} /></Field>
-                </div>
-              </ActionForm>
-            </div>
+            <summary className="flex min-h-11 cursor-pointer items-center font-medium text-ink">+ Add a package or single class</summary>
+            <div className="pb-3 pt-3"><AddOffer kinds={kinds} addProduct={addProduct} createClassType={createClassType} /></div>
           </details>
         </div>
       </section>

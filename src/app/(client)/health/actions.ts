@@ -1,4 +1,5 @@
 "use server";
+import { alertStudio } from "@/lib/studio-alerts";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { safeNext } from "@/lib/safe-next";
@@ -38,6 +39,9 @@ export async function saveHealth(_: HealthState, form: FormData): Promise<Health
     bpMeds: bp === "yes", medication: text("medication", 500),
   }, form.get("health_consent") === "on", settings.policy_version);
   if (!res.ok) return { ok: false, error: res.error };
+  // An update (not the first answers at sign-up): tell the studio, without any of the answers.
+  if (viewer.profile.parq_completed_at) await alertStudio("details", `Health answers updated: ${viewer.profile.full_name ?? viewer.profile.email ?? "a client"}`,
+    ["They've updated their health answers. Open their page in the studio to read them."], { path: `/admin/clients/${viewer.profile.id}` });
 
   revalidatePath("/account");
   const next = String(form.get("next") ?? "");

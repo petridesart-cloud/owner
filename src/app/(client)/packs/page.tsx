@@ -5,6 +5,7 @@ import { Card, Notice, PageTitle, Section } from "@/components/ui";
 import { getSettings, getViewer } from "@/lib/auth";
 import { productPrice } from "@/lib/pricing";
 import { availableRewards } from "@/lib/rewards";
+import { getKinds } from "@/lib/kinds";
 import { db } from "@/lib/supabase/admin";
 import { eur } from "@/lib/money";
 import { PackagePicker, type Group } from "./PackagePicker";
@@ -15,14 +16,17 @@ export const dynamic = "force-dynamic";
 
 export default async function PacksPage({ searchParams }: { searchParams: Promise<{ cancelled?: string; type?: string }> }) {
   const { cancelled, type } = await searchParams;
-  const kind = type === "mat" ? "mat" : "reformer";
-  const [s, viewer, { data: products }] = await Promise.all([
+  const [s, viewer, { data: products }, kinds] = await Promise.all([
     getSettings(),
     getViewer(),
-    db().from("products").select("*").eq("active", true).order("sort_order"),
+    db().from("products").select("*").eq("active", true).is("archived_at", null).order("sort_order"),
+    getKinds(),
   ]);
   const all = products ?? [];
-  const rewards = viewer ? (await availableRewards(viewer.profile.id)).map(({ id: _id, ...r }) => (void _id, r)) : [];
+  // One tab per class type with something on sale (Reformer, Mat, and any she adds).
+  const tabs = kinds.filter((k) => all.some((p) => p.credit_kind === k.key && (p.tag === "package" || p.tag === "trial" || p.tag === "drop_in")));
+  const kind = (tabs.find((k) => k.key === type) ?? tabs[0] ?? kinds[0]).key;
+  const rewards = viewer ? (await availableRewards(viewer.profile.id, "package")).map(({ id: _id, ...r }) => (void _id, r)) : [];
   const packs = all.filter((p) => p.tag === "package" && p.credit_kind === kind);
   const groups: Group[] = [...new Set(packs.map((p) => p.months ?? Math.round((p.validity_days ?? 30) / 30)))].sort().map((months) => ({
     months,
@@ -33,7 +37,7 @@ export default async function PacksPage({ searchParams }: { searchParams: Promis
   }));
   const singles = all.filter((p) => (p.tag === "trial" || p.tag === "drop_in") && p.credit_kind === kind);
   const methods: PayMethod[] = ["cash", "revolut", ...(s.bank_iban ? ["bank_transfer" as const] : [])];
-  const label = kind === "reformer" ? "Reformer" : "Mat";
+  const label = kinds.find((k) => k.key === kind)?.label ?? "";
 
   return (
     <div>
@@ -44,11 +48,11 @@ export default async function PacksPage({ searchParams }: { searchParams: Promis
       {cancelled && <div className="mb-4 px-5"><Notice>Checkout cancelled. Nothing was charged.</Notice></div>}
 
       <nav aria-label="Class type" className="mb-5 px-5">
-        <div className="grid grid-cols-2 rounded-full bg-lilac-100 p-1">
-          {(["reformer", "mat"] as const).map((k) => (
-            <Link key={k} href={k === "mat" ? "/packs?type=mat" : "/packs"} scroll={false} aria-current={k === kind ? "page" : undefined}
-              className={`flex min-h-11 items-center justify-center rounded-full text-[0.8rem] font-medium uppercase tracking-[0.16em] transition ${k === kind ? "bg-white text-ink shadow-[var(--shadow-soft)]" : "text-ink-soft"}`}>
-              {k === "reformer" ? "Reformer" : "Mat"}
+        <div className={`rounded-[1.4rem] bg-lilac-100 p-1 ${tabs.length <= 3 ? "grid" : "flex flex-wrap"}`} style={tabs.length <= 3 ? { gridTemplateColumns: `repeat(${Math.max(tabs.length, 1)}, minmax(0, 1fr))` } : undefined}>
+          {tabs.map((k) => (
+            <Link key={k.key} href={`/packs?type=${k.key}`} scroll={false} aria-current={k.key === kind ? "page" : undefined}
+              className={`flex min-h-11 flex-1 items-center justify-center rounded-full px-3 text-center text-[0.75rem] font-medium uppercase leading-tight tracking-[0.14em] transition ${k.key === kind ? "bg-white text-ink shadow-[var(--shadow-soft)]" : "text-ink-soft"}`}>
+              {k.label}
             </Link>
           ))}
         </div>
@@ -57,7 +61,7 @@ export default async function PacksPage({ searchParams }: { searchParams: Promis
       <div className="space-y-8">
         <div className="px-5">
           {groups.length ? <PackagePicker key={kind} kind={label} groups={groups} methods={methods} online={s.online_payments_enabled} cutoff={s.cancellation_cutoff_hours} rewards={rewards} signedIn={!!viewer} />
-            : <Card className="px-5 py-6 text-sm text-ink-soft">{label} packages are coming soon.</Card>}
+            : singles.length ? null : <Card className="px-5 py-6 text-sm text-ink-soft">{label} packages are coming soon.</Card>}
           {s.student_discount_pct > 0 && <p className="mt-3 text-xs leading-relaxed text-ink-soft">Students get {s.student_discount_pct}% off group packages: show your student card at the studio once and it&apos;s applied automatically.</p>}
         </div>
 
@@ -68,7 +72,7 @@ export default async function PacksPage({ searchParams }: { searchParams: Promis
                 <div key={p.id} className="flex items-center justify-between gap-3 py-3.5">
                   <div>
                     <p className="font-medium text-ink">{p.name}</p>
-                    <p className="text-xs text-ink-soft">{p.tag === "trial" ? `Your first ${kind} class only` : "One class, paid individually"}</p>
+                    <p className="text-xs text-ink-soft">{p.description || (p.tag === "trial" ? `Your first ${label.toLowerCase()} class only` : "One class, paid individually")}</p>
                   </div>
                   <p className="font-serif text-2xl text-ink">{eur(p.price_cents)}</p>
                 </div>
