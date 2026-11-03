@@ -33,5 +33,5 @@
    - Saturday: 8:00 R.
 
 ## Open questions
-- **Mat class size:** currently 8 spots, and Pre & Post Natal Mat is also 8. Tell us if that's wrong.
+- ~~Mat class size~~ **Answered:** Mat classes have 4 spots (Mat and Pre & Post Natal Mat), migration `20261103000300_mat_four_spots.sql`; scheduled Mat classes changed to 4 (never below who's already booked).
 - **Pre & Post Natal classes:** they aren't in the timetable yet. She adds them when she launches the tab.

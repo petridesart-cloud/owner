@@ -33,7 +33,7 @@ Booking web app for **Re·Form Pilates Studio**, Limassol, Cyprus (Instagram @re
   - Not a registered business yet: no VAT shown anywhere (the VAT and registration fields are hidden and empty).
   - Receipts are plain payment confirmations, never tax invoices.
 - **Classes:**
-  - Reformer: capacity 3, 50 minutes. Mat: configurable.
+  - Reformer: capacity 3, 50 minutes. Mat: capacity 4 (her answer, 3 Nov; Pre & Post Natal Mat too).
   - Events (SUP Pilates, brunch) are paid individually.
   - Each class type has a credit cost (a private session may cost 2–3).
 - **Cancellation:** **6h** cutoff.
