@@ -39,11 +39,13 @@ test("the studio builds a new class type with a trial; clients see its own tab; 
   await expect(client.getByRole("link", { name: label })).toHaveCount(0);
 
   // And the class type (nothing booked with it yet, so it's removed completely).
-  const type = admin.locator("details", { has: admin.locator("summary", { hasText: label }) }).first();
+  // The class type (not its Packages page tab, which has the same name).
+  const type = admin.locator("section", { has: admin.getByRole("heading", { name: "Class types" }) })
+    .locator("details", { has: admin.locator("summary", { hasText: label }) });
   await type.locator("summary").click();
   admin.once("dialog", (d) => d.accept());
   await type.getByRole("button", { name: `Delete ${label}` }).click();
-  await expect(admin.locator("summary", { hasText: label })).toHaveCount(0);
+  await expect(type).toHaveCount(0);
 });
 
 test("her tabs: Mat and Reformer for clients; Pre and Post Natal and Private set up but hidden until she shows them", async ({ browser }) => {

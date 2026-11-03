@@ -39,7 +39,8 @@ export default async function PacksPage({ searchParams }: { searchParams: Promis
     const packs = all.filter((p) => p.tag === "package" && p.credit_kind === k.key);
     return [...new Set(packs.map(monthsOf))].sort().map((months, i) => ({
       key: `${k.key}-${months}`, months,
-      title: many ? `${k.sub_label || k.label}${new Set(packs.map(monthsOf)).size > 1 ? ` · ${months} month${months === 1 ? "" : "s"}` : ""}` : `${k.label} packages`,
+      // In a tab with several class types the heading names the type, so the card just says how long.
+      title: many ? `${months} month${months === 1 ? "" : "s"}` : `${k.label} packages`,
       heading: many && i === 0 ? k.sub_label || k.label : undefined,
       description: many && i === 0 ? k.description : undefined,
       options: packs.filter((p) => monthsOf(p) === months).map((p) => {
