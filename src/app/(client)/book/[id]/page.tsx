@@ -31,8 +31,26 @@ export default async function BookPage({ params, searchParams }: { params: Promi
   const { data: s } = await db().from("class_sessions").select("starts_at").eq("id", id).maybeSingle();
   if (!s) notFound();
   const start = new Date(s.starts_at);
-  const [c] = await availability(new Date(start.getTime() - 1000), new Date(start.getTime() + 1000)).then((r) => r.filter((x) => x.id === id));
+  const [c] = await availability(new Date(start.getTime() - 1000), new Date(start.getTime() + 1000), { includePrivate: true }).then((r) => r.filter((x) => x.id === id));
   if (!c) notFound();
+  // A private session: only for the person she booked in (and the studio). Nobody else sees it or books it.
+  const { data: ptype } = await db().from("class_types").select("private").eq("id", c.class_type_id).maybeSingle();
+  if (ptype?.private) {
+    const v = await getViewer();
+    const mine = v && (v.profile.role === "admin" || (await db().from("bookings").select("id").eq("session_id", id).eq("profile_id", v.profile.id).in("status", ["confirmed", "held"]).maybeSingle()).data);
+    if (!mine) {
+      return (
+        <div className="px-5 pt-3">
+          <BackButton href="/schedule" />
+          <div className="card mt-4 px-5 py-6 text-center">
+            <h1 className="display text-[1.1rem] text-ink">Private session</h1>
+            <p className="mt-2 text-sm leading-relaxed text-ink-soft">Private sessions are arranged with the studio. Get a private package and we&apos;ll find the times that suit you.</p>
+            <ButtonLink href="/packs?type=private" variant="soft" className="mt-4 w-full">See packages</ButtonLink>
+          </div>
+        </div>
+      );
+    }
+  }
 
   const [viewer, settings, texts, extrasMap] = await Promise.all([getViewer(), getSettings(), getTexts(), eventExtras([id])]);
   const profile = viewer?.profile;

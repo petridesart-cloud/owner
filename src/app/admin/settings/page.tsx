@@ -4,9 +4,9 @@ import { ActionForm } from "@/components/ActionForm";
 import { Checkbox, Field, inputClass } from "@/components/ui";
 import { getSettings } from "@/lib/auth";
 import { db } from "@/lib/supabase/admin";
-import { addProduct, createClassType, deleteClassType, deleteProduct, paymentsUnlocked, resetDemoData, saveClassType, saveProduct, saveSettings } from "../actions";
+import { addProduct, createClassType, saveTab, deleteClassType, deleteProduct, paymentsUnlocked, resetDemoData, saveClassType, saveProduct, saveSettings } from "../actions";
 import { AddOffer } from "./Offers";
-import { getKinds } from "@/lib/kinds";
+import { getKinds, getTabs } from "@/lib/kinds";
 import { env, smsLive } from "@/lib/env";
 import { AdminTitle } from "../ui";
 import { Readiness } from "../Readiness";
@@ -36,6 +36,7 @@ export default async function SettingsPage() {
     getSettings().then(launchReadiness),
     getKinds(),
   ]);
+  const tabs = await getTabs();
   const kinds = kindRows.map(({ key, label }) => ({ key, label }));
   const kindName = (k: string | null) => kinds.find((x) => x.key === k)?.label ?? k ?? "";
   const n = (id: string, label: string, value: number, hint?: string, step = 1) => (
@@ -106,7 +107,7 @@ export default async function SettingsPage() {
 
           <Group title="Booking rules" sub="Booking window, cancellations, waitlist">
           <div className="grid grid-cols-2 gap-3">
-            {n("booking_window_weeks", "Clients can book (weeks ahead)", Math.round(s.booking_window_days / 7))}
+            {n("booking_window_weeks", "Clients can book (weeks ahead)", Math.round(s.booking_window_days / 7), "4 = about 1 month, 13 = 3 months (up to 26). Your timetable is always ready 2 weeks further.")}
             {n("cancellation_cutoff_hours", "Free cancellation until (hours before)", s.cancellation_cutoff_hours)}
             {n("expiry_reminder_days", "Remind before package expires (days)", s.expiry_reminder_days)}
             {n("waitlist_close_minutes", "Waitlist stops (minutes before class)", s.waitlist_close_minutes, "Nobody is moved in after this. Yours: 60")}
@@ -164,6 +165,52 @@ export default async function SettingsPage() {
       </section>
 
       <section>
+        <h2 className="display mb-1 text-[0.95rem]">Packages page</h2>
+        <p className="mb-3 text-sm text-ink-soft">
+          The tabs clients choose from after &ldquo;Secure your package&rdquo;. Each tab shows the packages, trials and drop-ins of the class types in it.
+          A hidden tab is ready but only you can see it (open it from Client view to check it).
+        </p>
+        <div className="space-y-3">
+          {tabs.map((t) => {
+            const inTab = kindRows.filter((k) => k.tab === t.key);
+            return (
+              <details key={t.key} className="card px-5 py-3">
+                <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-3 font-medium text-ink">
+                  {t.label}
+                  <span className="text-right text-sm font-normal text-ink-soft">{inTab.map((k) => k.sub_label || k.label).join(" · ") || "empty"}{t.visible ? "" : " · hidden"}</span>
+                </summary>
+                <div className="pb-3 pt-3">
+                  <ActionForm action={saveTab.bind(null, t.key)} submit="Save" variant="soft">
+                    <div className="grid grid-cols-[1fr_5rem] gap-3">
+                      <Field id={`tab-${t.key}`} label="Tab name"><input id={`tab-${t.key}`} name="label" defaultValue={t.label} className={inputClass} /></Field>
+                      <Field id={`tabsort-${t.key}`} label="Order"><input id={`tabsort-${t.key}`} name="sort" type="number" min={0} defaultValue={t.sort} className={inputClass} /></Field>
+                    </div>
+                    <Field id={`tabnote-${t.key}`} label="Note at the top (optional)" hint="e.g. how private sessions are arranged.">
+                      <textarea id={`tabnote-${t.key}`} name="note" rows={2} defaultValue={t.note ?? ""} className={`${inputClass} py-3`} />
+                    </Field>
+                    <Checkbox id={`tabvis-${t.key}`} name="visible" defaultChecked={t.visible}>Show this tab to clients</Checkbox>
+                    {inTab.map((k) => (
+                      <div key={k.key} className="space-y-3 rounded-2xl border border-line p-3">
+                        <input type="hidden" name="kinds" value={k.key} />
+                        <p className="text-sm font-medium text-ink">{k.label}</p>
+                        {inTab.length > 1 && <>
+                          <Field id={`sub-${k.key}`} label="Heading in this tab"><input id={`sub-${k.key}`} name={`sub_${k.key}`} defaultValue={k.sub_label ?? ""} placeholder={k.label} className={inputClass} /></Field>
+                          <Field id={`desc-${k.key}`} label="Description (optional)"><textarea id={`desc-${k.key}`} name={`desc_${k.key}`} rows={2} defaultValue={k.description ?? ""} className={`${inputClass} py-3`} /></Field>
+                        </>}
+                        <Field id={`in-${k.key}`} label="In tab">
+                          <select id={`in-${k.key}`} name={`tab_${k.key}`} defaultValue={t.key} className={inputClass}>{tabs.map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}</select>
+                        </Field>
+                      </div>
+                    ))}
+                  </ActionForm>
+                </div>
+              </details>
+            );
+          })}
+        </div>
+      </section>
+
+      <section>
         <h2 className="display mb-1 text-[0.95rem]">Class types</h2>
         <p className="mb-3 text-sm text-ink-soft">
           What clients see on the schedule and what you choose in the timetable. Each type says which packages pay for it: Reformer, Mat, or its own
@@ -200,6 +247,7 @@ export default async function SettingsPage() {
                     <Field id={`loc-${k}`} label="Default location"><input id={`loc-${k}`} name="default_location" defaultValue={ct?.default_location ?? ""} className={inputClass} /></Field>
                     <Field id={`desc-${k}`} label="Description"><textarea id={`desc-${k}`} name="description" rows={2} defaultValue={ct?.description ?? ""} className={`${inputClass} py-3`} /></Field>
                     <Checkbox id={`active-${k}`} name="active" defaultChecked={ct?.active ?? true}>Active (shows in the timetable and when adding classes)</Checkbox>
+                    {!isEvent && <Checkbox id={`private-${k}`} name="private" defaultChecked={ct?.private ?? false}>Private: never on the schedule; you book clients in yourself</Checkbox>}
                   </ActionForm>
                   {ct && !isEvent && (
                     <ActionForm action={deleteClassType.bind(null, ct.id)} submit={`Delete ${ct.name}`} variant="ghost"

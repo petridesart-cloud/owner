@@ -25,6 +25,8 @@ try {
     if (done.has(f)) continue;
     console.log(`[migrate] applying ${f}`);
     await sql.begin(async (tx) => {
+      // Lets a migration tell the real studio app apart (e.g. loading her timetable only there): app.env = production.
+      await tx`select set_config('app.env', ${process.env.APP_ENV === "production" ? "production" : "other"}, true)`;
       await tx.unsafe(fs.readFileSync(path.join(dir, f), "utf8"));
       await tx`insert into public._app_migrations (name) values (${f})`;
     });

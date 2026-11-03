@@ -8,7 +8,7 @@ test("client requests a pack, studio marks it paid, client books with a class cr
   const email = uniqueEmail("pack");
   const name = `Pack Tester ${Date.now() % 10000}`;
   const client = await (await browser.newContext()).newPage();
-  await signUp(client, email, "/packs", name);
+  await signUp(client, email, "/packs?type=reformer", name);
   await client.getByRole("group", { name: "Reformer packages, valid 30 days" }).getByText("4 classes", { exact: true }).click();
   await client.getByText("Cash", { exact: true }).click();
   await client.locator("#accept").check();

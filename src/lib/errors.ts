@@ -22,6 +22,7 @@ const MESSAGES: Record<string, string> = {
   package_frozen: "Your package is frozen on that date. You can book classes before or after the freeze.",
   not_free: "This event isn't free. Please refresh the page.",
   event_no_cancel: "Events can't be cancelled or refunded in the app. Please message the studio.",
+  private_class: "Private sessions are booked with the studio. Message us and we'll find a time that suits you.",
   clients_only: "This event is for Re·Form clients. Come to a class or get a package to join the next one.",
 };
 

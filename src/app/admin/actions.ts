@@ -560,7 +560,7 @@ export async function saveSettings(_: ActionResult, form: FormData): Promise<Act
     legal_name: str("legal_name"), trader_name: str("trader_name"), address: str("address"),
     contact_email: str("contact_email"), contact_phone: str("contact_phone"), instagram_handle: str("instagram_handle").replace(/^@/, ""),
     policy_version: str("policy_version"),
-    booking_window_days: Math.round(num("booking_window_weeks") * 7) || 28,
+    booking_window_days: Math.min(26, Math.max(1, Math.round(num("booking_window_weeks")) || 4)) * 7, // 1 week to 6 months
     updated_at: new Date().toISOString(),
   }).eq("id", 1);
   if (error) return { ok: false, error: "Some values are out of range. Please check them." };
@@ -641,6 +641,7 @@ export async function saveClassType(id: string | null, _: ActionResult, form: Fo
   if (!kinds.some((k) => k.key === paidWith)) return { ok: false, error: "Choose which packages pay for it." };
   const row = {
     ...p.data, default_location: p.data.default_location || null, description: p.data.description || null, active,
+    private: form.get("private") === "on",
     credit_kind: paidWith,
     // Reformer and Mat keep their own wording ("2 reformers left"); anything else reads "spots".
     kind: (paidWith === "reformer" || paidWith === "mat" ? paidWith : "other") as never,
@@ -681,11 +682,46 @@ export async function deleteClassType(id: string): Promise<ActionResult> {
       db().from("products").select("id", { count: "exact", head: true }).eq("credit_kind", ct.credit_kind).is("archived_at", null),
       db().from("credit_lots").select("id", { count: "exact", head: true }).eq("credit_kind", ct.credit_kind),
     ]);
-    if (!types && !offers && !lots) await db().from("credit_kinds").delete().eq("key", ct.credit_kind);
+    if (!types && !offers && !lots) {
+      const { data: k } = await db().from("credit_kinds").delete().eq("key", ct.credit_kind).select("tab").maybeSingle();
+      // Its tab goes too once it holds nothing else.
+      if (k?.tab) {
+        const { count: left } = await db().from("credit_kinds").select("key", { count: "exact", head: true }).eq("tab", k.tab);
+        if (!left) await db().from("package_tabs").delete().eq("key", k.tab);
+      }
+    }
   }
   revalidatePath("/admin/settings");
   revalidatePath("/schedule");
   return { ok: true, message: used ? `${ct.name} is deleted. Past classes still show it in clients' history.` : `${ct.name} is deleted.` };
+}
+
+/**
+ * A tab on the clients' Packages page (Mat, Reformer, Pre and Post Natal, Private…): its name, a note shown at the
+ * top, whether clients can see it, and for each class type in it, its heading, description and which tab it's in.
+ */
+export async function saveTab(key: string, _: ActionResult, form: FormData): Promise<ActionResult> {
+  await admin("save_tab", { key });
+  const label = String(form.get("label") ?? "").trim().slice(0, 60);
+  if (!label) return { ok: false, error: "Give the tab a name." };
+  const sort = Number(form.get("sort"));
+  const { error } = await db().from("package_tabs").update({
+    label, note: String(form.get("note") ?? "").trim().slice(0, 600) || null, visible: form.get("visible") === "on",
+    ...(Number.isInteger(sort) && sort >= 0 && sort < 1000 ? { sort } : {}),
+  }).eq("key", key);
+  if (error) return { ok: false, error: "Couldn't save the tab." };
+  const tabs = new Set(((await db().from("package_tabs").select("key")).data ?? []).map((t) => t.key));
+  for (const k of form.getAll("kinds").map(String)) {
+    const tab = String(form.get(`tab_${k}`) ?? key);
+    await db().from("credit_kinds").update({
+      sub_label: String(form.get(`sub_${k}`) ?? "").trim().slice(0, 60) || null,
+      description: String(form.get(`desc_${k}`) ?? "").trim().slice(0, 600) || null,
+      ...(tabs.has(tab) ? { tab } : {}),
+    }).eq("key", k);
+  }
+  revalidatePath("/admin/settings");
+  revalidatePath("/packs");
+  return { ok: true, message: form.get("visible") === "on" ? "Saved. Clients can see this tab." : "Saved. This tab is hidden from clients." };
 }
 
 /** A package's or single class's details and price. */

@@ -177,6 +177,12 @@ export async function saveAnswer(profileId: string, sessionId: string, answer: s
 export async function buyProduct(profile: Profile, productId: string, method: "cash" | "revolut" | "bank_transfer" = "cash", code?: string | null): Promise<ActionResult<{ redirect: string }>> {
   const { data: product } = await db().from("products").select("*").eq("id", productId).eq("active", true).single();
   if (!product) return { ok: false, error: "That package isn't available." };
+  // A tab she hasn't shown yet (e.g. Private): only the studio can request from it (to try it out).
+  if (profile.role !== "admin" && product.credit_kind) {
+    const tab = (await getKinds()).find((k) => k.key === product.credit_kind)?.tab;
+    const t = (await getTabs()).find((x) => x.key === tab);
+    if (t && !t.visible) return { ok: false, error: "That package isn't available yet." };
+  }
   const cfg = await getSettings();
   const purpose = product.kind === "membership" ? "membership" : "pack";
 
@@ -255,7 +261,7 @@ export { paymentReference, productPrice, paymentInstructions } from "@/lib/prici
 import { paymentInstructions, paymentReference, productPrice } from "@/lib/pricing";
 import { discountLabel, withDiscount } from "@/lib/discount";
 import { findCode } from "@/lib/rewards";
-import { kindLabel } from "@/lib/kinds";
+import { getKinds, getTabs, kindLabel } from "@/lib/kinds";
 import { alertBooking, alertStudio } from "@/lib/studio-alerts";
 
 export async function buyPack(profile: Profile, productId: string, code?: string | null): Promise<ActionResult<{ redirect: string }>> {

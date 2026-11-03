@@ -8,10 +8,15 @@ export type Availability = {
   status: "scheduled" | "cancelled";
 };
 
-export async function availability(from: Date, to: Date): Promise<Availability[]> {
-  const { data, error } = await db().rpc("session_availability", { p_from: from.toISOString(), p_to: to.toISOString() });
+export async function availability(from: Date, to: Date, opts: { includePrivate?: boolean } = {}): Promise<Availability[]> {
+  const [{ data, error }, { data: priv }] = await Promise.all([
+    db().rpc("session_availability", { p_from: from.toISOString(), p_to: to.toISOString() }),
+    db().from("class_types").select("id").eq("private", true),
+  ]);
   if (error) throw error;
-  return (data ?? []) as Availability[];
+  // Private sessions are never on the schedule: she books them in by hand.
+  const hidden = new Set((priv ?? []).map((t) => t.id));
+  return ((data ?? []) as Availability[]).filter((c) => opts.includePrivate || !hidden.has(c.class_type_id));
 }
 
 export type EventExtras = { clients_only: boolean; what_to_bring: string | null; event_policy: string | null; recap: string | null; signup_question: string | null; title_font: string | null };

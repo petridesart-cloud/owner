@@ -240,6 +240,7 @@ export type Database = {
           kind: Database["public"]["Enums"]["class_kind"];
           name: string;
           price_cents: number;
+          private: boolean;
           slug: string;
           sort_order: number;
         };
@@ -258,6 +259,7 @@ export type Database = {
           kind: Database["public"]["Enums"]["class_kind"];
           name: string;
           price_cents: number;
+          private?: boolean;
           slug: string;
           sort_order?: number;
         };
@@ -275,6 +277,7 @@ export type Database = {
           kind?: Database["public"]["Enums"]["class_kind"];
           name?: string;
           price_cents?: number;
+          private?: boolean;
           slug?: string;
           sort_order?: number;
         };
@@ -372,24 +375,41 @@ export type Database = {
       credit_kinds: {
         Row: {
           created_at: string;
+          description: string | null;
           key: string;
           label: string;
           sort: number;
+          sub_label: string | null;
+          tab: string | null;
         };
         ComputedFields: never;
         Insert: {
           created_at?: string;
+          description?: string | null;
           key: string;
           label: string;
           sort?: number;
+          sub_label?: string | null;
+          tab?: string | null;
         };
         Update: {
           created_at?: string;
+          description?: string | null;
           key?: string;
           label?: string;
           sort?: number;
+          sub_label?: string | null;
+          tab?: string | null;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "credit_kinds_tab_fkey";
+            columns: ["tab"];
+            isOneToOne: false;
+            referencedRelation: "package_tabs";
+            referencedColumns: ["key"];
+          },
+        ];
       };
       credit_ledger: {
         Row: {
@@ -965,6 +985,34 @@ export type Database = {
           email_hash?: string;
           id?: never;
           ip_hash?: string | null;
+        };
+        Relationships: [];
+      };
+      package_tabs: {
+        Row: {
+          created_at: string;
+          key: string;
+          label: string;
+          note: string | null;
+          sort: number;
+          visible: boolean;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          key: string;
+          label: string;
+          note?: string | null;
+          sort?: number;
+          visible?: boolean;
+        };
+        Update: {
+          created_at?: string;
+          key?: string;
+          label?: string;
+          note?: string | null;
+          sort?: number;
+          visible?: boolean;
         };
         Relationships: [];
       };
@@ -2011,7 +2059,16 @@ export const Constants = {
         "marketing_sms",
         "photos",
       ],
-      credit_kind: ["reformer", "mat"],
+      credit_kind: [
+        "reformer",
+        "mat",
+        "prenatal_mat",
+        "prenatal_reformer",
+        "private_mat",
+        "private_reformer",
+        "private_prenatal_mat",
+        "private_prenatal_reformer",
+      ],
       ledger_entry: [
         "grant",
         "booking_debit",

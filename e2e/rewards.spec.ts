@@ -17,7 +17,7 @@ test("a discount code and a personal reward: right price, noted on the request, 
   // The client types the code: 4 classes €70 → €59.50.
   const name = `Reward Tester ${Date.now() % 10000}`;
   const client = await (await browser.newContext()).newPage();
-  await signUp(client, uniqueEmail("reward"), "/packs", name);
+  await signUp(client, uniqueEmail("reward"), "/packs?type=reformer", name);
   const fourClasses = client.getByRole("group", { name: "Reformer packages, valid 30 days" }).getByText("4 classes", { exact: true });
   await fourClasses.click();
   await client.getByRole("button", { name: "Have a code?" }).click();
@@ -44,7 +44,7 @@ test("a discount code and a personal reward: right price, noted on the request, 
   await admin.getByRole("button", { name: "Give reward" }).click();
   await expect(admin.getByText(/Saved: 1 free class added to your next package/)).toBeVisible();
 
-  await client.goto("/packs");
+  await client.goto("/packs?type=reformer");
   await fourClasses.click();
   await expect(client.getByText("Your reward: 1 free class added to this package")).toBeVisible();
   await client.locator("#accept").check();

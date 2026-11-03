@@ -4,6 +4,6 @@ import fs from "node:fs";
 const f = "src/lib/supabase/types.ts";
 const s = fs.readFileSync(f, "utf8");
 // Works on the raw generator output ("credit_kind": "reformer"|"mat",) and on the formatted file (credit_kind: …;).
-const out = s.replace(/("?credit_kind"?):\s*"reformer"\s*\|\s*"mat"(?:\s*\|\s*\(string & \{\}\))?(?=\s*[,;\n])/, '$1: "reformer" | "mat" | (string & {})');
+const out = s.replace(/("?credit_kind"?):\s*"reformer"(?:\s*\|\s*"[a-z0-9_]+")*(?:\s*\|\s*\(string & \{\}\))?(?=\s*[,;\n])/, '$1: "reformer" | "mat" | (string & {})');
 if (out === s) { console.error("widen-types: credit_kind enum not found"); process.exit(1); }
 fs.writeFileSync(f, out);

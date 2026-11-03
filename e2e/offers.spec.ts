@@ -45,3 +45,19 @@ test("the studio builds a new class type with a trial; clients see its own tab; 
   await type.getByRole("button", { name: `Delete ${label}` }).click();
   await expect(admin.locator("summary", { hasText: label })).toHaveCount(0);
 });
+
+test("her tabs: Mat and Reformer for clients; Pre and Post Natal and Private set up but hidden until she shows them", async ({ browser }) => {
+  const client = await (await browser.newContext()).newPage();
+  await client.goto("/packs");
+  await expect(client.getByRole("link", { name: "Mat", exact: true })).toBeVisible();
+  await expect(client.getByRole("link", { name: "Reformer", exact: true })).toBeVisible();
+  await expect(client.getByRole("link", { name: /Private/ })).toHaveCount(0);
+  await expect(client.getByRole("link", { name: /Pre and Post Natal/ })).toHaveCount(0);
+
+  const admin = await (await browser.newContext()).newPage();
+  await adminSignIn(admin, ADMIN, CODE);
+  await admin.goto("/packs?type=private");
+  await expect(admin.getByText("Only you can see this tab.")).toBeVisible();
+  await expect(admin.getByText(/no open slots to book in the app/)).toBeVisible();
+  await expect(admin.getByRole("heading", { name: "Pre & Post Natal · Reformer based" })).toBeVisible();
+});

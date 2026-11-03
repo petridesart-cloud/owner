@@ -5,15 +5,16 @@ import { Button, Checkbox, inputClass } from "@/components/ui";
 import { withDiscount, type Discount } from "@/lib/discount";
 import { buyPackAction, checkCodeAction, type PayMethod } from "./actions";
 
-export type Option = { id: string; perWeek: number; credits: number; cents: number; listCents: number; student: boolean; validityDays: number };
-export type Group = { months: number; options: Option[] };
+export type Option = { id: string; perWeek: number; credits: number; cents: number; listCents: number; student: boolean; validityDays: number; kindLabel: string };
+/** One card per class type and length; `heading`/`description` open a class type inside a tab with several (e.g. Private → Mat). */
+export type Group = { key: string; months: number; title: string; heading?: string; description?: string | null; options: Option[] };
 
 const eur = (c: number) => `€${(c / 100).toFixed(c % 100 ? 2 : 0)}`;
 const METHOD_LABEL: Record<PayMethod, string> = { cash: "Cash", revolut: "Revolut", bank_transfer: "Bank transfer" };
 
 /** Pick a package (per week × months), choose cash or Revolut, accept the terms, request it. */
-export function PackagePicker({ kind, groups, methods, online, cutoff, rewards = [], signedIn = false }: {
-  kind: string; groups: Group[]; methods: PayMethod[]; online: boolean; cutoff: number; rewards?: Discount[]; signedIn?: boolean;
+export function PackagePicker({ groups, methods, online, cutoff, rewards = [], signedIn = false }: {
+  groups: Group[]; methods: PayMethod[]; online: boolean; cutoff: number; rewards?: Discount[]; signedIn?: boolean;
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Option | null>(null);
@@ -31,10 +32,17 @@ export function PackagePicker({ kind, groups, methods, online, cutoff, rewards =
   return (
     <div className="space-y-5">
       {groups.map((g) => (
-        <fieldset key={g.months} className="card px-4 py-4">
-          <legend className="sr-only">{kind} packages, valid {g.options[0]?.validityDays} days</legend>
+        <div key={g.key} className="space-y-3">
+        {g.heading && (
+          <div className="px-1 pt-2">
+            <h2 className="display text-[1.1rem] text-ink">{g.heading}</h2>
+            {g.description && <p className="mt-1 text-sm leading-relaxed text-ink-soft">{g.description}</p>}
+          </div>
+        )}
+        <fieldset className="card px-4 py-4">
+          <legend className="sr-only">{g.title}, valid {g.options[0]?.validityDays} days</legend>
           <div className="px-1">
-            <p className="display text-[1.05rem] text-ink">{kind} packages</p>
+            <p className="display text-[1.05rem] text-ink">{g.title}</p>
             <p className="text-sm text-ink-soft">Valid {g.options[0]?.validityDays} days from your first class</p>
           </div>
           <div className="mt-3 space-y-2">
@@ -45,8 +53,8 @@ export function PackagePicker({ kind, groups, methods, online, cutoff, rewards =
                   <input type="radio" name="package" value={o.id} checked={on} onChange={() => { setSelected(o); setError(null); }} className="peer sr-only" />
                   <span className="flex min-h-16 items-center justify-between gap-3 rounded-2xl border border-line bg-white px-4 py-3 text-ink transition peer-checked:border-plum-700 peer-checked:bg-lilac-100 peer-focus-visible:ring-2 peer-focus-visible:ring-lilac-300">
                     <span>
-                      <span className="block text-base font-medium">{o.credits} classes</span>
-                      <span className="block text-xs text-ink-soft">{o.credits} credits</span>
+                      <span className="block text-base font-medium">{o.credits} {o.credits === 1 ? "class" : "classes"}</span>
+                      <span className="block text-xs text-ink-soft">{o.credits} {o.credits === 1 ? "credit" : "credits"}</span>
                     </span>
                     <span className="text-right">
                       {(o.student || price(o).cents < o.cents) && <span className="block text-[0.7rem] text-ink-soft line-through">{eur(o.listCents)}</span>}
@@ -59,12 +67,13 @@ export function PackagePicker({ kind, groups, methods, online, cutoff, rewards =
             })}
           </div>
         </fieldset>
+        </div>
       ))}
 
       {selected && (
         <div className="card animate-rise space-y-4 px-5 py-5" aria-live="polite">
           <div className="flex items-baseline justify-between gap-3">
-            <p className="font-medium text-ink">{kind} · {selected.credits} classes · valid {selected.validityDays} days</p>
+            <p className="font-medium text-ink">{selected.kindLabel} · {selected.credits} {selected.credits === 1 ? "class" : "classes"} · valid {selected.validityDays} days</p>
             <p className="font-serif text-2xl text-ink">{eur(price(selected).cents)}</p>
           </div>
           {selected.student && !(discount && price(selected).applies && discount.kind !== "free_classes") && <p className="-mt-2 text-xs font-medium text-plum-700">Student price</p>}
@@ -111,7 +120,7 @@ export function PackagePicker({ kind, groups, methods, online, cutoff, rewards =
             </fieldset>
           )}
           <ul className="list-disc space-y-1 rounded-2xl bg-lilac-50 py-3 pl-8 pr-4 text-sm leading-relaxed text-ink">
-            <li>{selected.credits + price(selected).extraClasses} {kind.toLowerCase()} classes ({selected.credits + price(selected).extraClasses} credits), valid {selected.validityDays} days from the date of your first class. Use them whenever you like within that time.</li>
+            <li>{selected.credits + price(selected).extraClasses} {selected.kindLabel} {selected.credits + price(selected).extraClasses === 1 ? "class" : "classes"} ({selected.credits + price(selected).extraClasses} credits), valid {selected.validityDays} days from the date of your first class. Use them whenever you like within that time.</li>
             <li>Cancel at least {cutoff} hours before class and the credit goes straight back into your package. Cancellations within {cutoff} hours, and missed classes, use the credit and can&apos;t be refunded.</li>
             <li>Classes can&apos;t be booked after the expiry date; unused classes expire and are non-refundable.</li>
             <li>{online ? "Paid now by secure checkout." : "Paid in advance. Your classes appear as soon as your instructor confirms the payment."}</li>
