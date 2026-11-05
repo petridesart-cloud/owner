@@ -6,6 +6,12 @@ import fs from "node:fs";
 import path from "node:path";
 import postgres from "postgres";
 
+// Preview deployments never touch a database: their environment variables may point at a real one.
+if (process.env.VERCEL_ENV && process.env.VERCEL_ENV !== "production") {
+  console.log(`[migrate] VERCEL_ENV=${process.env.VERCEL_ENV}; migrations only run on production deployments; skipping`);
+  process.exit(0);
+}
+
 const url = process.env.POSTGRES_URL_NON_POOLING || process.env.DATABASE_URL;
 if (!url) {
   console.log("[migrate] no POSTGRES_URL_NON_POOLING; skipping");
