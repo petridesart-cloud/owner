@@ -28,8 +28,8 @@ export function PageTitle({ eyebrow, title, script, children }: { eyebrow?: stri
     <header className="animate-rise px-5 pb-4 pt-6">
       {eyebrow && <Eyebrow>{eyebrow}</Eyebrow>}
       <h1 className="display mt-2 text-[1.9rem] text-ink">
-        {script && <span className="mr-2 font-script text-[2.3rem] normal-case tracking-normal text-plum-700">{script}</span>}
-        {title}
+        {/* Her note: the first word ("Your" Packages, "The" Studio) in the same clean lettering as the rest. */}
+        {script && `${script} `}{title}
       </h1>
       {children && <div className="mt-2 text-[0.95rem] leading-relaxed text-ink-soft">{children}</div>}
     </header>

@@ -33,8 +33,8 @@ export default async function EventsPage() {
     eventExtras(upcoming.map((e) => e.id)),
     lockedEventIds(upcoming.map((e) => e.id), viewer?.profile.id),
   ]);
-  // The archive shows the events she has added photos or a few words to.
-  const archive = (past ?? []).filter((e) => e.recap || photos.some((p) => p.slot === `event:${e.id}`));
+  // Every past event she held (not cancelled), newest first; her photos and a few words are optional extras.
+  const archive = past ?? [];
 
   return (
     <div>

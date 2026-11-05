@@ -44,10 +44,11 @@ export async function signUp(page: Page, email: string, next = "/", name = "Test
 export async function openBookableClass(page: Page) {
   await page.goto("/schedule");
   const days = page.getByRole("navigation", { name: "Choose a day" }).getByRole("link");
-  const bookable = page.getByRole("link", { name: /^Book .*reformers? left/ });
+  const bookable = page.getByRole("link", { name: /^Book .*reformers? left/ }).filter({ visible: true });
   // From a few days ahead, the first day that has a reformer spot (some days, e.g. Sundays, have no classes).
   for (let i = 3; i < (await days.count()); i++) {
     await page.goto((await days.nth(i).getAttribute("href"))!);
+    await page.waitForLoadState("networkidle");
     if (await bookable.count()) break;
   }
   await bookable.first().click();
