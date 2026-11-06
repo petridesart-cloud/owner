@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useActionState, useState } from "react";
+import { startTransition, useActionState, useState } from "react";
 import { Button, ButtonLink, Field, Notice, inputClass } from "@/components/ui";
 import { keepValues } from "@/lib/keep-form";
 import { confirmEmail, requestReset, resendCode, resetPassword, signIn, type AuthState } from "./actions";
@@ -26,7 +26,8 @@ export function CodeStep({ email, demoCode, next, onChange }: { email: string; d
           defaultValue={code} key={code ?? "code"} placeholder="••••••" className={codeClass} />
       </Field>
       <Button type="submit" disabled={pending} className="w-full">{pending ? "Checking…" : "Confirm"}</Button>
-      <button type="submit" formAction={resend} formNoValidate disabled={resending} className="mx-auto block min-h-11 text-sm font-medium text-ink underline underline-offset-4">
+      {/* Not a submit button: the form's onSubmit (keepValues) would send it to confirmEmail instead. */}
+      <button type="button" disabled={resending} onClick={(e) => { const f = new FormData(e.currentTarget.form!); startTransition(() => resend(f)); }} className="mx-auto block min-h-11 text-sm font-medium text-ink underline underline-offset-4">
         {resent.ok ? "New code sent" : "Send a new code"}
       </button>
     </form>
