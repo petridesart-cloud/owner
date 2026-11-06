@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { serviceDb, signIn, signUp, uniqueEmail } from "./helpers";
+import { serviceDb, signIn, signUp, startSignUp, uniqueEmail } from "./helpers";
 
 // A-002, A-008, A-088: logins are linked to client records only once the email is proven.
 const db = serviceDb();
@@ -48,4 +48,35 @@ test("a login made outside the app (already confirmed) gets neither an imported 
   await signIn(page, invited, "/", "outside-pass-1");
   await expect(page).not.toHaveURL(/\/admin/);
   expect((await db.from("profiles").select("id").eq("email", invited).eq("role", "admin")).data).toHaveLength(0);
+});
+
+test("re-running sign-up from another browser can't put its details or password on the account", async ({ page, browser }) => {
+  const email = uniqueEmail("rerun");
+  await startSignUp(page, email, "Real", "real-pass-123");
+  const other = await browser.newContext();
+  const attacker = await other.newPage();
+  await startSignUp(attacker, email, "Attacker", "attacker-pass-1");
+  // The real owner asks for a new code and confirms in their own browser.
+  await page.getByRole("button", { name: "Send a new code" }).click();
+  await expect(page.getByRole("button", { name: "New code sent" })).toBeVisible();
+  await page.getByRole("button", { name: "Confirm" }).click();
+  await page.waitForURL(/\/welcome/);
+  const uid = (await db.from("profiles").select("first_name").eq("email", email).single()).data;
+  expect(uid?.first_name ?? null).not.toBe("Attacker");
+  await signIn(attacker, email, "/account", "attacker-pass-1");
+  await expect(attacker.getByText("Email or password isn't right.")).toBeVisible();
+  await other.close();
+});
+
+test("an unconfirmed account can be finished on another device by signing in with its password", async ({ page, browser }) => {
+  const email = uniqueEmail("device");
+  await startSignUp(page, email, "Phone", "real-pass-123");
+  const laptop = await (await browser.newContext()).newPage();
+  await signIn(laptop, email, "/bookings", "wrong-pass-123");
+  await expect(laptop.getByText("Email or password isn't right.")).toBeVisible();
+  await signIn(laptop, email, "/bookings", "real-pass-123");
+  await expect(laptop.getByLabel("Code from your email")).toHaveValue(/^\d{6,10}$/);
+  await laptop.getByRole("button", { name: "Confirm" }).click();
+  await laptop.waitForURL(/\/health/);
+  expect((await db.from("profiles").select("first_name").eq("email", email).single()).data?.first_name).toBe("Phone");
 });
