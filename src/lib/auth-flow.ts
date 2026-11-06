@@ -5,6 +5,7 @@ import { db } from "@/lib/supabase/admin";
 import { emailLive, env } from "@/lib/env";
 import { notify } from "@/lib/notifications";
 import { ensureProfile, type Profile } from "@/lib/auth";
+import { normEmail } from "@/lib/request-keys";
 import { safeNext } from "@/lib/safe-next";
 import { fullName, PHOTO_CONSENT, type PhotoConsent } from "@/lib/profile";
 
@@ -13,11 +14,15 @@ const sha = (s: string) => createHash("sha256").update(s).digest("hex");
 /** Demo only: every demo client (…@example.com) signs in with this password, shown on the sign-in page. */
 export const DEMO_CLIENT_PASSWORD = "reform-demo";
 
-/** Admins: emails in ADMIN_EMAILS (bootstrap) plus anyone she added under Studio team. */
-export async function isStudioAdmin(email: string) {
+/** Admins: emails in ADMIN_EMAILS (bootstrap), anyone on the Studio team, and pending Studio-team invites. */
+export async function isStudioAdmin(raw: string) {
+  const email = normEmail(raw);
   if (env.adminEmails.includes(email)) return true;
-  const { data } = await db().from("profiles").select("id").ilike("email", email).eq("role", "admin").is("deleted_at", null).maybeSingle();
-  return !!data;
+  const [{ data: admin }, { data: invite }] = await Promise.all([
+    db().from("profiles").select("id").eq("email", email).eq("role", "admin").is("deleted_at", null).maybeSingle(),
+    db().from("team_invites").select("email").eq("email", email).maybeSingle(),
+  ]);
+  return !!admin || !!invite;
 }
 
 export async function authUser(email: string) {
@@ -55,18 +60,29 @@ export async function sendCode(email: string, template: "verify_email" | "reset_
     console.error("generateLink", error);
     return { ok: false, error: "We couldn't create a code. Please try again." };
   }
-  const { data: profile } = await db().from("profiles").select("id").ilike("email", email).maybeSingle();
+  const { data: profile } = await db().from("profiles").select("id").eq("email", normEmail(email)).is("deleted_at", null).maybeSingle();
   const sent = await notify({ profileId: profile?.id, email }, template, { code });
   if (sent.email === "failed") return { ok: false, error: "We couldn't send the email just now. Please try again in a minute." };
   return { ok: true, demoCode: env.demoMode && !(await isStudioAdmin(email)) ? code : undefined };
 }
 
-/** Make sure the login and profile exist and are linked; bootstrap admins from ADMIN_EMAILS. */
-export async function profileFor(userId: string, email: string): Promise<Profile | null> {
-  const profile = await ensureProfile(userId, email);
-  if (profile && env.adminEmails.includes(email) && profile.role !== "admin") {
-    await db().from("profiles").update({ role: "admin" }).eq("id", profile.id);
-    profile.role = "admin";
+/**
+ * Make sure the login and profile exist and are linked. `verified` means this sign-in just proved the
+ * email (a code from the email, or the demo passwords): only then is an unlinked client record linked,
+ * and admin access granted to ADMIN_EMAILS (bootstrap) and pending Studio-team invites. A password
+ * sign-in alone never grants either, so a login created outside the app can't claim them.
+ */
+export async function profileFor(userId: string, raw: string, opts: { verified?: boolean } = {}): Promise<Profile | null> {
+  const email = normEmail(raw);
+  const profile = await ensureProfile(userId, email, { link: opts.verified });
+  if (!profile || !opts.verified || profile.role === "admin") return profile;
+  const { data: invite } = await db().from("team_invites").select("email, full_name").eq("email", email).maybeSingle();
+  if (env.adminEmails.includes(email) || invite) {
+    const { error } = await db().from("profiles").update({ role: "admin", ...(invite?.full_name && !profile.full_name ? { full_name: invite.full_name } : {}) }).eq("id", profile.id);
+    if (!error) {
+      profile.role = "admin";
+      if (invite) await db().from("team_invites").delete().eq("email", email);
+    }
   }
   return profile;
 }

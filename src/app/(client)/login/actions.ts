@@ -36,19 +36,22 @@ export async function signIn(_: AuthState, form: FormData): Promise<AuthState> {
   if (await tooMany(email.data)) return { ok: false, error: "Too many tries. Please wait 15 minutes, or reset your password." };
 
   let user: { id: string; email?: string } | null = null;
+  let verified = false; // a demo password counts as proof of the email; a real password alone doesn't
   if (env.demoMode && (await isStudioAdmin(email.data))) {
     // Demo: the studio signs in with DEMO_ADMIN_CODE (no emails are sent in the demo).
     if (env.demoAdminCode.length < 8 || password !== env.demoAdminCode) return { ok: false, error: "Email or password isn't right." };
     await db().auth.admin.createUser({ email: email.data, email_confirm: true });
     const link = await db().auth.admin.generateLink({ type: "magiclink", email: email.data });
     user = await signInWithCode(email.data, link.data?.properties?.email_otp ?? "");
+    verified = true;
   } else if (env.demoMode && password === DEMO_CLIENT_PASSWORD && email.data.endsWith("@example.com")) {
     // Demo clients (elena@example.com…) share one password, shown on the sign-in page.
-    const { data: demo } = await db().from("profiles").select("id").ilike("email", email.data).is("deleted_at", null).maybeSingle();
+    const { data: demo } = await db().from("profiles").select("id").eq("email", email.data).is("deleted_at", null).maybeSingle();
     if (!demo) return { ok: false, error: "Email or password isn't right." };
     await db().auth.admin.createUser({ email: email.data, email_confirm: true });
     const link = await db().auth.admin.generateLink({ type: "magiclink", email: email.data });
     user = await signInWithCode(email.data, link.data?.properties?.email_otp ?? "");
+    verified = true;
   } else {
     const existing = await authUser(email.data);
     if (existing && !existing.confirmed && existing.has_password) {
@@ -69,7 +72,12 @@ export async function signIn(_: AuthState, form: FormData): Promise<AuthState> {
     user = data.user;
   }
   if (!user) return { ok: false, error: "We couldn't sign you in. Please try again." };
-  const profile = await profileFor(user.id, email.data);
+  const profile = await profileFor(user.id, email.data, { verified });
+  if (!profile) {
+    // The login isn't linked to their client record yet: a code from the email proves it's them.
+    await (await supabaseServer()).auth.signOut();
+    return { ok: false, error: "Please confirm it's you: tap “Forgot password?” and we'll email you a code." };
+  }
   redirect(landing(profile, next));
 }
 
@@ -83,7 +91,7 @@ export async function confirmEmail(_: AuthState, form: FormData): Promise<AuthSt
   const user = await signInWithCode(email.data, token);
   if (!user) return { ok: false, step: "code", email: email.data, error: "That code didn't work or has expired. Check it, or ask for a new one." };
 
-  let profile = await profileFor(user.id, email.data);
+  let profile = await profileFor(user.id, email.data, { verified: true });
   // Details typed when creating the account are kept on the login until the email is confirmed.
   const meta = (user.user_metadata ?? {}) as Partial<SignupDetails> & { signup?: boolean };
   if (profile && meta.signup && !profile.onboarded_at) {
@@ -111,8 +119,8 @@ export async function requestReset(_: AuthState, form: FormData): Promise<AuthSt
   let existing = await authUser(email.data);
   if (!existing) {
     // A client the studio added (or imported), or a studio email from ADMIN_EMAILS: create their login now.
-    const { data: known } = await db().from("profiles").select("id").ilike("email", email.data).is("deleted_at", null).maybeSingle();
-    if (known || env.adminEmails.includes(email.data)) {
+    const { data: known } = await db().from("profiles").select("id").eq("email", email.data).is("deleted_at", null).maybeSingle();
+    if (known || (await isStudioAdmin(email.data))) {
       await db().auth.admin.createUser({ email: email.data, email_confirm: false });
       existing = await authUser(email.data);
     }
@@ -138,7 +146,7 @@ export async function resetPassword(_: AuthState, form: FormData): Promise<AuthS
   await db().auth.admin.updateUserById(user.id, { password: pw.data });
   // Changing the password ends existing sessions, so sign in again with the new one.
   await (await supabaseServer()).auth.signInWithPassword({ email: email.data, password: pw.data });
-  const profile = await profileFor(user.id, email.data);
+  const profile = await profileFor(user.id, email.data, { verified: true });
   redirect(landing(profile, next));
 }
 

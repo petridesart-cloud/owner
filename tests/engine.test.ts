@@ -769,3 +769,79 @@ describe("her notes, round 5", () => {
     await db.from("site_content").delete().eq("key", "terms");
   });
 });
+
+describe("account linking (A-002, A-008)", () => {
+  const anon = createClient<Database>(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY, { auth: { persistSession: false } });
+  const stamp = () => `${Date.now()}${Math.random().toString(36).slice(2, 6)}`;
+  /** A client the studio added (imported, DM, manual): a profile with no login. */
+  async function imported(email: string, extra: Record<string, unknown> = {}) {
+    const { data, error } = await db.from("profiles").insert({ full_name: "Imported Client", email, ...extra }).select("id").single();
+    assert.ifError(error);
+    return data!.id;
+  }
+  const profile = async (id: string) => (await db.from("profiles").select("user_id, role, email").eq("id", id).single()).data!;
+  /** Prove the email the way the app does: a code from the email, checked by Supabase Auth. */
+  async function confirmWithCode(email: string) {
+    const link = await db.auth.admin.generateLink({ type: "magiclink", email });
+    assert.ifError(link.error);
+    const v = await anon.auth.verifyOtp({ email, token: link.data.properties!.email_otp, type: "email" });
+    assert.ifError(v.error);
+    return v.data.user!.id;
+  }
+
+  test("an unconfirmed login with the same email doesn't get the profile; confirming with a code links it", async () => {
+    const email = `link-${stamp()}@example.com`;
+    const p = await imported(email);
+    await grant(p, 5, null);
+    const { data, error } = await db.auth.admin.createUser({ email, password: "pw-12345678", email_confirm: false });
+    assert.ifError(error);
+    assert.equal((await profile(p)).user_id, null);
+    assert.equal((await db.from("profiles").select("id").eq("user_id", data.user!.id)).data!.length, 0, "no profile before the email is proven");
+    assert.equal(await confirmWithCode(email), data.user!.id);
+    assert.equal((await profile(p)).user_id, data.user!.id);
+  });
+
+  test("a login created already confirmed (autoconfirm / admin API) never takes over an existing profile", async () => {
+    const email = `autoconf-${stamp()}@example.com`;
+    const p = await imported(email);
+    const { data, error } = await db.auth.admin.createUser({ email, password: "pw-12345678", email_confirm: true });
+    assert.ifError(error);
+    assert.equal((await profile(p)).user_id, null);
+    assert.equal((await db.from("profiles").select("id").eq("user_id", data.user!.id)).data!.length, 0);
+    // A brand-new email still gets its own profile.
+    const fresh = `fresh-${stamp()}@example.com`;
+    const created = await db.auth.admin.createUser({ email: fresh, email_confirm: true });
+    assert.equal((await db.from("profiles").select("email").eq("user_id", created.data.user!.id).single()).data?.email, fresh);
+  });
+
+  test("Studio-team invites aren't admin profiles, and a login for that email doesn't become admin", async () => {
+    const email = `invite-${stamp()}@example.com`;
+    assert.ifError((await db.from("team_invites").insert({ email })).error);
+    const { data } = await db.auth.admin.createUser({ email, password: "pw-12345678", email_confirm: true });
+    const mine = (await db.from("profiles").select("role").eq("user_id", data.user!.id).single()).data;
+    assert.equal(mine?.role, "client");
+    assert.equal((await db.from("profiles").select("id").eq("email", email).eq("role", "admin")).data!.length, 0);
+    // Also not through a code-confirmed sign-up on the database side: only the app grants the invite.
+    const other = `invite2-${stamp()}@example.com`;
+    await db.from("team_invites").insert({ email: other });
+    await db.auth.admin.createUser({ email: other, password: "pw-12345678", email_confirm: false });
+    const uid = await confirmWithCode(other);
+    assert.equal((await db.from("profiles").select("role").eq("user_id", uid).single()).data?.role, "client");
+  });
+
+  test("_ and % in an email don't match anyone else; emails are stored lower-case", async () => {
+    const t = stamp();
+    const victim = await imported(`x.y${t}@example.com`);
+    const pct = await imported(`xay${t}@example.com`);
+    await db.auth.admin.createUser({ email: `x_y${t}@example.com`, password: "pw-12345678", email_confirm: false });
+    const uid = await confirmWithCode(`x_y${t}@example.com`);
+    await db.auth.admin.createUser({ email: `x%y${t}@example.com`, password: "pw-12345678", email_confirm: false });
+    const uid2 = await confirmWithCode(`x%y${t}@example.com`);
+    assert.equal((await profile(victim)).user_id, null);
+    assert.equal((await profile(pct)).user_id, null);
+    assert.equal((await db.from("profiles").select("email").eq("user_id", uid).single()).data?.email, `x_y${t}@example.com`);
+    assert.equal((await db.from("profiles").select("email").eq("user_id", uid2).single()).data?.email, `x%y${t}@example.com`);
+    const mixed = await imported(`MiXeD${t}@Example.com`);
+    assert.equal((await profile(mixed)).email, `mixed${t}@example.com`);
+  });
+});

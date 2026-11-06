@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
 import { db } from "@/lib/supabase/admin";
 import type { Database } from "@/lib/supabase/types";
+import { normEmail } from "@/lib/request-keys";
 
 export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 
@@ -19,18 +20,25 @@ export const getViewer = cache(async (): Promise<{ userId: string; email: string
 });
 
 /**
- * The profile for a login account. Links an existing client record with the same
- * email (DM/imported clients, or after a demo reset) before creating a new one.
+ * The profile for a login account. An existing client record with the same email (DM/imported clients,
+ * or after a demo reset) is linked only when `link` is set, i.e. the caller has just proven the email
+ * (a code from the email, or the demo passwords). Without proof an unlinked record is never handed over:
+ * the database links it when the email is confirmed (handle_user_confirmed).
  */
-export async function ensureProfile(userId: string, email?: string | null): Promise<Profile | null> {
+export async function ensureProfile(userId: string, email?: string | null, opts: { link?: boolean } = {}): Promise<Profile | null> {
   const { data: mine } = await db().from("profiles").select("*").eq("user_id", userId).is("deleted_at", null).maybeSingle();
   if (mine) return mine;
-  if (email) {
-    const { data: linked } = await db().from("profiles").update({ user_id: userId })
-      .ilike("email", email).is("user_id", null).is("deleted_at", null).select("*").maybeSingle();
-    if (linked) return linked;
+  const address = email ? normEmail(email) : null;
+  if (address) {
+    const { data: other } = await db().from("profiles").select("id, user_id").eq("email", address).is("deleted_at", null).maybeSingle();
+    if (other) {
+      if (!opts.link || other.user_id) return null;
+      const { data: linked } = await db().from("profiles").update({ user_id: userId })
+        .eq("id", other.id).is("user_id", null).select("*").maybeSingle();
+      return linked;
+    }
   }
-  const { data: created } = await db().from("profiles").insert({ user_id: userId, email: email?.toLowerCase() }).select("*").single();
+  const { data: created } = await db().from("profiles").insert({ user_id: userId, email: address }).select("*").maybeSingle();
   return created;
 }
 

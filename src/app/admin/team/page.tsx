@@ -10,7 +10,10 @@ export const dynamic = "force-dynamic";
 
 export default async function TeamPage() {
   const viewer = await requireAdmin();
-  const { data: team } = await db().from("profiles").select("id, full_name, email, user_id").eq("role", "admin").is("deleted_at", null).order("created_at");
+  const [{ data: team }, { data: invites }] = await Promise.all([
+    db().from("profiles").select("id, full_name, email, user_id").eq("role", "admin").is("deleted_at", null).order("created_at"),
+    db().from("team_invites").select("email, full_name").order("created_at"),
+  ]);
   return (
     <div className="space-y-6">
       <AdminTitle back="/admin/settings" title="Studio team" sub="People who can open this admin. They sign in with their email." />
@@ -19,6 +22,12 @@ export default async function TeamPage() {
           <li key={m.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
             <span><span className="block font-medium text-ink">{m.full_name ?? m.email}</span><span className="text-ink-soft">{m.email}{!m.user_id ? " · hasn't signed in yet" : ""}{m.id === viewer.profile.id ? " · you" : ""}</span></span>
             {m.id !== viewer.profile.id && <RemoveMember id={m.id} name={m.email ?? "member"} />}
+          </li>
+        ))}
+        {(invites ?? []).map((m) => (
+          <li key={m.email} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+            <span><span className="block font-medium text-ink">{m.full_name ?? m.email}</span><span className="text-ink-soft">{m.email} · hasn&apos;t signed in yet</span></span>
+            <RemoveMember invite={m.email} name={m.email} />
           </li>
         ))}
       </ul>

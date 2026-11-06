@@ -1510,6 +1510,36 @@ export type Database = {
         };
         Relationships: [];
       };
+      team_invites: {
+        Row: {
+          created_at: string;
+          email: string;
+          full_name: string | null;
+          invited_by: string | null;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          email: string;
+          full_name?: string | null;
+          invited_by?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          email?: string;
+          full_name?: string | null;
+          invited_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "team_invites_invited_by_fkey";
+            columns: ["invited_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       template_slots: {
         Row: {
           capacity: number | null;

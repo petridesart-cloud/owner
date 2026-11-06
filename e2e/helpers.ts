@@ -1,4 +1,7 @@
+import fs from "node:fs";
+import { createClient } from "@supabase/supabase-js";
 import { expect, type Page } from "@playwright/test";
+import type { Database } from "../src/lib/supabase/types";
 
 export const uniqueEmail = (tag: string) => `e2e-${tag}-${Date.now()}-${Math.floor(Math.random() * 1e4)}@example.com`;
 
@@ -54,4 +57,25 @@ export async function openBookableClass(page: Page) {
   await bookable.first().click();
   await page.waitForURL(/\/book\//);
   await expect(page.getByText("What to bring")).toBeVisible();
+}
+
+/** Service-role client for setting up test data (reads the local keys from .env.local). */
+export function serviceDb() {
+  const env = Object.fromEntries(fs.readFileSync(".env.local", "utf8").split("\n").filter((l) => l.includes("=")).map((l) => [l.split("=")[0], l.slice(l.indexOf("=") + 1)]));
+  return createClient<Database>(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+}
+
+/** Fill in "Create account" up to the code step (without confirming). */
+export async function startSignUp(page: Page, email: string, first: string, password: string) {
+  await page.goto("/signup");
+  await page.getByLabel("Name", { exact: true }).fill(first);
+  await page.getByLabel("Surname").fill("Client");
+  await page.getByLabel("Date of birth").fill("1994-05-17");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Mobile number").fill(`+357 9${Math.floor(1e6 + Math.random() * 8.9e6)}`);
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByLabel("Confirm password").fill(password);
+  await page.locator("#policy").check();
+  await page.getByRole("button", { name: "Create account" }).click();
+  await expect(page.getByLabel("Code from your email")).toHaveValue(/^\d{6,10}$/);
 }

@@ -17,6 +17,22 @@ database migrations first. Try changes on the demo before telling clients about 
 - `NEXT_PUBLIC_SITE_URL=https://book.reformpilatescy.com` (CNAME `book` → Vercel in Cloudflare, DNS only)
 - Supabase variables (added automatically by the integration)
 - `RESEND_API_KEY` (send-only, domain-restricted) and `EMAIL_FROM` = `Re·Form Pilates <hello@mail.reformpilatescy.com>`: email is live.
+- Optional `RATE_LIMIT_SECRET` (random, 32+ characters): key for the hashed rate-limit records. Without it the app uses `CRON_SECRET`.
+
+## Supabase Auth settings (both `reform-prod` and `reform-db`; owner action, audit A-002 / A-045)
+The app creates logins itself (admin API) and proves emails with its own codes. Supabase's public Auth API
+must not offer a second way in. In each project's dashboard (Authentication → Sign In / Providers, Emails, Rate Limits):
+- **Allow new users to sign up: off.** Email provider stays enabled (the app needs it for passwords and codes).
+- **Confirm email: on.**
+- **Secure email change: on**, and **Secure password change: on**.
+- **Email OTP expiration: 600 seconds** (the code emails say 10 minutes). OTP length 6 or 8 (the app accepts 6–10 digits).
+- **Rate limits → Token verifications:** lower it (for example 10 per 5 minutes per IP).
+- Record the values you found before changing them here: _(to fill in)_.
+
+If one of these is wrong, the code still never hands an existing client record or a Studio-team invite to a login
+created outside the app (records are linked, and invites granted, only after a code from the email is used; see
+`20261106000100_wp1_auth_linking.sql`). What remains open with sign-ups on and confirmation off is someone
+registering an unused email address they don't own, which is why the settings matter. `supabase/config.toml` mirrors these settings for local development.
 
 ## Never
 - Never press "Reset demo data" thinking it's the real app: it only exists on the demo.

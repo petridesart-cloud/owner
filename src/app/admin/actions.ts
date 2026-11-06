@@ -71,7 +71,7 @@ export async function manualBook(sessionId: string, _: ActionResult, form: FormD
     if (!parsed.success) return { ok: false, error: "Pick a client, or enter at least the name of someone new." };
     const { first_name, last_name, phone } = parsed.data;
     const email = parsed.data.email || null;
-    const existing = email ? (await db().from("profiles").select("id").ilike("email", email).is("deleted_at", null).maybeSingle()).data : null;
+    const existing = email ? (await db().from("profiles").select("id").eq("email", email).is("deleted_at", null).maybeSingle()).data : null;
     if (existing) profileId = existing.id;
     else {
       const { data, error } = await db().from("profiles").insert({
@@ -845,7 +845,7 @@ export async function importClients(rows: Record<string, unknown>[]): Promise<Ac
     const r = ImportClient.safeParse(raw);
     if (!r.success) { skipped++; continue; }
     const c = r.data;
-    const existing = c.email ? (await db().from("profiles").select("id").ilike("email", c.email).is("deleted_at", null).maybeSingle()).data : null;
+    const existing = c.email ? (await db().from("profiles").select("id").eq("email", c.email).is("deleted_at", null).maybeSingle()).data : null;
     let id = existing?.id;
     if (id) { await db().from("profiles").update({ full_name: c.full_name, phone: c.phone ?? undefined, admin_notes: c.notes ?? undefined }).eq("id", id); updated++; }
     else {
@@ -912,16 +912,30 @@ export async function saveTexts(_: ActionResult, form: FormData): Promise<Action
   return { ok: true, message: "Saved. Your changes are live." };
 }
 
-/** Add someone to the studio team (admin access). They sign in with this email. */
+/**
+ * Add someone to the studio team (admin access). They sign in with this email. Someone who already has
+ * a login gets access straight away; otherwise it's an invite (team_invites), granted only when they
+ * first sign in with a code sent to that email, so nobody can claim it by creating that login elsewhere.
+ */
 export async function addTeamMember(_: ActionResult, form: FormData): Promise<ActionResult> {
-  await admin("team_add");
+  const viewer = await admin("team_add");
   const email = String(form.get("email") ?? "").trim().toLowerCase();
   if (!z.string().email().safeParse(email).success) return { ok: false, error: "Enter a valid email." };
-  const { data: existing } = await db().from("profiles").select("id").ilike("email", email).is("deleted_at", null).maybeSingle();
-  if (existing) await db().from("profiles").update({ role: "admin" }).eq("id", existing.id);
-  else await db().from("profiles").insert({ email, role: "admin", full_name: String(form.get("name") ?? "").trim() || null });
+  const { data: existing } = await db().from("profiles").select("id, user_id").eq("email", email).is("deleted_at", null).maybeSingle();
+  const { error } = existing?.user_id
+    ? await db().from("profiles").update({ role: "admin" }).eq("id", existing.id)
+    : await db().from("team_invites").upsert({ email, full_name: String(form.get("name") ?? "").trim() || null, invited_by: viewer.profile.id });
+  if (error) return { ok: false, error: "Couldn't add them. Please try again." };
   revalidatePath("/admin/team");
   return { ok: true, message: `${email} can now sign in to the studio admin.` };
+}
+
+/** Withdraw a Studio-team invite that hasn't been used yet. */
+export async function removeTeamInvite(email: string): Promise<ActionResult> {
+  await admin("team_invite_remove", { email });
+  await db().from("team_invites").delete().eq("email", String(email).trim().toLowerCase());
+  revalidatePath("/admin/team");
+  return { ok: true };
 }
 
 export async function removeTeamMember(profileId: string): Promise<ActionResult> {
