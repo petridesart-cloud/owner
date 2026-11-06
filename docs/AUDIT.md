@@ -579,3 +579,7 @@ The code for A-033, A-061 and A-085 is small and goes into WP3, WP8 and WP3 resp
 - `setup.sql` matches a fresh bundle.
 - Shared pricing and discount logic for display and server.
 - The cutoff and waitlist close are read from settings everywhere.
+
+## Open after Phase 4
+- **A-001 (WP2), owner + Elysia:** (a) Confirm the "I'd rather tell my instructor in person" option and the new consent wording in `src/app/(client)/health/HealthWizard.tsx` (it names `trader_name` and the studio name; it doesn't promise a retention period until WP7's `enforce_retention()` exists; bump `HEALTH_CONSENT_VERSION` when the text changes). (b) Who may read health answers: the migration `20261106000300` grants `can_view_health` only to `elysia.stephani@gmail.com` (if she is already an admin); set `HEALTH_VIEWER_EMAILS=elysia.stephani@gmail.com` on the production Vercel project as a bootstrap. There is no Settings switch for it yet: should Studio team get one? (c) Remove or limit `petridesart@gmail.com`'s admin role on production after launch. The Privacy Policy health row is A-013 (WP8).
+

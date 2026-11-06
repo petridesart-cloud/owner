@@ -3,6 +3,7 @@ import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { ipFrom, keyHash, limitOutcome, normEmail } from "../src/lib/request-keys";
+import { needsHealthConsent } from "../src/lib/health";
 
 describe("rate limits and email keys (A-045, A-092, A-103, A-008)", () => {
   test("sign-in and code limits fail closed when the check errors; booking limits fail open", () => {
@@ -31,5 +32,16 @@ describe("rate limits and email keys (A-045, A-092, A-103, A-008)", () => {
 
   test("emails are compared exactly, lower-case", () => {
     assert.equal(normEmail("  X_Y@Example.COM "), "x_y@example.com");
+  });
+});
+
+describe("health consent rule (A-105)", () => {
+  test("consent is needed whenever something would be stored, including only 'other medication'", () => {
+    assert.equal(needsHealthConsent({ conditions: [], bpMeds: false, medication: null }), false);
+    assert.equal(needsHealthConsent({ conditions: [], bpMeds: false, medication: "   " }), false);
+    assert.equal(needsHealthConsent({ conditions: [], bpMeds: false, medication: "Thyroxine" }), true);
+    assert.equal(needsHealthConsent({ conditions: [], bpMeds: true, medication: null }), true);
+    assert.equal(needsHealthConsent({ conditions: ["back"], bpMeds: false }), true);
+    assert.equal(needsHealthConsent({ conditions: [], details: "something" }), true);
   });
 });

@@ -15,6 +15,10 @@ export const env = {
   twilioFrom: process.env.TWILIO_FROM,
   cronSecret: process.env.CRON_SECRET,
   adminEmails: (process.env.ADMIN_EMAILS || "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean),
+  // Studio members who may read health answers (the instructor), granted on their next admin page view.
+  // Unset: only profiles.can_view_health; in demo mode the demo admins.
+  healthViewerEmails: (process.env.HEALTH_VIEWER_EMAILS || (process.env.DEMO_MODE === "true" && process.env.APP_ENV !== "production" ? process.env.ADMIN_EMAILS : "") || "")
+    .split(",").map((e) => e.trim().toLowerCase()).filter(Boolean),
   // The real studio app (set APP_ENV=production on that deployment only).
   isProduction: process.env.APP_ENV === "production",
   // Demo mode: login codes are shown on screen and messages only go to the admin Outbox.

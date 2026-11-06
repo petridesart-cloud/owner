@@ -1,7 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { db } from "@/lib/supabase/admin";
-import { needsClearance } from "@/lib/health";
+import { HEALTH_CONSENT_VERSION, needsClearance, needsHealthConsent } from "@/lib/health";
 import { todayKey } from "@/lib/time";
 
 export { PHOTO_CONSENT, type PhotoConsent } from "@/lib/photo-consent";
@@ -29,43 +29,34 @@ export function ageOn(dob: string, on = todayKey()) {
 
 export const fullName = (first: string, last: string) => `${first} ${last}`.trim();
 
-type Consent = { profile_id: string; type: "health_data" | "photos"; granted: boolean; version: string };
-
-
-
 export type HealthAnswers = {
   conditions: string[]; details: string | null; pregnancy: "current" | "past" | null;
   pregnancyWeeks: number | null; postpartumMonths: number | null; bpMeds: boolean; medication: string | null;
 };
 
 /**
- * Health questions v2. Always records when they were answered. The answers themselves are
- * health data: stored (instructor-only) only with explicit consent, which the form requires
- * whenever there is something to store. "No conditions" clears any earlier answers.
+ * Health questions v2, saved in one transaction (`save_health_answers`; `parq_completed_at` last).
+ * The answers are health data: stored (instructor-only) only with explicit consent, which is needed
+ * whenever there is something to store (`needsHealthConsent`). "No conditions" and "I'll tell my
+ * instructor in person" store nothing and remove any earlier answers and their history.
  */
-export async function saveHealthAnswers(profileId: string, a: HealthAnswers, consent: boolean, version: string) {
-  const now = new Date().toISOString();
-  const anything = a.conditions.length > 0 || a.bpMeds || !!a.medication || !!a.details;
-  if (anything && !consent) return { ok: false as const, error: "To keep this information for your instructor we need your consent (tick the box)." };
-  await db().from("profiles").update({ parq_completed_at: now }).eq("id", profileId);
-  if (!anything) {
-    await db().from("health_notes").delete().eq("profile_id", profileId);
-    await db().from("health_history").insert({ profile_id: profileId }); // "no injuries or conditions" on this date
-    return { ok: true as const };
-  }
-  const { data: prev } = await db().from("health_notes").select("clearance_received_at").eq("profile_id", profileId).maybeSingle();
-  const clearance = needsClearance({ conditions: a.conditions, pregnancy: a.pregnancy, postpartum_months: a.postpartumMonths });
-  await db().from("health_notes").upsert({
-    profile_id: profileId, conditions: a.conditions, details: a.details, pregnancy: a.pregnancy,
-    pregnancy_weeks: a.pregnancyWeeks, postpartum_months: a.postpartumMonths, bp_meds: a.bpMeds, medication: a.medication,
-    clearance_needed: clearance, clearance_received_at: clearance ? prev?.clearance_received_at ?? null : null,
-    note: null, injuries: null, parq_yes: null, consent_at: now, updated_at: now,
-  });
-  await db().from("consents").insert({ profile_id: profileId, type: "health_data", granted: true, version } satisfies Consent);
-  // A copy of each version, so the studio sees what changed and when.
-  await db().from("health_history").insert({
-    profile_id: profileId, conditions: a.conditions, details: a.details, pregnancy: a.pregnancy, pregnancy_weeks: a.pregnancyWeeks,
+export async function saveHealthAnswers(profileId: string, a: HealthAnswers | "in_person", consent: boolean) {
+  const mode = a === "in_person" ? "in_person" : needsHealthConsent(a) ? "answers" : "none";
+  const clearance = a !== "in_person" && mode === "answers" && needsClearance({ conditions: a.conditions, pregnancy: a.pregnancy, postpartum_months: a.postpartumMonths });
+  const answers = a === "in_person" || mode !== "answers" ? null : {
+    conditions: a.conditions, details: a.details, pregnancy: a.pregnancy, pregnancy_weeks: a.pregnancyWeeks,
     postpartum_months: a.postpartumMonths, bp_meds: a.bpMeds, medication: a.medication, clearance_needed: clearance,
+  };
+  const { error } = await db().rpc("save_health_answers", {
+    p_profile: profileId, p_mode: mode, p_answers: answers as never, p_consent: consent, p_version: HEALTH_CONSENT_VERSION,
   });
-  return { ok: true as const, clearance };
+  if (error?.message === "health_consent_required") return { ok: false as const, error: "To keep this information for your instructor we need your consent (tick the box)." };
+  if (error) return { ok: false as const, error: "We couldn't save your answers. Please try again." };
+  return { ok: true as const, clearance, mode };
+}
+
+/** Account → Health → "Delete my health information": answers and history deleted, consent withdrawn. */
+export async function withdrawHealthConsent(profileId: string) {
+  const { data, error } = await db().rpc("withdraw_health_consent", { p_profile: profileId, p_version: HEALTH_CONSENT_VERSION });
+  return error ? { ok: false as const } : { ok: true as const, removed: !!data };
 }

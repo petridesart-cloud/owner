@@ -5,6 +5,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { db } from "@/lib/supabase/admin";
 import type { Database } from "@/lib/supabase/types";
 import { normEmail } from "@/lib/request-keys";
+import { env } from "@/lib/env";
 
 export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 
@@ -60,6 +61,19 @@ export async function requireAdmin() {
   if (viewer.profile.role !== "admin") redirect("/");
   return viewer;
 }
+
+/**
+ * May the signed-in studio member read health answers (A-001)? Only admins with `can_view_health`
+ * (the instructor). HEALTH_VIEWER_EMAILS bootstraps it, like ADMIN_EMAILS. Others see only the flags.
+ */
+export const canViewHealth = cache(async (): Promise<boolean> => {
+  const viewer = await getViewer();
+  if (!viewer || viewer.profile.role !== "admin") return false;
+  if (viewer.profile.can_view_health) return true;
+  if (!env.healthViewerEmails.includes(normEmail(viewer.email))) return false;
+  const { error } = await db().from("profiles").update({ can_view_health: true }).eq("id", viewer.profile.id);
+  return !error;
+});
 
 export const getSettings = cache(async () => {
   const { data } = await db().from("studio_settings").select("*").eq("id", 1).single();

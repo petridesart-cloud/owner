@@ -845,3 +845,88 @@ describe("account linking (A-002, A-008)", () => {
     assert.equal((await profile(mixed)).email, `mixed${t}@example.com`);
   });
 });
+
+describe("health data (A-001, A-105)", () => {
+  const V = "health-2026-11-v1";
+  const answers = { conditions: ["back"], details: "Lower back ache", pregnancy: null, pregnancy_weeks: null, postpartum_months: null, bp_meds: false, medication: null, clearance_needed: false };
+  const save = (p: string, mode: string, a: object | null, consent: boolean) =>
+    db.rpc("save_health_answers", { p_profile: p, p_mode: mode, p_answers: a as never, p_consent: consent, p_version: V });
+  const state = async (p: string) => ({
+    profile: (await db.from("profiles").select("parq_completed_at, health_mode").eq("id", p).single()).data!,
+    notes: (await db.from("health_notes").select("profile_id").eq("profile_id", p)).data!.length,
+    history: (await db.from("health_history").select("id").eq("profile_id", p)).data!.length,
+    consents: (await db.from("consents").select("type, granted, version").eq("profile_id", p).order("id")).data!,
+  });
+
+  test("answers need consent, are saved in one go, and a standing consent isn't re-recorded", async () => {
+    const p = await client("health-save");
+    assert.equal((await save(p, "answers", answers, false)).error?.message, "health_consent_required");
+    // A bad row rolls everything back: nothing stored and not marked answered.
+    assert.ok((await save(p, "answers", { ...answers, pregnancy_weeks: "lots" }, true)).error);
+    let s = await state(p);
+    assert.equal(s.profile.parq_completed_at, null);
+    assert.equal(s.notes + s.history + s.consents.length, 0);
+    assert.ifError((await save(p, "answers", answers, true)).error);
+    s = await state(p);
+    assert.ok(s.profile.parq_completed_at);
+    assert.equal(s.profile.health_mode, "answers");
+    assert.deepEqual([s.notes, s.history], [1, 1]);
+    assert.deepEqual(s.consents, [{ type: "health_data", granted: true, version: V }]);
+    assert.ifError((await save(p, "answers", { ...answers, details: "Better now" }, false)).error);
+    s = await state(p);
+    assert.equal(s.history, 2);
+    assert.equal(s.consents.length, 1, "consent already on file: no new row");
+  });
+
+  test("withdrawing deletes the notes and all history and records granted=false; booking stays possible", async () => {
+    const p = await client("health-withdraw");
+    await save(p, "answers", answers, true);
+    await save(p, "answers", answers, true);
+    const { data, error } = await db.rpc("withdraw_health_consent", { p_profile: p, p_version: V });
+    assert.ifError(error);
+    assert.equal(data, true);
+    const s = await state(p);
+    assert.deepEqual([s.notes, s.history], [0, 0]);
+    assert.deepEqual(s.consents.at(-1), { type: "health_data", granted: false, version: V });
+    assert.ok(s.profile.parq_completed_at);
+    assert.equal(s.profile.health_mode, "in_person");
+    // Withdrawing again changes nothing and records nothing.
+    assert.equal((await db.rpc("withdraw_health_consent", { p_profile: p, p_version: V })).data, false);
+    assert.equal((await state(p)).consents.length, s.consents.length);
+  });
+
+  test("\"No conditions\" after earlier answers deletes the history and withdraws the consent", async () => {
+    const p = await client("health-none");
+    await save(p, "answers", answers, true);
+    assert.ifError((await save(p, "none", null, false)).error);
+    const s = await state(p);
+    assert.deepEqual([s.notes, s.history], [0, 0]);
+    assert.equal(s.profile.health_mode, "none");
+    assert.deepEqual(s.consents.at(-1), { type: "health_data", granted: false, version: V });
+  });
+
+  test("telling the instructor in person stores nothing and still counts as answered", async () => {
+    const p = await client("health-inperson");
+    assert.ifError((await save(p, "in_person", null, false)).error);
+    const s = await state(p);
+    assert.ok(s.profile.parq_completed_at);
+    assert.equal(s.profile.health_mode, "in_person");
+    assert.deepEqual([s.notes, s.history], [0, 0]);
+    assert.deepEqual(s.consents, [{ type: "health_declaration_offline", granted: true, version: V }]);
+  });
+
+  test("RLS: only a studio member with can_view_health reads health notes", async () => {
+    const anon = () => createClient<Database>(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY, { auth: { persistSession: false } });
+    const p = await client("health-rls");
+    await save(p, "answers", answers, true);
+    const email = `team-${Date.now()}${Math.random().toString(36).slice(2, 6)}@example.com`;
+    const { data: u } = await db.auth.admin.createUser({ email, password: "pw-12345678", email_confirm: true });
+    assert.ifError((await db.from("profiles").update({ role: "admin" }).eq("user_id", u.user!.id)).error);
+    const c = anon();
+    assert.ifError((await c.auth.signInWithPassword({ email, password: "pw-12345678" })).error);
+    assert.equal((await c.from("health_notes").select("profile_id").eq("profile_id", p)).data!.length, 0, "an admin without can_view_health sees nothing");
+    await db.from("profiles").update({ can_view_health: true }).eq("user_id", u.user!.id);
+    assert.equal((await c.from("health_notes").select("profile_id").eq("profile_id", p)).data!.length, 1);
+    assert.equal((await c.from("health_history").select("id").eq("profile_id", p)).data?.length ?? 0, 0, "history is server-only");
+  });
+});

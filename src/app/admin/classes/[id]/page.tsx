@@ -4,6 +4,7 @@ import { HealthInfo } from "../../HealthInfo";
 import { ActionForm } from "@/components/ActionForm";
 import { Badge, Checkbox, Field, inputClass } from "@/components/ui";
 import { db } from "@/lib/supabase/admin";
+import { canViewHealth } from "@/lib/auth";
 import { dayKey, longDate, time } from "@/lib/time";
 import { allowEventAccess, cancelSessionAction, manualBook, updateSession } from "../../actions";
 import { AccessRemove } from "./AccessRemove";
@@ -21,9 +22,10 @@ export const dynamic = "force-dynamic";
 export default async function SessionAdmin({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { data: s } = await db().from("class_sessions")
-    .select("*, class_types(*), bookings!bookings_session_id_fkey(id, status, paid_with, source, checked_in_at, answer, note, created_at, payment_id, profiles(id, full_name, email, phone, photo_consent, health_notes(note, injuries, medication, parq_yes, conditions, details, pregnancy, pregnancy_weeks, postpartum_months, bp_meds, clearance_needed, clearance_received_at))), waitlist_entries(id, status, created_at, offer_expires_at, profiles(id, full_name))")
+    .select("*, class_types(*), bookings!bookings_session_id_fkey(id, status, paid_with, source, checked_in_at, answer, note, created_at, payment_id, profiles(id, full_name, email, phone, photo_consent, parq_completed_at, health_mode, health_notes(note, injuries, medication, parq_yes, conditions, details, pregnancy, pregnancy_weeks, postpartum_months, bp_meds, clearance_needed, clearance_received_at))), waitlist_entries(id, status, created_at, offer_expires_at, profiles(id, full_name))")
     .eq("id", id).maybeSingle();
   if (!s) notFound();
+  const seeHealth = await canViewHealth();
   const [{ data: types }, { data: clients }] = await Promise.all([
     db().from("class_types").select("*").order("sort_order"),
     db().from("profiles").select("id, full_name, email").is("deleted_at", null).eq("role", "client").order("full_name").limit(1000),
@@ -57,11 +59,12 @@ export default async function SessionAdmin({ params }: { params: Promise<{ id: s
                   {b.paid_with === "pay_at_studio" && <span className="ml-1 rounded-full bg-burgundy-soft px-2 py-0.5 font-medium text-burgundy">Unpaid</span>}
                   {b.profiles?.photo_consent === "none" && <span className="ml-1 rounded-full bg-ink px-2 py-0.5 font-medium text-paper">No photos</span>}
                   {b.profiles?.photo_consent === "no_face" && <span className="ml-1 rounded-full bg-ink/80 px-2 py-0.5 font-medium text-paper">No face</span>}
+                  {b.profiles?.parq_completed_at && b.profiles.health_mode === "in_person" && <span className="ml-1 rounded-full bg-white px-2 py-0.5 font-medium text-ink-soft ring-1 ring-line">Health: tell in person</span>}
                 </p>
                 {b.paid_with === "pay_at_studio" && b.payment_id && <div className="mt-1.5"><MarkPaid paymentId={b.payment_id} label={b.profiles?.full_name ?? "booking"} /></div>}
                 {b.answer && <p className="mt-1 text-xs text-ink"><span className="text-ink-soft">{s.signup_question ?? "Answer"}:</span> {b.answer}</p>}
                 {b.note && <p className="mt-1 text-xs text-ink"><span className="text-ink-soft">Note:</span> {b.note}</p>}
-                <HealthInfo h={b.profiles?.health_notes} />
+                <HealthInfo h={b.profiles?.health_notes} canView={seeHealth} />
                 {past && s.status === "scheduled" && (
                   <Attendance bookingId={b.id} name={b.profiles?.full_name ?? "client"} state={b.status === "no_show" ? "no_show" : b.checked_in_at ? "attended" : "unmarked"} />
                 )}

@@ -12,13 +12,14 @@ import { deleteAccount, signOutAction } from "./actions";
 import { ProfileForm } from "./Forms";
 import { Accordion } from "@/components/Accordion";
 import { POSTPARTUM, conditionLabel } from "@/lib/health";
+import { deleteHealthInfo } from "../health/actions";
 
 export const metadata: Metadata = { title: "Account" };
 export const dynamic = "force-dynamic";
 
 const CONSENT_LABEL: Record<string, string> = {
   policy: "Studio Rules", terms: "Terms & Conditions", fitness_declaration: "Health declaration",
-  health_data: "Health data", marketing_email: "News by email", marketing_sms: "News by SMS", photos: "Photos for social media",
+  health_data: "Health data", health_declaration_offline: "Health: tell my instructor in person", marketing_email: "News by email", marketing_sms: "News by SMS", photos: "Photos for social media",
 };
 
 export default async function AccountPage({ searchParams }: { searchParams: Promise<{ delete?: string; dob?: string; health?: string }> }) {
@@ -39,6 +40,8 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
       <PageTitle eyebrow={viewer.email} title="Account" />
       <div className="space-y-3 px-5">
         {health === "saved" && <Notice tone="success">Thank you, your health answers are saved.</Notice>}
+        {health === "deleted" && <Notice tone="success">Your health information is deleted. Please tell your instructor in person about anything she should know.</Notice>}
+        {health === "failed" && <Notice tone="error">We couldn&apos;t delete your health information. Please try again.</Notice>}
         <Accordion title="Your details" sub="Name, contact, emergency contact, photos, notifications" open={!p.date_of_birth || !!dob} id="details">
           {!p.date_of_birth && <div className="mb-3"><Notice>Please add your date of birth to keep booking classes.</Notice></div>}
           <ProfileForm p={{
@@ -48,17 +51,23 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
           }} />
         </Accordion>
 
-        <Accordion title="Health" sub={p.parq_completed_at ? `Answered ${dotDate(p.parq_completed_at)}` : "Please answer before your next booking"} open={!p.parq_completed_at} id="health">
+        <Accordion title="Health" sub={p.parq_completed_at ? `Answered ${dotDate(p.parq_completed_at)}` : "Please answer before your next booking"} open={!p.parq_completed_at || health === "deleted" || health === "failed"} id="health">
           {p.parq_completed_at ? (
             <div className="space-y-3 text-sm">
               {h?.conditions?.length ? (
                 <ul className="flex flex-wrap gap-1.5">{h.conditions.map((k) => <li key={k} className="rounded-full bg-lilac-100 px-2.5 py-1 text-xs text-ink">{conditionLabel(k)}</li>)}</ul>
-              ) : <p className="text-ink-soft">{h ? "Saved." : "No injuries or medical conditions."}</p>}
+              ) : <p className="text-ink-soft">{h ? "Saved." : p.health_mode === "in_person" ? "You'll tell your instructor in person. Nothing is stored." : "No injuries or medical conditions."}</p>}
               {h?.pregnancy && <p className="text-ink">Pregnancy: {h.pregnancy === "current" ? `${h.pregnancy_weeks} weeks` : POSTPARTUM.find((o) => o.months === h.postpartum_months)?.label.toLowerCase()}</p>}
               {h?.clearance_needed && !h.clearance_received_at && <Notice>Please bring a written note from your doctor confirming you&apos;re cleared for Pilates, before your next class.</Notice>}
             </div>
           ) : <p className="text-sm text-ink-soft">A quick check so your instructor can keep you safe. It takes about a minute.</p>}
           <ButtonLink href="/health" variant={p.parq_completed_at ? "soft" : "primary"} className="mt-4 w-full">{p.parq_completed_at ? "Update my answers" : "Answer the health questions"}</ButtonLink>
+          {(h || latest.get("health_data")?.granted) && (
+            <form action={deleteHealthInfo} className="mt-2">
+              <Button type="submit" variant="ghost" className="w-full">Delete my health information</Button>
+              <p className="mt-1 text-center text-xs text-ink-soft">Deletes your answers and their history, and withdraws your consent. You can still book.</p>
+            </form>
+          )}
         </Accordion>
 
         <Accordion title="Receipts" sub={(receipts ?? []).length ? `${receipts!.length} payment${receipts!.length === 1 ? "" : "s"}` : "None yet"}>

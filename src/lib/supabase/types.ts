@@ -1196,6 +1196,7 @@ export type Database = {
       profiles: {
         Row: {
           admin_notes: string | null;
+          can_view_health: boolean;
           created_at: string;
           date_of_birth: string | null;
           deleted_at: string | null;
@@ -1206,6 +1207,7 @@ export type Database = {
           first_name: string | null;
           full_name: string | null;
           goal: string | null;
+          health_mode: string | null;
           id: string;
           last_name: string | null;
           marketing_email: boolean;
@@ -1223,6 +1225,7 @@ export type Database = {
         ComputedFields: never;
         Insert: {
           admin_notes?: string | null;
+          can_view_health?: boolean;
           created_at?: string;
           date_of_birth?: string | null;
           deleted_at?: string | null;
@@ -1233,6 +1236,7 @@ export type Database = {
           first_name?: string | null;
           full_name?: string | null;
           goal?: string | null;
+          health_mode?: string | null;
           id?: string;
           last_name?: string | null;
           marketing_email?: boolean;
@@ -1249,6 +1253,7 @@ export type Database = {
         };
         Update: {
           admin_notes?: string | null;
+          can_view_health?: boolean;
           created_at?: string;
           date_of_birth?: string | null;
           deleted_at?: string | null;
@@ -1259,6 +1264,7 @@ export type Database = {
           first_name?: string | null;
           full_name?: string | null;
           goal?: string | null;
+          health_mode?: string | null;
           id?: string;
           last_name?: string | null;
           marketing_email?: boolean;
@@ -1710,6 +1716,7 @@ export type Database = {
         Returns: Json;
       };
       can_access_event: { Args: { p_profile: string; p_session: string }; Returns: boolean };
+      can_view_health: { Args: Record<PropertyKey, never>; Returns: boolean };
       cancel_booking: { Args: { p_admin?: boolean; p_booking: string; p_profile: string }; Returns: Json };
       cancel_session: {
         Args: { p_reason: string; p_session: string };
@@ -1718,6 +1725,7 @@ export type Database = {
           profile_id: string;
         }[];
       };
+      clear_health_data: { Args: { p_profile: string; p_version: string }; Returns: boolean };
       closed_days: { Args: { p_from: string; p_to: string }; Returns: number };
       compute_expiry: { Args: { p_start: string; p_validity: number }; Returns: string };
       confirm_payment: { Args: { p_method?: string; p_payment: string; p_provider_ref?: string }; Returns: Json };
@@ -1752,6 +1760,7 @@ export type Database = {
         Returns: string;
       };
       grant_membership_period: { Args: { p_membership: string; p_payment?: string; p_start: string }; Returns: string };
+      health_consent_standing: { Args: { p_profile: string; p_version: string }; Returns: boolean };
       install_baseline: { Args: Record<PropertyKey, never>; Returns: undefined };
       install_catalogue: { Args: Record<PropertyKey, never>; Returns: undefined };
       is_admin: { Args: Record<PropertyKey, never>; Returns: boolean };
@@ -1798,6 +1807,10 @@ export type Database = {
       reset_demo_data: { Args: Record<PropertyKey, never>; Returns: undefined };
       resume_membership: { Args: { p_membership: string }; Returns: string };
       return_credit: { Args: { p_booking: string; p_reason: string }; Returns: undefined };
+      save_health_answers: {
+        Args: { p_answers: Json; p_consent: boolean; p_mode: string; p_profile: string; p_version: string };
+        Returns: Json;
+      };
       seed_demo: { Args: Record<PropertyKey, never>; Returns: undefined };
       seed_demo_profiles: { Args: Record<PropertyKey, never>; Returns: undefined };
       session_availability: {
@@ -1927,6 +1940,7 @@ export type Database = {
           usable: number;
         }[];
       };
+      withdraw_health_consent: { Args: { p_profile: string; p_version: string }; Returns: boolean };
     };
     Enums: {
       booking_source: "online" | "manual";
@@ -1946,7 +1960,12 @@ export type Database = {
         | "fitness_declaration"
         | "marketing_email"
         | "marketing_sms"
-        | "photos";
+        | "photos"
+        | "health_declaration_offline"
+        | "waiver"
+        | "studio_rules"
+        | "payments_policy"
+        | "early_start";
       credit_kind: "reformer" | "mat" | (string & {});
       ledger_entry:
         | "grant"
@@ -2088,6 +2107,11 @@ export const Constants = {
         "marketing_email",
         "marketing_sms",
         "photos",
+        "health_declaration_offline",
+        "waiver",
+        "studio_rules",
+        "payments_policy",
+        "early_start",
       ],
       credit_kind: [
         "reformer",

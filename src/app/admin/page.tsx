@@ -12,7 +12,7 @@ import { cancelToday } from "./actions";
 import { eur } from "@/lib/money";
 import { dayMonth, nowMs } from "@/lib/time";
 import { AdminTitle, Stat } from "./ui";
-import { getSettings } from "@/lib/auth";
+import { canViewHealth, getSettings } from "@/lib/auth";
 import { launchReadiness } from "@/lib/business";
 import { env } from "@/lib/env";
 import { Readiness } from "./Readiness";
@@ -28,7 +28,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   scheduleTick();
   const { day } = await searchParams;
   const key = day && /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : todayKey();
-  const settings = await getSettings();
+  const [settings, seeHealth] = await Promise.all([getSettings(), canViewHealth()]);
   const sessions = await sessionsWithRoster(localToUtc(key, "00:00"), localToUtc(addDaysKey(key, 1), "00:00"));
   const live = sessions.filter((s) => s.status === "scheduled");
   const booked = live.reduce((n, s) => n + s.roster.length, 0);
@@ -135,6 +135,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
                       {b.firstClass && <span className={`${flag} bg-lilac-300 text-ink`}>First class</span>}
                       {b.minor && <span className={`${flag} bg-burgundy-soft text-burgundy`}>Under 18</span>}
                       {b.profiles?.health_notes?.clearance_needed && !b.profiles.health_notes.clearance_received_at && <span className={`${flag} bg-burgundy text-paper`}>Doctor&apos;s note needed</span>}
+                      {b.profiles?.parq_completed_at && b.profiles.health_mode === "in_person" && <span className={`${flag} bg-white text-ink-soft ring-1 ring-line`}>Health: tell in person</span>}
                       {b.profiles && !b.profiles.parq_completed_at && <span className={`${flag} bg-white text-ink-soft ring-1 ring-line`}>No health answers</span>}
                       {b.tag === "trial" && <span className={`${flag} bg-mauve text-ink`}>Trial</span>}
                       {b.tag === "drop_in" && <span className={`${flag} bg-lilac-100 text-ink`}>Drop-in</span>}
@@ -143,7 +144,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
                       {b.paid_with === "pay_at_studio" && b.payment?.status !== "paid" && <span className={`${flag} bg-burgundy-soft text-burgundy`}>Unpaid{b.payment?.intended_method ? ` · ${METHOD[b.payment.intended_method]}` : ""}</span>}
                       {b.status === "no_show" ? "No-show" : b.paid_with === "credit" ? "Class credit" : b.paid_with === "payment" ? "Paid" : b.paid_with === "pay_at_studio" ? "Pay at studio" : "Manual / DM"}{b.profiles?.phone ? ` · ${b.profiles.phone}` : ""}
                     </p>
-                    <HealthInfo h={b.profiles?.health_notes} />
+                    {seeHealth && <HealthInfo h={b.profiles?.health_notes} canView />}
                   </div>
                 </li>
               ))}

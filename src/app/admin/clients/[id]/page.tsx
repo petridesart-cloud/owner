@@ -7,6 +7,7 @@ import { Field, inputClass } from "@/components/ui";
 import { db } from "@/lib/supabase/admin";
 import { dayMonth, dotDate, isBirthday, lastDay, longDate, nowMs, time, todayKey } from "@/lib/time";
 import { HealthInfo } from "../../HealthInfo";
+import { canViewHealth } from "@/lib/auth";
 import { PHOTO_CONSENT, type PhotoConsent } from "@/lib/photo-consent";
 import { ageOn } from "@/lib/profile";
 import { eur } from "@/lib/money";
@@ -66,13 +67,15 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
   const { id } = await params;
   const { data: c } = await db().from("profiles").select("*, health_notes(note, injuries, medication, parq_yes, conditions, details, pregnancy, pregnancy_weeks, postpartum_months, bp_meds, clearance_needed, clearance_received_at, consent_at)").eq("id", id).maybeSingle();
   if (!c) notFound();
+  // Health answers and their history only for the instructor (A-001); others see the flags.
+  const seeHealth = await canViewHealth();
   const [{ groups, totals }, { data: membership }, { data: monthly }, { data: ledger }, { data: payments }, { data: history }, { data: rewards }] = await Promise.all([
     clientHistory(id),
     db().from("memberships").select("*, products!memberships_product_id_fkey(name, credits, price_cents), next:products!memberships_next_product_id_fkey(name)").eq("profile_id", id).in("status", ["active", "paused", "past_due"]).maybeSingle(),
     db().from("products").select("id, name").eq("kind", "membership").eq("active", true).order("sort_order"),
     db().from("credit_ledger").select("id, delta, entry_type, credit_kind, note, created_at").eq("profile_id", id).order("created_at", { ascending: false }).limit(60),
     db().from("payments").select("id, description, amount_cents, status, method, intended_method, paid_at, created_at, discount_note").eq("profile_id", id).order("created_at", { ascending: false }).limit(40),
-    db().from("health_history").select("*").eq("profile_id", id).order("created_at", { ascending: false }).limit(20),
+    seeHealth ? db().from("health_history").select("*").eq("profile_id", id).order("created_at", { ascending: false }).limit(20) : Promise.resolve({ data: [] as HH[] }),
     db().from("discount_codes").select("id, code, kind, value, note, expires_on, active, created_at, applies_to, payments(status, paid_at, created_at)").eq("profile_id", id).order("created_at", { ascending: false }),
   ]);
   const current = groups.filter((g) => g.current);
@@ -169,22 +172,26 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
       <section className="card px-5 py-4">
         <h2 className="display mb-1 text-[0.95rem]">Health</h2>
         <p className={`text-sm ${c.parq_completed_at ? "text-ink-soft" : "font-medium text-burgundy"}`}>{c.parq_completed_at ? `Last answered ${dotDate(c.parq_completed_at)}` : "Not answered yet: ask before class"}</p>
-        {latestHealth ? (
+        {c.parq_completed_at && c.health_mode === "in_person" && !c.health_notes && <p className="mt-2 text-sm font-medium text-ink">Health: tell in person. Nothing is stored; please ask them before class.</p>}
+        {!seeHealth ? (
+          c.health_notes && <p className="mt-2 text-sm text-ink-soft">Health answers saved. Only the instructor can see them.</p>
+        ) : latestHealth ? (
           <>
-            <HealthEntry h={latestHealth} received={c.health_notes?.clearance_received_at ?? null} />
+            <HealthEntry h={latestHealth} received={c.health_notes?.clearance_received_at ?? null} canView />
             {olderHealth.length > 0 && (
               <details className="mt-2 rounded-2xl border border-line px-4 py-1">
                 <summary className="min-h-11 cursor-pointer content-center text-sm font-medium text-ink">Earlier answers ({olderHealth.length})</summary>
-                <div className="divide-y divide-line pb-2">{olderHealth.map((h) => <HealthEntry key={h.id} h={h} received={null} />)}</div>
+                <div className="divide-y divide-line pb-2">{olderHealth.map((h) => <HealthEntry key={h.id} h={h} received={null} canView />)}</div>
               </details>
             )}
           </>
-        ) : c.health_notes ? <HealthInfo h={c.health_notes} label="Answers" open />
-          : c.parq_completed_at && <p className="mt-2 text-sm text-ink">No injuries or medical conditions.</p>}
+        ) : c.health_notes ? <HealthInfo h={c.health_notes} canView label="Answers" open />
+          : c.parq_completed_at && c.health_mode !== "in_person" && <p className="mt-2 text-sm text-ink">No injuries or medical conditions.</p>}
+        {!seeHealth && c.health_notes?.clearance_needed && !c.health_notes.clearance_received_at && <p className="mt-2 text-sm font-medium text-burgundy">Doctor&apos;s note needed before class</p>}
         {c.health_notes?.clearance_needed && !c.health_notes.clearance_received_at && (
           <div className="mt-3"><ActionForm action={clearanceReceived.bind(null, id)} submit="Doctor's note received" variant="soft" /></div>
         )}
-        {c.health_notes?.consent_at && <p className="mt-2 text-xs text-ink-soft">Health consent given {dayMonth(c.health_notes.consent_at)} · only you can see this</p>}
+        {seeHealth && c.health_notes?.consent_at && <p className="mt-2 text-xs text-ink-soft">Health consent given {dayMonth(c.health_notes.consent_at)} · only you can see this</p>}
       </section>
 
       <section className="card px-5 py-4">
@@ -313,13 +320,13 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
 type HH = { id: string; created_at: string; conditions: string[]; details: string | null; pregnancy: string | null; pregnancy_weeks: number | null; postpartum_months: number | null; bp_meds: boolean | null; medication: string | null; clearance_needed: boolean };
 
 /** One saved version of their health answers. Facts only. */
-function HealthEntry({ h, received }: { h: HH; received: string | null }) {
+function HealthEntry({ h, received, canView }: { h: HH; received: string | null; canView: boolean }) {
   const none = !h.conditions.length && !h.details && !h.pregnancy && !h.bp_meds && !h.medication;
   return (
     <div className="py-2">
       <p className="text-xs font-medium uppercase tracking-[0.12em] text-ink-soft">{dotDate(h.created_at)}</p>
       {none ? <p className="text-sm text-ink">No injuries or medical conditions.</p> : (
-        <HealthInfo open label="Answers" h={{ ...h, clearance_received_at: received }} />
+        <HealthInfo open canView={canView} label="Answers" h={{ ...h, clearance_received_at: received }} />
       )}
     </div>
   );

@@ -11,8 +11,12 @@ type H = {
 
 export const hasHealth = (h: H) => !!h && !!(h.note || h.injuries || h.medication || h.parq_yes?.length || h.conditions?.length || h.details || h.bp_meds);
 
-/** Health info (instructor only), collapsed behind a tap. */
-export function HealthInfo({ h, label = "Health info", open = false }: { h: H; label?: string; open?: boolean }) {
+/**
+ * Health info, collapsed behind a tap. Only for studio members with `can_view_health` (the instructor, A-001):
+ * everyone else sees just "Doctor's note needed" when it applies.
+ */
+export function HealthInfo({ h, canView, label = "Health info", open = false }: { h: H; canView: boolean; label?: string; open?: boolean }) {
+  if (!canView) return h?.clearance_needed && !h.clearance_received_at ? <p className="mt-1 text-xs font-medium text-burgundy">Doctor&apos;s note needed before class</p> : null;
   if (!h || !hasHealth(h)) return null;
   return (
     <details className="mt-1 text-xs text-burgundy" open={open}>
