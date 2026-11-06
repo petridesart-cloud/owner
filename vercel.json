@@ -4,5 +4,8 @@
     "deploymentEnabled": {
       "hardening-pass": false
     }
-  }
+  },
+  "regions": [
+    "fra1"
+  ]
 }
