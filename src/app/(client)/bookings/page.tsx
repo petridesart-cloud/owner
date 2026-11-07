@@ -14,13 +14,13 @@ import { eur } from "@/lib/money";
 export const metadata: Metadata = { title: "My classes" };
 export const dynamic = "force-dynamic";
 
-export default async function BookingsPage({ searchParams }: { searchParams: Promise<{ purchased?: string; requested?: string }> }) {
-  const { purchased, requested } = await searchParams;
+export default async function BookingsPage({ searchParams }: { searchParams: Promise<{ purchased?: string; requested?: string; all?: string }> }) {
+  const { purchased, requested, all } = await searchParams;
   const viewer = await requireViewer("/bookings");
   const p = viewer.profile;
   const settings = await getSettings();
   const [packages, { data: bookings }, { data: waits }, { data: pending }] = await Promise.all([
-    clientPackages(p.id),
+    clientPackages(p.id, undefined, { all: all === "1" }),
     db().from("bookings").select("id, status, paid_with, late_refund_pending, payment:payments!bookings_payment_id_fkey(status, amount_cents, intended_method), class_sessions!inner(id, starts_at, ends_at, title, location, class_types(name, kind))")
       .eq("profile_id", p.id).eq("status", "confirmed").gt("class_sessions.starts_at", new Date().toISOString()),
     db().from("waitlist_entries").select("id, status, offer_expires_at, created_at, class_sessions!inner(id, starts_at, title, class_types(name))")
@@ -155,6 +155,7 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
             <ul className="card divide-y divide-line overflow-hidden">
               {past.map((x) => <li key={x.id}><PastPackageRow p={x} /></li>)}
             </ul>
+            {packages.hidden > 0 && <Link href="/bookings?all=1" prefetch={false} className="mt-3 block text-center text-sm text-ink-soft underline underline-offset-4">Show all past packages</Link>}
           </Section>
         )}
       </div>

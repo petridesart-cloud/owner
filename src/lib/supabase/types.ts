@@ -1841,6 +1841,7 @@ export type Database = {
       };
     };
     Functions: {
+      active_client_ids: { Args: Record<PropertyKey, never>; Returns: string[] };
       add_credit_kind: { Args: { p_label: string }; Returns: string };
       add_local_days: { Args: { p_days: number; p_ts: string }; Returns: string };
       admin_adjust_credits: {
@@ -1935,6 +1936,13 @@ export type Database = {
       expire_credits: { Args: Record<PropertyKey, never>; Returns: number };
       expire_unpaid_requests: { Args: Record<PropertyKey, never>; Returns: string[] };
       extend_timetable: { Args: { p_days?: number }; Returns: number };
+      first_class_at: {
+        Args: { p_ids: string[] };
+        Returns: {
+          first_class: string;
+          profile_id: string;
+        }[];
+      };
       generate_sessions: { Args: { p_template: string }; Returns: number };
       generate_sessions_range: { Args: { p_from: string; p_template: string; p_to: string }; Returns: number };
       grant_lot: {
@@ -1969,6 +1977,7 @@ export type Database = {
           profile_id: string;
         }[];
       };
+      locked_events: { Args: { p_ids: string[]; p_profile: string }; Returns: string[] };
       lot_class_range: { Args: { p_lot: string }; Returns: Record<string, unknown> };
       lot_usable_for: {
         Args: {
@@ -2050,6 +2059,14 @@ export type Database = {
         Returns: undefined;
       };
       pause_membership: { Args: { p_membership: string }; Returns: undefined };
+      payments_by_method: {
+        Args: { p_year: number };
+        Returns: {
+          method: string;
+          month: string;
+          total_cents: number;
+        }[];
+      };
       period_end: { Args: { p_days: number; p_start: string }; Returns: string };
       phone_key: { Args: { p: string }; Returns: string };
       process_waitlist: {
@@ -2079,7 +2096,7 @@ export type Database = {
       seed_demo: { Args: Record<PropertyKey, never>; Returns: undefined };
       seed_demo_profiles: { Args: Record<PropertyKey, never>; Returns: undefined };
       session_availability: {
-        Args: { p_from: string; p_to: string };
+        Args: { p_events_only?: boolean; p_from: string; p_id?: string; p_to: string };
         Returns: {
           capacity: number;
           class_type_id: string;
@@ -2090,6 +2107,7 @@ export type Database = {
           kind: Database["public"]["Enums"]["class_kind"];
           location: string;
           price_cents: number;
+          private: boolean;
           spots_left: number;
           starts_at: string;
           status: Database["public"]["Enums"]["session_status"];
@@ -2401,7 +2419,6 @@ export const Constants = {
         "private_reformer",
         "private_prenatal_mat",
         "private_prenatal_reformer",
-        "pre_natal_mw5zhhdy",
       ],
       ledger_entry: [
         "grant",

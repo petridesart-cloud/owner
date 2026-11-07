@@ -5,18 +5,21 @@ export type Availability = {
   id: string; class_type_id: string; type_slug: string; type_name: string; kind: "reformer" | "mat" | "event" | "other";
   credit_kind: string | null; title: string; description: string | null; starts_at: string; ends_at: string;
   capacity: number; spots_left: number; waitlist_count: number; price_cents: number; location: string | null;
-  status: "scheduled" | "cancelled";
+  status: "scheduled" | "cancelled"; private: boolean;
 };
 
-export async function availability(from: Date, to: Date, opts: { includePrivate?: boolean } = {}): Promise<Availability[]> {
-  const [{ data, error }, { data: priv }] = await Promise.all([
-    db().rpc("session_availability", { p_from: from.toISOString(), p_to: to.toISOString() }),
-    db().from("class_types").select("id").eq("private", true),
-  ]);
+export async function availability(from: Date, to: Date, opts: { includePrivate?: boolean; eventsOnly?: boolean } = {}): Promise<Availability[]> {
+  const { data, error } = await db().rpc("session_availability", { p_from: from.toISOString(), p_to: to.toISOString(), p_events_only: opts.eventsOnly ?? false });
   if (error) throw error;
   // Private sessions are never on the schedule: she books them in by hand.
-  const hidden = new Set((priv ?? []).map((t) => t.id));
-  return ((data ?? []) as Availability[]).filter((c) => opts.includePrivate || !hidden.has(c.class_type_id));
+  return ((data ?? []) as Availability[]).filter((c) => opts.includePrivate || !c.private);
+}
+
+/** One class (or event) by id, with its type's private flag; null if it doesn't exist. */
+export async function sessionById(id: string): Promise<Availability | null> {
+  const { data, error } = await db().rpc("session_availability", { p_from: "1970-01-01T00:00:00Z", p_to: "1970-01-01T00:00:00Z", p_id: id });
+  if (error) throw error;
+  return ((data ?? []) as Availability[])[0] ?? null;
 }
 
 export type EventExtras = { clients_only: boolean; what_to_bring: string | null; event_policy: string | null; recap: string | null; signup_question: string | null; title_font: string | null };
@@ -28,14 +31,12 @@ export async function eventExtras(ids: string[]): Promise<Map<string, EventExtra
   return new Map((data ?? []).map(({ id, ...x }) => [id, x]));
 }
 
-/** Which of these clients-only events this person may NOT open (no active package, not added by the studio, not booked). */
+/** Which of these clients-only events this person may NOT open (no active package, not added by the studio, not booked): one RPC. */
 export async function lockedEventIds(ids: string[], profileId: string | undefined): Promise<Set<string>> {
-  const extras = await eventExtras(ids);
-  const only = ids.filter((id) => extras.get(id)?.clients_only);
-  if (!only.length) return new Set();
-  if (!profileId) return new Set(only);
-  const checks = await Promise.all(only.map((id) => db().rpc("can_access_event", { p_profile: profileId, p_session: id })));
-  return new Set(only.filter((_, i) => checks[i].data !== true));
+  if (!ids.length) return new Set();
+  const { data, error } = await db().rpc("locked_events", { p_profile: (profileId ?? null) as string, p_ids: ids });
+  if (error) throw error;
+  return new Set((data ?? []) as unknown as string[]);
 }
 
 /** Clients-only events in a list that this viewer can't open. */
@@ -66,16 +67,16 @@ export async function creditBalance(profileId: string) {
   return Object.assign(out, { reformerExpiry: expiry.reformer ?? null, matExpiry: expiry.mat ?? null, expiry });
 }
 
-/** The viewer's next confirmed class, if any. */
+/** The viewer's next confirmed class, if any (the nearest start time, ordered on the class itself). */
 export async function nextBooking(profileId: string) {
-  const { data } = await db().from("bookings")
-    .select("id, class_sessions!inner(id, starts_at, ends_at, title, location, status, class_types(name, kind, default_location))")
-    .eq("profile_id", profileId).eq("status", "confirmed")
-    .gt("class_sessions.starts_at", new Date().toISOString())
-    .order("starts_at", { referencedTable: "class_sessions", ascending: true })
-    .limit(10);
-  const rows = (data ?? []).sort((a, b) => a.class_sessions.starts_at.localeCompare(b.class_sessions.starts_at));
-  return rows[0] ?? null;
+  const { data } = await db().from("class_sessions")
+    .select("id, starts_at, ends_at, title, location, status, class_types(name, kind, default_location), bookings!inner(id)")
+    .eq("bookings.profile_id", profileId).eq("bookings.status", "confirmed")
+    .gt("starts_at", new Date().toISOString())
+    .order("starts_at", { ascending: true }).limit(1).maybeSingle();
+  if (!data) return null;
+  const { bookings, ...session } = data;
+  return { id: bookings[0].id, class_sessions: session };
 }
 
 /**

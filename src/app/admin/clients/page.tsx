@@ -12,23 +12,24 @@ type Row = { id: string; full_name: string | null; first_name: string | null; la
 
 export default async function ClientsPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const { q = "" } = await searchParams;
-  let query = db().from("profiles")
-    .select("id, full_name, first_name, last_name, email, phone, date_of_birth, credit_lots(remaining, expires_at), bookings(status, paid_with, class_sessions(starts_at), payment:payments!bookings_payment_id_fkey(status))")
-    .is("deleted_at", null).eq("role", "client").limit(2000);
+  // A-050 / A-051: the list needs names only; who is active is worked out in SQL (no bookings or packages per client),
+  // and the profiles are read page by page so the API's 1,000-row cap never cuts the list.
   const term = searchTerm(q);
-  if (term) query = query.or(`full_name.ilike.%${term}%,email.ilike.%${term}%,phone.ilike.%${term}%`);
-  const { data } = await query;
-  const now = new Date().toISOString();
+  const profiles: Row[] = [];
+  for (let at = 0; ; at += 1000) {
+    let query = db().from("profiles").select("id, full_name, first_name, last_name, email, phone, date_of_birth")
+      .is("deleted_at", null).eq("role", "client").order("id").range(at, at + 999);
+    if (term) query = query.or(`full_name.ilike.%${term}%,email.ilike.%${term}%,phone.ilike.%${term}%`);
+    const { data: page } = await query;
+    profiles.push(...(page ?? []));
+    if ((page?.length ?? 0) < 1000) break;
+  }
+  const { data: activeIds } = await db().rpc("active_client_ids");
+  const activeSet = new Set((activeIds ?? []) as unknown as string[]);
   const today = todayKey();
-
-  // Active (her answer): classes left in a package that hasn't expired, or a paid (or free / studio-added)
-  // class coming up. An unpaid trial or drop-in doesn't count yet.
-  const isActive = (c: NonNullable<typeof data>[number]) =>
-    c.credit_lots.some((l) => l.remaining > 0 && (!l.expires_at || l.expires_at > now)) ||
-    c.bookings.some((b) => b.status === "confirmed" && (b.class_sessions?.starts_at ?? "") > now
-      && (b.paid_with !== "pay_at_studio" || b.payment?.status === "paid"));
+  const isActive = (c: Row) => activeSet.has(c.id);
   const name = (c: Row) => [c.first_name, c.last_name].filter(Boolean).join(" ") || c.full_name || c.email || "Unnamed";
-  const sorted = [...(data ?? [])].sort((a, b) => name(a).localeCompare(name(b), "en", { sensitivity: "base" }));
+  const sorted = [...profiles].sort((a, b) => name(a).localeCompare(name(b), "en", { sensitivity: "base" }));
   const active = sorted.filter(isActive);
   const inactive = sorted.filter((c) => !isActive(c));
 

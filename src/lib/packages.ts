@@ -17,13 +17,24 @@ const months = (m: number) => `${m} month${m === 1 ? "" : "s"}`;
  * The client's packages (credit lots) with what happened to each class, for My classes.
  * Classes cancelled in time were rescheduled, so they're left out; late cancels and no-shows count as missed.
  */
-export async function clientPackages(profileId: string, lotId?: string): Promise<PackageView[]> {
+export const PAST_PACKAGES_SHOWN = 12;
+
+/** `hidden` = older past packages left out (A-051: the newest 12 are read; `all` reads every one). */
+export async function clientPackages(profileId: string, lotId?: string, opts: { all?: boolean } = {}): Promise<PackageView[] & { hidden: number }> {
   let q = db().from("credit_lots")
     .select("id, credit_kind, total, remaining, started_at, expires_at, validity_days, note, created_at, payments(products(per_week, months, credits, validity_days))")
     .eq("profile_id", profileId).order("created_at", { ascending: false });
   if (lotId) q = q.eq("id", lotId);
-  const { data: lots } = await q;
-  if (!lots?.length) return [];
+  const { data: allLots } = await q;
+  if (!allLots?.length) return Object.assign([], { hidden: 0 });
+  // Running packages are always read; of the finished ones only the newest few unless asked for all.
+  const nowAt = Date.now();
+  let pastSeen = 0;
+  const lots = allLots.filter((l) => {
+    if (lotId || opts.all || !l.expires_at || new Date(l.expires_at).getTime() > nowAt) return true;
+    return pastSeen++ < PAST_PACKAGES_SHOWN;
+  });
+  const hidden = allLots.length - lots.length;
 
   const ids = lots.map((l) => l.id);
   const { data: ledger } = await db().from("credit_ledger")
@@ -32,7 +43,7 @@ export async function clientPackages(profileId: string, lotId?: string): Promise
 
   const labels = await kindLabels();
   const now = Date.now();
-  return lots.map((l) => {
+  const views = lots.map((l) => {
     const rows = (ledger ?? []).filter((e) => e.lot_id === l.id);
     const byBooking = new Map<string, { net: number; b: (typeof rows)[number]["bookings"] }>();
     for (const e of rows) {
@@ -67,4 +78,5 @@ export async function clientPackages(profileId: string, lotId?: string): Promise
       current: !expiredOut && (l.remaining > 0 || upcoming), classes,
     };
   });
+  return Object.assign(views, { hidden });
 }

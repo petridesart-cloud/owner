@@ -24,3 +24,10 @@ export async function logoSrc() {
   const [logo] = await getMedia("logo").catch(() => []);
   return logo?.url ?? DEFAULT_LOGO;
 }
+
+/** Photos for an exact list of slots (e.g. the covers of the events on a page), in one query. */
+export async function getMediaIn(slots: string[]): Promise<MediaItem[]> {
+  if (!slots.length) return [];
+  const { data } = await db().from("media").select("id, slot, path, caption, sort").in("slot", slots).order("sort").order("created_at");
+  return (data ?? []).map((m) => ({ ...m, url: publicUrl(m.path) }));
+}

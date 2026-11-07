@@ -1765,3 +1765,50 @@ describe("WP12: package ends in calendar days (A-036, A-047, A-080, A-096)", () 
     }
   });
 });
+
+describe("WP9: one-query answers (A-050, A-051, A-022)", () => {
+  const D = 86_400_000;
+  test("events-only availability still lists events after more than 1,000 classes (A-050)", async () => {
+    const type = (await db.from("class_types").select("id").eq("kind", "event").limit(1).single()).data!.id;
+    const base = Date.now() + 400 * D;
+    const rows = Array.from({ length: 1100 }, (_, i) => ({ class_type_id: reformer, starts_at: new Date(base + i * 3_600_000).toISOString(), ends_at: new Date(base + i * 3_600_000 + 50 * 60_000).toISOString(), capacity: 3, title: "WP9 filler" }));
+    for (let i = 0; i < rows.length; i += 500) assert.ifError((await db.from("class_sessions").insert(rows.slice(i, i + 500))).error);
+    const evStart = base + 1200 * 3_600_000;
+    const { data: ev } = await db.from("class_sessions").insert({ class_type_id: type, starts_at: new Date(evStart).toISOString(), ends_at: new Date(evStart + 90 * 60_000).toISOString(), capacity: 5, title: "WP9 far event" }).select("id").single();
+    try {
+      const from = new Date().toISOString(), to = new Date(base + 2000 * 3_600_000).toISOString();
+      const all = await db.rpc("session_availability", { p_from: from, p_to: to });
+      assert.equal(all.data?.length, 1000, "the plain list is capped by the API");
+      const events = await db.rpc("session_availability", { p_from: from, p_to: to, p_events_only: true });
+      assert.ok(events.data?.some((r) => r.id === ev!.id), "the far event is listed");
+      assert.ok(events.data?.every((r) => r.kind === "event"));
+      const one = await db.rpc("session_availability", { p_from: from, p_to: from, p_id: ev!.id });
+      assert.equal(one.data?.length, 1);
+      assert.equal(one.data?.[0].private, false);
+    } finally {
+      await db.from("class_sessions").delete().like("title", "WP9 %");
+    }
+  });
+
+  test("first_class_at, payments_by_method and locked_events", async () => {
+    const p = await client("wp9-first");
+    const s1 = await session(3 * D), s2 = await session(9 * D);
+    await grant(p, 3, 30 * D);
+    assert.ifError((await book(p, s2)).error);
+    assert.ifError((await book(p, s1)).error);
+    const first = await db.rpc("first_class_at", { p_ids: [p] });
+    const startOf = (await db.from("class_sessions").select("starts_at").eq("id", s1).single()).data!.starts_at;
+    assert.equal(new Date(first.data![0].first_class).getTime(), new Date(startOf).getTime());
+    const year = Number(todayKey().slice(0, 4));
+    const methods = await db.rpc("payments_by_method", { p_year: year });
+    assert.ifError(methods.error);
+    const ev = await clientsOnlyEvent(5 * D);
+    const stranger = await client("wp9-stranger");
+    assert.deepEqual((await db.rpc("locked_events", { p_profile: stranger, p_ids: [ev, s1] })).data, [ev]);
+    assert.deepEqual((await db.rpc("locked_events", { p_profile: p, p_ids: [ev] })).data, [], "a client with a package may open it");
+    const anon = await db.rpc("locked_events", { p_profile: null as unknown as string, p_ids: [ev] });
+    assert.deepEqual(anon.data, [ev]);
+    const active = await db.rpc("active_client_ids");
+    assert.ok((active.data as unknown as string[]).includes(p));
+  });
+});

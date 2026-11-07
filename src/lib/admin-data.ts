@@ -18,12 +18,10 @@ export async function sessionsWithRoster(from: string, to: string) {
   const ids = [...new Set(rows.flatMap((s) => s.bookings.map((b) => b.profiles?.id)).filter(Boolean))] as string[];
   const first = new Map<string, string>();
   if (ids.length) {
-    const { data: prior } = await db().from("bookings").select("profile_id, class_sessions!inner(starts_at)")
-      .in("profile_id", ids).in("status", ["confirmed", "no_show", "late_cancelled"]);
-    for (const b of prior ?? []) {
-      const cur = first.get(b.profile_id);
-      if (!cur || b.class_sessions.starts_at < cur) first.set(b.profile_id, b.class_sessions.starts_at);
-    }
+    // A-050: in SQL (one row per person), not every booking they ever made through a 1,000-row API cap.
+    const { data: prior, error } = await db().rpc("first_class_at", { p_ids: ids });
+    if (error) throw error;
+    for (const r of prior ?? []) first.set(r.profile_id, r.first_class);
   }
   return rows.map((s) => ({
     ...s,
