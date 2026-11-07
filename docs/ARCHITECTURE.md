@@ -55,12 +55,12 @@ anon key + a user's JWT.
 | Table | Holds | RLS policies (anon/authenticated) |
 |---|---|---|
 | `profiles` | Client/admin people: names, email, phone, DOB, emergency contact (+relation), goal, photo consent, role (`client`/`admin`), student-verified-until, marketing/reminder flags, `parq_completed_at`, `onboarded_at`, `admin_notes`, `deleted_at`, `user_id` → auth.users | own read; own update; admin all |
-| `health_notes` | Special-category health answers (conditions, details, pregnancy, meds, clearance flags, consent time) | owner or instructor read; instructor write |
+| `health_notes` | Special-category health answers (conditions, details, pregnancy, meds, clearance flags, consent time) | owner or instructor read; no client writes (server only, A-086) |
 | `health_history` | A copy of every health save | none (server only) |
 | `consents` | Versioned consent records (policy, terms, fitness_declaration, health_data, marketing_email/sms, photos) | own read |
 | `class_types` | Reformer, Mat, Event, Pre & Post Natal, Private… (kind, credit_kind, capacity, minutes, credit_cost, private, archived_at) | public read (active) |
-| `class_sessions` | Scheduled classes/events (time, capacity, price, title, location, status, template, clients_only, what_to_bring, event_policy, recap, signup_question, title_font) | public read (all rows) |
-| `timetable_templates`, `template_slots` | Repeating weekly timetable | admin all |
+| `class_sessions` | Scheduled classes/events (time, capacity, price, title, location, status, template, clients_only, what_to_bring, event_policy, recap, signup_question, title_font) | read through `can_see_session()`: clients-only events only for those who may see them, private sessions only for the studio and the client booked in (A-041) |
+| `timetable_templates`, `template_slots` | Repeating weekly timetable | admin read; written by the server only (A-086) |
 | `bookings` | Session × profile (status held/confirmed/cancelled/late_cancelled/studio_cancelled/expired/no_show, source, paid_with, payment_id, checked_in_at, answer, note, late_refund_pending, free_cancel_until) | own read |
 | `waitlist_entries` | Position by created_at; waiting/offered/claimed/expired/left | own read |
 | `products` | Packages, trials, drop-ins, memberships (tag, credit_kind, credits, months, validity_days, price, is_group, active, archived_at) | public read (active) |
@@ -77,7 +77,7 @@ anon key + a user's JWT.
 | `notifications` | Outbox: every email/SMS (dedupe_key unique, status) | admin read |
 | `media` | Her photos (slot → Storage path) | public read |
 | `site_content` | Her editable texts (rules, policy, terms…) | public read |
-| `studio_settings` | One row of settings / feature flags (§8) | public read (whole row) |
+| `studio_settings` | One row of settings / feature flags (§8) | public columns only (name, intro, banner, contact, Instagram, map, cutoff, window…), also as the `studio_public` view; no alert email, bank details, heartbeats or retention (A-041) |
 | `compliance_items` | "Before online payments" checklist | admin all |
 | `audit_log` | Every admin action | admin read |
 | `otp_requests`, `rate_events` | Rate-limit records (hashed keys) | none |
@@ -97,7 +97,7 @@ anon key + a user's JWT.
 - **Credits:** `grant_lot`, `return_credit`, `admin_adjust_lot` (extend/freeze/end/add/remove, all ledger entries), `admin_adjust_credits`, `expire_credits`, `compute_expiry`, `recalc_lot_expiry`, `usable_credits`, `credit_balance`.
 - **Payments:** `confirm_payment` (offline/Stripe → grant or confirm booking; idempotent `already_paid`), `expire_unpaid_requests`, `release_unpaid_payment` (trigger).
 - **Timetable and closures:** `generate_sessions[_range]`, `extend_timetable` (≥ booking window + 14 days), `replace_timetable_from`, `apply_closure`, `closed_days`, `is_closed_on`.
-- **Access:** `is_admin`, `my_profile_id` (used by RLS), `is_studio_client`, `can_access_event`.
+- **Access:** `is_admin`, `my_profile_id` (used by RLS, executable by anon too), `is_studio_client`, `can_access_event`, `can_see_session` (the `class_sessions` policy). Anon/authenticated hold no TRUNCATE/TRIGGER/REFERENCES (also as default privileges), and `credit_ledger` refuses TRUNCATE (A-086).
 - **Guard triggers:**
   - `guard_clients_only`.
   - `guard_free_booking`.
@@ -237,4 +237,4 @@ Environment flags (`src/lib/env.ts`): `APP_ENV=production` (real app; forces dem
 - **Booking rules in the database:** the engine functions lock rows and enforce every rule, so the UI can't bypass them. RLS + revoked function grants protect the database if the anon key is used directly.
 - **Health data:** stored only in `health_notes`/`health_history`, shown only to admins, never emailed.
 - **Rate limiting:** in SQL for auth, codes and booking-type actions.
-- **Headers:** security headers in `next.config.ts` (HSTS, nosniff, frame DENY, referrer, permissions). No CSP yet.
+- **Headers:** security headers in `next.config.ts` (HSTS, nosniff, frame DENY, referrer, permissions). A Content-Security-Policy in **Report-Only** mode comes from `src/proxy.ts` with a fresh nonce per request (`src/lib/csp.ts`: own origin, nonce + `strict-dynamic` scripts, Supabase images, the Google map frame, `form-action 'self'` + Stripe Checkout); violations are logged by `/api/csp-report`. `e2e/authz.spec.ts` checks pages have none. To enforce it later, change `CSP_HEADER` and add `frame-ancestors 'none'`.

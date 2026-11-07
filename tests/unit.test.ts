@@ -271,3 +271,22 @@ describe("photo uploads (A-093)", () => {
     assert.equal(sniffImage(new Uint8Array(2)), null);
   });
 });
+
+describe("Content-Security-Policy (A-043)", () => {
+  test("nonce scripts, own origin only, her photos from Supabase, the click-to-load map, no plugins", async () => {
+    const { buildCsp } = await import("../src/lib/csp");
+    const csp = buildCsp("abc123", { supabaseUrl: "https://xyz.supabase.co", dev: false });
+    const dir = (name: string) => csp.split(";").map((d) => d.trim()).find((d) => d.startsWith(name + " "));
+    assert.equal(dir("default-src"), "default-src 'self'");
+    assert.equal(dir("script-src"), "script-src 'self' 'nonce-abc123' 'strict-dynamic'");
+    assert.ok(dir("img-src")!.includes("https://xyz.supabase.co"));
+    assert.ok(dir("frame-src")!.includes("https://www.google.com"));
+    assert.equal(dir("object-src"), "object-src 'none'");
+    assert.equal(dir("base-uri"), "base-uri 'self'");
+    assert.ok(dir("form-action")!.startsWith("form-action 'self'"));
+    assert.ok(!csp.includes("unsafe-eval"));
+    assert.ok(!csp.includes("frame-ancestors") && !csp.includes("upgrade-insecure-requests"), "ignored (with a console warning) in Report-Only");
+    assert.ok(buildCsp("n", { supabaseUrl: "http://127.0.0.1:54321", dev: true }).includes("'unsafe-eval'"), "React needs eval in dev only");
+    assert.ok(!/[\n\r]/.test(csp));
+  });
+});

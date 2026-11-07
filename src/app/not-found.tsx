@@ -1,8 +1,11 @@
 import Link from "next/link";
+import { connection } from "next/server";
 
 export const metadata = { title: "Page not found" };
 
-export default function NotFound() {
+// Rendered per request so its scripts carry the CSP nonce (A-043).
+export default async function NotFound() {
+  await connection();
   const btn = "inline-flex min-h-12 items-center justify-center rounded-full px-6 text-[0.8rem] font-medium uppercase tracking-[0.18em] transition";
   return (
     <main className="mx-auto flex min-h-[70dvh] max-w-md flex-col justify-center px-5 py-10 text-center">
