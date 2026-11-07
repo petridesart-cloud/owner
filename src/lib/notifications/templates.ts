@@ -22,7 +22,9 @@ export type TemplateName =
   | "weekly_full"
   | "birthday"
   | "reward"
-  | "studio_alert";
+  | "studio_alert"
+  | "health_expiring"
+  | "account_inactive";
 
 export type TemplateData = {
   name?: string;
@@ -215,6 +217,30 @@ export function render(t: TemplateName, raw: TemplateData): Rendered {
         lines: [`Hi ${first(d.name)}, thank you for being part of Re·Form.`, d.note ?? "", "It's applied automatically when you book in the app."].filter(Boolean),
         cta: { label: "See packages", href: `${link}/packs` },
         sms: `Re·Form: you have a reward: ${d.note ?? ""} ${link}/packs`,
+      };
+    // Retention notices (A-011): 30 days before the stored data is deleted. `when` is the deletion date.
+    case "health_expiring":
+      return {
+        subject: "Your health answers will be deleted soon",
+        heading: "Your health answers",
+        lines: [
+          `Hi ${first(d.name)}, we keep your health answers only while you're coming to classes.`,
+          `As you haven't been to a class for a while, we'll delete them on ${d.when}.`,
+          "If you come back, we'll simply ask the questions again before your next class.",
+        ],
+        cta: { label: "My account", href: `${link}/account` },
+        sms: `Re·Form: your health answers will be deleted on ${d.when}. ${link}/account`,
+      };
+    case "account_inactive":
+      return {
+        subject: "We'll close your Re·Form account soon",
+        heading: "We miss you",
+        lines: [
+          `Hi ${first(d.name)}, you haven't booked or signed in for a long time, so we'll delete your account and personal details on ${d.when}.`,
+          "To keep your account, just sign in before then.",
+        ],
+        cta: { label: "Sign in", href: `${link}/login` },
+        sms: `Re·Form: we'll delete your inactive account on ${d.when}. Sign in to keep it: ${link}/login`,
       };
     case "studio_alert":
       // To the studio itself: what happened, in one line, with a link to the studio app. Never health details.

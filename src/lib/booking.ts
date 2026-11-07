@@ -6,7 +6,7 @@ import { getSettings, unavailable, type Profile, type Settings } from "@/lib/aut
 import { later, notify, pool, retryFailed } from "@/lib/notifications";
 import { paymentProvider } from "@/lib/payments";
 import { friendlyError, type ActionResult } from "@/lib/errors";
-import { spokenDateTime, time, relativeHours, todayKey } from "@/lib/time";
+import { longDate, spokenDateTime, time, relativeHours, todayKey } from "@/lib/time";
 import { eur, vatPortion } from "@/lib/money";
 import { applyRecurring } from "@/lib/recurring";
 import { cancelledOutcome } from "@/lib/notifications/templates";
@@ -247,7 +247,7 @@ export async function buyProduct(profile: Profile, productId: string, method: "c
     later("package request emails", async () => {
     if (isNew) await alertStudio("requests", `Package request: ${profile.full_name ?? profile.email ?? "a client"}`,
       [`${product.name} · ${eur(price.cents)}${price.note ? ` (${price.note})` : ""}`, `They'll pay ${method === "revolut" ? "by Revolut" : method === "bank_transfer" ? "by bank transfer" : "in cash"}. Tap Mark as paid on Today once you have it.`],
-      { path: "/admin", dedupeKey: `request:${payId}` });
+      { path: "/admin", dedupeKey: `request:${payId}`, about: profile.id });
     // A new request, or the same one at a new price (a code added or taken off): send the instructions again.
     if (resend) {
       await notify({ profileId: profile.id, email: profile.email }, "payment_request",
@@ -468,7 +468,7 @@ async function cancelEmails(profile: Profile, bookingId: string, res: CancelResu
     await alertStudio("cancellations", `Cancellation: ${s.name}, ${spokenDateTime(s.starts_at)}`,
       [`${profile.full_name ?? profile.email ?? "A client"} cancelled${late ? ` inside the ${s.cutoff}-hour window (the class isn't returned)` : " in time (the class went back into their package)"}.`,
        "Their spot is open again; the waitlist moves up if anyone is waiting."],
-      { path: `/admin/classes/${s.id}`, dedupeKey: `cancel:${bookingId}` });
+      { path: `/admin/classes/${s.id}`, dedupeKey: `cancel:${bookingId}`, about: profile.id });
   }
   await notifyOffers(res.offers ?? []);
 }
@@ -541,6 +541,7 @@ export async function runTick(source: "cron" | "page" | "admin" = "page"): Promi
     await db().from("profiles").update({ date_of_birth: `1995-${todayKey().slice(5) === "02-29" ? "02-28" : todayKey().slice(5)}` }).eq("email", "sofia@example.com");
   }, undefined);
   const weekly = await step("weekly", async () => (await applyRecurring()).booked, 0);
+  await step("retention", () => dailyRetention(cfg), undefined);
 
   // The heartbeat comes last, so a tick that died half-way never looks healthy.
   const now = new Date().toISOString();
@@ -551,6 +552,34 @@ export async function runTick(source: "cron" | "page" | "admin" = "page"): Promi
   }).eq("id", 1);
   if (error) { console.error("tick heartbeat", error); errors.push("heartbeat"); }
   return { offers, reminders, notices, retried, weekly, errors };
+}
+
+/**
+ * Retention (A-011), once a day: enforce_retention() deletes or anonymises what has passed its period
+ * (Settings → retention_*; counts only in audit_log). Then the 30-day notices go out and the logins of
+ * people erased for inactivity are deleted.
+ */
+async function dailyRetention(cfg: Settings) {
+  if (cfg.last_retention_at && Date.now() - new Date(cfg.last_retention_at).getTime() < 23 * 3_600_000) return;
+  const { data, error } = await db().rpc("enforce_retention", {});
+  if (error) throw error;
+  const res = data as { warn_health?: { profile_id: string; delete_on: string }[]; warn_inactive?: { profile_id: string; delete_on: string }[]; erased_users?: { user_id: string | null }[] };
+  const notices = [
+    ...(res.warn_health ?? []).map((w) => ({ ...w, template: "health_expiring" as const })),
+    ...(res.warn_inactive ?? []).map((w) => ({ ...w, template: "account_inactive" as const })),
+  ];
+  const people = await profilesById(notices.map((n) => n.profile_id));
+  await pool(notices, 5, async (n) => {
+    const p = people.get(n.profile_id);
+    if (!p?.email) return;
+    await notify({ profileId: p.id, email: p.email }, n.template, { name: p.full_name ?? undefined, when: longDate(n.delete_on) },
+      { dedupeKey: `${n.template}:${p.id}:${n.delete_on.slice(0, 10)}` });
+  });
+  for (const u of res.erased_users ?? []) {
+    if (!u.user_id) continue;
+    const { error: e } = await db().auth.admin.deleteUser(u.user_id);
+    if (e) console.error("retention: auth user delete failed (profile already erased)", u.user_id, e);
+  }
 }
 
 /** Reminders due now (one query per offset, already-reminded bookings left out in SQL), five at a time. */

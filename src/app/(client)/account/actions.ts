@@ -1,5 +1,6 @@
 "use server";
 import { alertStudio } from "@/lib/studio-alerts";
+import { eraseProfile } from "@/lib/erase";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -77,18 +78,8 @@ export async function deleteAccount(form: FormData) {
   const viewer = await requireViewer("/account");
   if (String(form.get("confirm")).trim().toUpperCase() !== "DELETE") redirect("/account?delete=confirm");
   // Erase first; the login is deleted only once the data is gone (A-010, A-019).
-  const { data, error } = await db().rpc("erase_profile", { p_profile: viewer.profile.id });
-  if (error) {
-    console.error("erase_profile failed", error);
-    redirect("/account?delete=failed");
-  }
-  const res = { user_id: data as string | null };
-  const supabase = await supabaseServer();
-  await supabase.auth.signOut();
-  if (res.user_id) {
-    const { error: e } = await db().auth.admin.deleteUser(res.user_id);
-    // Their data is already erased and the profile unlinked; a leftover login can't reach anything.
-    if (e) console.error("auth user delete failed (profile already erased)", e);
-  }
+  if (!(await eraseProfile(viewer.profile.id, viewer.profile.email ?? viewer.email))) redirect("/account?delete=failed");
+  // The login is gone already: just clear this browser's session cookies.
+  await (await supabaseServer()).auth.signOut({ scope: "local" });
   redirect("/?deleted=1");
 }

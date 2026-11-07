@@ -26,3 +26,7 @@ export async function clientIp() {
 
 /** Booking-type actions (book, cancel, waitlist, package request, weekly): generous, per client. */
 export const bookingLimited = (profileId: string) => rateLimited("booking", profileId, 30, 10);
+
+/** The keyed hashes rate_events can hold for one person (their email and profile id), for erasure (A-010). */
+export const personKeys = (email: string | null | undefined, profileId: string) =>
+  [profileId, ...(email ? [email] : [])].map((v) => keyHash(secret(), v));

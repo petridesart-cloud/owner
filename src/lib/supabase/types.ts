@@ -894,6 +894,7 @@ export type Database = {
       };
       notifications: {
         Row: {
+          about_profile_id: string | null;
           attempts: number;
           body: string;
           booking_id: string | null;
@@ -914,6 +915,7 @@ export type Database = {
         };
         ComputedFields: "notification_stale";
         Insert: {
+          about_profile_id?: string | null;
           attempts?: number;
           body: string;
           booking_id?: string | null;
@@ -932,6 +934,7 @@ export type Database = {
           template: string;
         };
         Update: {
+          about_profile_id?: string | null;
           attempts?: number;
           body?: string;
           booking_id?: string | null;
@@ -950,6 +953,13 @@ export type Database = {
           template?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "notifications_about_profile_id_fkey";
+            columns: ["about_profile_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "notifications_booking_id_fkey";
             columns: ["booking_id"];
@@ -1214,8 +1224,10 @@ export type Database = {
           first_name: string | null;
           full_name: string | null;
           goal: string | null;
+          health_expiry_warned_at: string | null;
           health_mode: string | null;
           id: string;
+          inactive_warned_at: string | null;
           last_name: string | null;
           marketing_email: boolean;
           marketing_sms: boolean;
@@ -1243,8 +1255,10 @@ export type Database = {
           first_name?: string | null;
           full_name?: string | null;
           goal?: string | null;
+          health_expiry_warned_at?: string | null;
           health_mode?: string | null;
           id?: string;
+          inactive_warned_at?: string | null;
           last_name?: string | null;
           marketing_email?: boolean;
           marketing_sms?: boolean;
@@ -1271,8 +1285,10 @@ export type Database = {
           first_name?: string | null;
           full_name?: string | null;
           goal?: string | null;
+          health_expiry_warned_at?: string | null;
           health_mode?: string | null;
           id?: string;
+          inactive_warned_at?: string | null;
           last_name?: string | null;
           marketing_email?: boolean;
           marketing_sms?: boolean;
@@ -1398,6 +1414,7 @@ export type Database = {
           instagram_handle: string;
           intro_line: string;
           last_cron_tick_at: string | null;
+          last_retention_at: string | null;
           last_tick_at: string | null;
           last_tick_error: string | null;
           last_tick_ok_at: string | null;
@@ -1409,6 +1426,16 @@ export type Database = {
           refund_late_cancel_if_filled: boolean;
           registration_number: string;
           reminder_offsets_minutes: number[];
+          retention_audit_months: number | null;
+          retention_auth_log_days: number | null;
+          retention_codes_months: number | null;
+          retention_consents_years: number | null;
+          retention_event_extras_months: number | null;
+          retention_health_months: number | null;
+          retention_inactive_months: number | null;
+          retention_messages_months: number | null;
+          retention_notice_days: number;
+          retention_payments_years: number | null;
           revolut_link: string;
           rollover_max: number;
           status_banner: string;
@@ -1449,6 +1476,7 @@ export type Database = {
           instagram_handle?: string;
           intro_line?: string;
           last_cron_tick_at?: string | null;
+          last_retention_at?: string | null;
           last_tick_at?: string | null;
           last_tick_error?: string | null;
           last_tick_ok_at?: string | null;
@@ -1460,6 +1488,16 @@ export type Database = {
           refund_late_cancel_if_filled?: boolean;
           registration_number?: string;
           reminder_offsets_minutes?: number[];
+          retention_audit_months?: number | null;
+          retention_auth_log_days?: number | null;
+          retention_codes_months?: number | null;
+          retention_consents_years?: number | null;
+          retention_event_extras_months?: number | null;
+          retention_health_months?: number | null;
+          retention_inactive_months?: number | null;
+          retention_messages_months?: number | null;
+          retention_notice_days?: number;
+          retention_payments_years?: number | null;
           revolut_link?: string;
           rollover_max?: number;
           status_banner?: string;
@@ -1499,6 +1537,7 @@ export type Database = {
           instagram_handle?: string;
           intro_line?: string;
           last_cron_tick_at?: string | null;
+          last_retention_at?: string | null;
           last_tick_at?: string | null;
           last_tick_error?: string | null;
           last_tick_ok_at?: string | null;
@@ -1510,6 +1549,16 @@ export type Database = {
           refund_late_cancel_if_filled?: boolean;
           registration_number?: string;
           reminder_offsets_minutes?: number[];
+          retention_audit_months?: number | null;
+          retention_auth_log_days?: number | null;
+          retention_codes_months?: number | null;
+          retention_consents_years?: number | null;
+          retention_event_extras_months?: number | null;
+          retention_health_months?: number | null;
+          retention_inactive_months?: number | null;
+          retention_messages_months?: number | null;
+          retention_notice_days?: number;
+          retention_payments_years?: number | null;
           revolut_link?: string;
           rollover_max?: number;
           status_banner?: string;
@@ -1768,7 +1817,8 @@ export type Database = {
           starts_at: string;
         }[];
       };
-      erase_profile: { Args: { p_profile: string }; Returns: string };
+      enforce_retention: { Args: { p_now?: string }; Returns: Json };
+      erase_profile: { Args: { p_profile: string; p_rate_keys?: string[] }; Returns: Json };
       expire_credits: { Args: Record<PropertyKey, never>; Returns: number };
       expire_unpaid_requests: { Args: Record<PropertyKey, never>; Returns: string[] };
       extend_timetable: { Args: { p_days?: number }; Returns: number };
@@ -1836,6 +1886,7 @@ export type Database = {
       notification_retry_claim: {
         Args: { p_id?: string; p_limit?: number };
         Returns: {
+          about_profile_id: string | null;
           attempts: number;
           body: string;
           booking_id: string | null;
@@ -1957,6 +2008,7 @@ export type Database = {
           instagram_handle: string;
           intro_line: string;
           last_cron_tick_at: string | null;
+          last_retention_at: string | null;
           last_tick_at: string | null;
           last_tick_error: string | null;
           last_tick_ok_at: string | null;
@@ -1968,6 +2020,16 @@ export type Database = {
           refund_late_cancel_if_filled: boolean;
           registration_number: string;
           reminder_offsets_minutes: number[];
+          retention_audit_months: number | null;
+          retention_auth_log_days: number | null;
+          retention_codes_months: number | null;
+          retention_consents_years: number | null;
+          retention_event_extras_months: number | null;
+          retention_health_months: number | null;
+          retention_inactive_months: number | null;
+          retention_messages_months: number | null;
+          retention_notice_days: number;
+          retention_payments_years: number | null;
           revolut_link: string;
           rollover_max: number;
           status_banner: string;
@@ -2224,8 +2286,6 @@ export const Constants = {
         "private_reformer",
         "private_prenatal_mat",
         "private_prenatal_reformer",
-        "pre_natal_vc8w",
-        "pre_natal_mw5nw8b3",
       ],
       ledger_entry: [
         "grant",

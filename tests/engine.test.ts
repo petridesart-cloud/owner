@@ -1327,3 +1327,134 @@ describe("WP6: atomic writes (A-019, A-054)", () => {
     assert.deepEqual(live.map((r) => r.weekday), [1]);
   });
 });
+
+describe("WP7: privacy lifecycle (A-010, A-011)", () => {
+  const pg = postgres(env.DATABASE_URL || "postgresql://postgres:postgres@127.0.0.1:54322/postgres", { max: 1, onnotice: () => {} });
+  after(() => pg.end());
+  const count = async (q: Promise<{ count: string | number }[]>) => Number((await q)[0].count);
+
+  test("account deletion leaves nothing identifiable, keeps anonymised records and moves the waitlist up", async () => {
+    const tag = `${Date.now()}${Math.random().toString(36).slice(2, 6)}`;
+    const email = `erase-${tag}@example.com`, phone = `+357 96 ${tag.slice(-6)}`, name = `Zoe Erasable${tag.slice(-4)}`;
+    const { data: u } = await db.auth.admin.createUser({ email, password: "pw-erase-123", email_confirm: true });
+    const fields = { user_id: u.user!.id, email, phone, full_name: name, first_name: "Zoe", onboarded_at: new Date().toISOString(),
+      stripe_customer_id: "cus_test", student_verified_until: "2030-01-01", health_mode: "answers" };
+    const existing = (await db.from("profiles").select("id").eq("user_id", u.user!.id).maybeSingle()).data;
+    const p = existing
+      ? (await db.from("profiles").update(fields).eq("id", existing.id).select("id").single()).data!.id
+      : (await db.from("profiles").insert(fields).select("id").single()).data!.id;
+    const other = await client("erase-waiter");
+    // A full class they're booked into, with someone waiting who has a package class.
+    const s = await session(72 * H, 1);
+    const lot = await grant(p, 2, 60 * 24 * H, "injury: left knee");
+    await grant(other, 2, 60 * 24 * H);
+    assert.ifError((await book(p, s)).error);
+    assert.ifError((await db.rpc("join_waitlist", { p_profile: other, p_session: s })).error);
+    await pg`insert into public.lot_freezes (lot_id, starts_on, ends_on, reason) values (${lot}, current_date + 100, current_date + 101, 'back pain')`;
+    await db.from("notifications").insert([
+      { profile_id: p, channel: "email", template: "birthday", recipient: email, subject: "Happy birthday, Zoe!", body: "Hi Zoe", status: "sent", provider_ref: "re_1", error: `bounce ${email}` },
+      { about_profile_id: p, channel: "email", template: "studio_alert", recipient: "studio@example.com", subject: `New client: ${name}`, body: `${email} · ${phone}`, status: "sent" },
+      { channel: "email", template: "studio_alert", recipient: "studio@example.com", subject: `Details updated: ${name}`, body: `New mobile number: ${phone}`, status: "sent" },
+      { channel: "email", template: "verify_email", recipient: email, subject: "Your code", body: "123456", status: "logged" },
+    ]);
+    await pg`insert into public.otp_requests (email_hash) values (encode(sha256(convert_to(${email}, 'UTF8')), 'hex'))`;
+    await pg`insert into public.rate_events (kind, key_hash) values ('signin', ${"k-" + tag})`;
+    await pg`insert into public.team_invites (email) values (${email})`;
+    await pg`insert into auth.audit_log_entries (id, payload, created_at, ip_address) values (gen_random_uuid(), ${pg.json({ actor_id: u.user!.id, actor_username: email, action: "login" })}, now(), '')`;
+
+    const r = await db.rpc("erase_profile", { p_profile: p, p_rate_keys: ["k-" + tag] });
+    assert.ifError(r.error);
+    const res = r.data as { user_id: string; offers: { profile_id: string }[] };
+    assert.equal(res.user_id, u.user!.id);
+
+    // Nothing left that names them.
+    const like = `%${email}%`, likePhone = `%${phone}%`, likeName = `%${name}%`;
+    assert.equal(await count(pg`select count(*) from public.notifications where recipient ilike ${like} or subject ilike ${like} or body ilike ${like}
+      or body like ${likePhone} or subject ilike ${likeName} or body ilike ${likeName} or error ilike ${like} or provider_ref = 're_1'`), 0);
+    assert.equal(await count(pg`select count(*) from public.otp_requests where email_hash = encode(sha256(convert_to(${email}, 'UTF8')), 'hex')`), 0);
+    assert.equal(await count(pg`select count(*) from public.rate_events where key_hash = ${"k-" + tag}`), 0);
+    assert.equal(await count(pg`select count(*) from public.team_invites where email = ${email}`), 0);
+    assert.equal(await count(pg`select count(*) from auth.audit_log_entries where payload->>'actor_username' = ${email}`), 0);
+    assert.equal(await count(pg`select count(*) from public.credit_lots where profile_id = ${p} and note is not null`), 0);
+    assert.equal(await count(pg`select count(*) from public.credit_ledger where profile_id = ${p} and note is not null`), 0);
+    assert.equal(await count(pg`select count(*) from public.lot_freezes where lot_id = ${lot} and reason is not null`), 0);
+    const [row] = await pg`select full_name, email, phone, stripe_customer_id, student_verified_until, health_mode, user_id, deleted_at from public.profiles where id = ${p}`;
+    assert.deepEqual({ ...row, deleted_at: !!row.deleted_at }, { full_name: "Deleted client", email: null, phone: null, stripe_customer_id: null, student_verified_until: null, health_mode: null, user_id: null, deleted_at: true });
+    // Anonymised records stay (accounting), the spot is freed and the first in line is moved in.
+    assert.equal(await count(pg`select count(*) from public.bookings where profile_id = ${p}`), 1);
+    assert.equal(await count(pg`select count(*) from public.credit_ledger where profile_id = ${p}`) > 0, true);
+    assert.deepEqual(res.offers.map((o) => o.profile_id), [other]);
+    assert.equal((await db.from("bookings").select("status").eq("session_id", s).eq("profile_id", other).maybeSingle()).data?.status, "confirmed");
+    // Erasing twice is refused (nothing to erase).
+    assert.equal((await db.rpc("erase_profile", { p_profile: p })).error?.message, "profile_not_found");
+    await db.auth.admin.deleteUser(u.user!.id);
+  });
+
+  test("the erasure exception only clears ledger notes; it never changes amounts", async () => {
+    const p = await client("ledger-exc");
+    await grant(p, 2, null, "a note");
+    await assert.rejects(pg.begin(async (t) => {
+      await t`select set_config('app.erasing', 'on', true)`;
+      await t`update public.credit_ledger set delta = delta + 5, note = null where profile_id = ${p}`;
+    }), /append-only/);
+    await assert.rejects(pg.begin(async (t) => {
+      await t`select set_config('app.erasing', 'on', true)`;
+      await t`delete from public.credit_ledger where profile_id = ${p}`;
+    }), /append-only/);
+    await assert.rejects(pg`delete from public.credit_ledger where profile_id = ${p}`, /append-only/);
+  });
+
+  test("enforce_retention removes what has passed its period, keeps recent rows and logs counts only", async () => {
+    // Everything runs inside one transaction that is rolled back, so the shared test database is untouched.
+    const ROLLBACK = new Error("rollback");
+    type Result = { counts: Record<string, number>; warn_health: { profile_id: string }[]; warn_inactive: { profile_id: string }[]; erased_users: unknown[] };
+    let result = null as Result | null;
+    let checks: Record<string, number> = {};
+    await assert.rejects(pg.begin(async (t) => {
+      const [{ id: oldP }] = await t`insert into public.profiles (full_name, email, created_at) values ('Old Client', ${`old-${Date.now()}@example.com`}, now() - interval '30 months') returning id`;
+      const [{ id: newP }] = await t`insert into public.profiles (full_name, email) values ('New Client', ${`new-${Date.now()}@example.com`}) returning id`;
+      const [{ id: ct }] = await t`select id from public.class_types where slug = 'reformer'`;
+      const [{ id: oldS }] = await t`insert into public.class_sessions (class_type_id, starts_at, ends_at, capacity, price_cents) values (${ct}, now() - interval '5 months', now() - interval '5 months' + interval '50 minutes', 3, 0) returning id`;
+      const [{ id: recentS }] = await t`insert into public.class_sessions (class_type_id, starts_at, ends_at, capacity, price_cents) values (${ct}, now() - interval '10 days', now() - interval '10 days' + interval '50 minutes', 3, 0) returning id`;
+      await t`insert into public.bookings (profile_id, session_id, status, paid_with, answer, note) values (${newP}, ${oldS}, 'confirmed', 'free', 'veggie', 'note'), (${newP}, ${recentS}, 'confirmed', 'free', 'vegan', 'note')`;
+      await t`insert into public.waitlist_entries (profile_id, session_id, status) values (${newP}, ${oldS}, 'left'), (${oldP}, ${recentS}, 'left')`;
+      await t`insert into public.notifications (channel, template, recipient, body, status, created_at) values ('email', 'test_email', 'a@example.com', 'old', 'sent', now() - interval '13 months'), ('email', 'test_email', 'b@example.com', 'recent', 'sent', now() - interval '11 months')`;
+      await t`insert into public.audit_log (action, created_at) values ('old_thing', now() - interval '25 months'), ('recent_thing', now() - interval '23 months')`;
+      await t`insert into public.rate_events (kind, key_hash, created_at) values ('t', 'old', now() - interval '2 days'), ('t', 'recent', now())`;
+      // Health answers with no class for 13 months: warned now, deleted only after the notice period.
+      await t`insert into public.health_notes (profile_id, conditions, consent_at, updated_at) values (${oldP}, '{}', now() - interval '13 months', now() - interval '13 months')`;
+      const first = (await t`select public.enforce_retention() as r`)[0].r;
+      result = first;
+      checks = {
+        oldBookingAnswer: Number((await t`select count(*) from public.bookings where session_id = ${oldS} and answer is not null`)[0].count),
+        recentBookingAnswer: Number((await t`select count(*) from public.bookings where session_id = ${recentS} and answer is not null`)[0].count),
+        oldWaitlist: Number((await t`select count(*) from public.waitlist_entries where session_id = ${oldS}`)[0].count),
+        recentWaitlist: Number((await t`select count(*) from public.waitlist_entries where session_id = ${recentS}`)[0].count),
+        oldMessages: Number((await t`select count(*) from public.notifications where body = 'old' and template = 'test_email'`)[0].count),
+        recentMessages: Number((await t`select count(*) from public.notifications where body = 'recent' and template = 'test_email'`)[0].count),
+        oldAudit: Number((await t`select count(*) from public.audit_log where action = 'old_thing'`)[0].count),
+        recentAudit: Number((await t`select count(*) from public.audit_log where action = 'recent_thing'`)[0].count),
+        oldRate: Number((await t`select count(*) from public.rate_events where key_hash = 'old'`)[0].count),
+        recentRate: Number((await t`select count(*) from public.rate_events where key_hash = 'recent'`)[0].count),
+        healthAfterWarning: Number((await t`select count(*) from public.health_notes where profile_id = ${oldP}`)[0].count),
+        log: Number((await t`select count(*) from public.audit_log where action = 'retention' and actor_profile_id is null and not (details::text ilike '%@%')`)[0].count),
+        lastRun: Number((await t`select count(*) from public.studio_settings where last_retention_at is not null`)[0].count),
+      };
+      // 31 days later the notice has run out: the health answers go; the old client was warned and is erased later.
+      const later = (await t`select public.enforce_retention(now() + interval '31 days') as r`)[0].r;
+      checks.healthAfterNotice = Number((await t`select count(*) from public.health_notes where profile_id = ${oldP}`)[0].count);
+      checks.oldClientErased = Number((await t`select count(*) from public.profiles where id = ${oldP} and deleted_at is not null`)[0].count);
+      checks.newClientKept = Number((await t`select count(*) from public.profiles where id = ${newP} and deleted_at is null`)[0].count);
+      checks.laterErased = later.erased_users.length;
+      throw ROLLBACK;
+    }), (e) => e === ROLLBACK);
+    assert.ok(result);
+    assert.deepEqual(checks, {
+      oldBookingAnswer: 0, recentBookingAnswer: 1, oldWaitlist: 0, recentWaitlist: 1, oldMessages: 0, recentMessages: 1,
+      oldAudit: 0, recentAudit: 1, oldRate: 0, recentRate: 1, healthAfterWarning: 1, log: 1, lastRun: 1,
+      healthAfterNotice: 0, oldClientErased: 1, newClientKept: 1, laterErased: 1,
+    });
+    assert.ok(result!.warn_health.length >= 1);
+    assert.ok(result!.warn_inactive.length >= 1);
+  });
+});

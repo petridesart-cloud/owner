@@ -8,7 +8,8 @@ import { sendSms } from "./sms";
 import { getSettings } from "@/lib/auth";
 
 type Recipient = { profileId?: string | null; email?: string | null; phone?: string | null };
-type Opts = { sms?: boolean; dedupeKey?: string; bookingId?: string; sessionId?: string };
+/** `aboutProfileId`: the client a studio alert is about, so erasing them also erases it (A-010). */
+type Opts = { sms?: boolean; dedupeKey?: string; bookingId?: string; sessionId?: string; aboutProfileId?: string };
 
 /**
  * Transactional notification. Every message is written to the Outbox table; it is
@@ -78,7 +79,7 @@ async function deliver(
     .insert({
       profile_id: to.profileId ?? null, channel, template, recipient, subject, body: stored,
       status: "logged", attempts: live ? 1 : 0, dedupe_key: key,
-      booking_id: opts.bookingId ?? null, session_id: opts.sessionId ?? null,
+      booking_id: opts.bookingId ?? null, session_id: opts.sessionId ?? null, about_profile_id: opts.aboutProfileId ?? to.profileId ?? null,
     })
     .select("id, attempts")
     .single();
