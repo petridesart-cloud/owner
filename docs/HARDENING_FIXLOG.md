@@ -110,3 +110,4 @@
 | A-084 | Low | seed_demo → seed_demo_base + Mat classes to 4; Mat default capacity 4 | engine.test.ts (suite) | A-056, A-057, A-058, A-069, A-084 |
 | A-065 | Medium | `parseSettingsNumbers()` (empty keeps, ranges, per-field message), price validation in `sessionRow`, guarded JSON.parse in saveTimetable, import capacity check. Not done: import `to` (timetables repeat) | unit.test.ts "settings form and action arguments" | A-065, A-066 |
 | A-066 | Medium | `parse()`/`uuid`/`payMethod` (src/lib/validate.ts) on the admin positional actions and bookAction/join/leave/buyPack | unit.test.ts, e2e admin/packages | A-065, A-066 |
+| A-068 | Medium | engines 22.x, .nvmrc, @types/node 22, exact @supabase/ssr, next 16.4.5, react 19.3.1, fontsource removed. Not done: supabase devDependency, 8 moderate dev-only audit findings. Owner: set Node 22 on both Vercel projects | typecheck, lint, full suite | A-068 |
