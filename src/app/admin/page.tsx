@@ -100,7 +100,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
                   {p.intended_method && <p className="text-xs font-medium text-plum-700">Will pay: {METHOD[p.intended_method] ?? p.intended_method}</p>}
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <MarkPaid paymentId={p.id} prefer={p.intended_method} label={`${p.profiles?.full_name}: ${p.description}`} />
+                  <MarkPaid paymentId={p.id} prefer={p.intended_method} amountCents={p.amount_cents} label={`${p.profiles?.full_name}: ${p.description}`} />
                   <RemoveRequest paymentId={p.id} label={`${p.profiles?.full_name}: ${p.description}`} />
                 </div>
               </li>

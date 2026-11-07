@@ -89,3 +89,4 @@
 | A-028 | High | `closedAt()` gives an absolute time ("Free cancellation closed at 10:00 (6 hours before class)") | unit.test.ts "late-cancel wording" | A-028, A-029, A-079 |
 | A-029 | High | Trial/drop-in confirmation shows `<AwaitingPayment title="To pay before class">` with amount, method, RF reference, Revolut button | e2e/booking.spec.ts (trial case) | A-028, A-029, A-079 |
 | A-079 | Medium | No Revolut link: fallback with /contact link instead of "ask your instructor"; readiness "Add your Revolut link". Owner/Elysia still to enter her Revolut link and IBAN in Settings | typecheck | A-028, A-029, A-079 |
+| A-030 | High | MarkPaid: primary "Paid · method", "Other method ▾", confirm sentence + Yes / Not yet, min-h-11 targets, Remove 44px | e2e/packages.spec.ts, e2e/rewards.spec.ts | A-030: Mark as paid is one clear button with a confirm step |

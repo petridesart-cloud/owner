@@ -27,7 +27,13 @@ test("client requests a pack, studio marks it paid, client books with a class cr
   const admin = await (await browser.newContext()).newPage();
   await adminSignIn(admin, ADMIN, CODE);
   const row = admin.getByRole("listitem").filter({ hasText: name });
-  await row.getByRole("button", { name: "Cash" }).click();
+  await row.getByRole("button", { name: /^Paid · Cash/ }).click();
+  // A-030: a confirm step first; nothing is granted until she says yes.
+  await expect(row.getByText(/^Mark .*as paid by Cash\?$/)).toBeVisible();
+  await row.getByRole("button", { name: "Not yet" }).click();
+  await expect(row.getByRole("button", { name: /^Paid · Cash/ })).toBeVisible();
+  await row.getByRole("button", { name: /^Paid · Cash/ }).click();
+  await admin.getByRole("button", { name: "Yes, mark as paid" }).click();
   await expect(row).toHaveCount(0); // settled: leaves the "Awaiting payment" list
 
   await client.goto("/bookings");

@@ -139,7 +139,7 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
         {pending.map((p) => (
           <div key={p.id} className="mt-3 flex items-center justify-between gap-2 rounded-2xl border border-line px-3 py-2 text-sm">
             <span className="text-ink">{p.description} · {eur(p.amount_cents)}<span className="block text-xs text-ink-soft">awaiting payment{p.intended_method ? ` · ${METHOD[p.intended_method] ?? p.intended_method}` : ""}</span></span>
-            <MarkPaid paymentId={p.id} label={p.description} />
+            <MarkPaid paymentId={p.id} amountCents={p.amount_cents} prefer={p.intended_method} label={`${first || "Client"}: ${p.description}`} />
           </div>
         ))}
       </section>
