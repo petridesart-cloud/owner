@@ -25,3 +25,4 @@
 | A-035 | Medium | `studio_settings_booking_window_days_check` 7..182 | `engine.test.ts` "A-035" | A-035: the booking window can be saved up to 26 weeks |
 | A-037 | Medium | Trigger `guard_code_uses` locks the code row and re-counts (`code_used_up`); `bookSingle` releases the spot and says so when the discount update fails | `engine.test.ts` "A-037" | A-037: a shared code's total limit holds when several people use it at once |
 | A-039 | Medium | `update_session()` under the class lock: capacity vs `spots_taken`, `type_locked`, closed days, expiry recalculated and `moved_outside_package`; waitlist moves up in the same step | `engine.test.ts` "A-039" | A-039: editing a booked class goes through the engine (capacity, type, closures, packages) |
+| A-083 | Low | `setAttendance` / `markNoShow` only after the start; trigger `guard_no_show_future` (`class_not_started`) | `engine.test.ts` "A-083" | A-083: no-shows only once the class has started |

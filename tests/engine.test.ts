@@ -1070,6 +1070,14 @@ describe("WP3: engine hardening", () => {
     assert.equal(status(await db.rpc("join_waitlist", { p_profile: p, p_session: s })), "beyond_window");
   });
 
+  test("A-083: a no-show can only be marked once the class has started", async () => {
+    const p = await client("wp3-ns");
+    const future = bid(await book(p, await session(2 * D + 9000), "manual", "manual"));
+    assert.match((await db.from("bookings").update({ status: "no_show" }).eq("id", future)).error?.message ?? "", /class_not_started/);
+    const past = bid(await book(p, await session(-2 * H), "manual", "manual"));
+    assert.ifError((await db.from("bookings").update({ status: "no_show" }).eq("id", past)).error);
+  });
+
   test("A-081: refund-if-filled returns the late canceller's class only when the class was otherwise full", async () => {
     await db.from("studio_settings").update({ refund_late_cancel_if_filled: true }).eq("id", 1);
     try {

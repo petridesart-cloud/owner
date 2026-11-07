@@ -32,8 +32,10 @@ export async function toggleCheckIn(bookingId: string, checked: boolean) {
 /** Her answer: attendance stays editable (attended / no-show / not marked), in case of a mistake. */
 export async function setAttendance(bookingId: string, state: "attended" | "no_show" | "unmarked") {
   await admin("attendance", { bookingId, state });
-  const { data: b } = await db().from("bookings").select("status, checked_in_at").eq("id", bookingId).single();
+  const { data: b } = await db().from("bookings").select("status, checked_in_at, class_sessions(starts_at)").eq("id", bookingId).single();
   if (!b || !["confirmed", "no_show"].includes(b.status)) return;
+  // Only once the class has started (A-083): before that a no-show would free the spot without the waitlist.
+  if (!b.class_sessions || new Date(b.class_sessions.starts_at) > new Date()) return;
   await db().from("bookings").update(
     state === "attended" ? { status: "confirmed", checked_in_at: b.checked_in_at ?? new Date().toISOString() }
     : state === "no_show" ? { status: "no_show", checked_in_at: null }
@@ -44,6 +46,8 @@ export async function setAttendance(bookingId: string, state: "attended" | "no_s
 
 export async function markNoShow(bookingId: string) {
   await admin("no_show", { bookingId });
+  const { data: b } = await db().from("bookings").select("class_sessions(starts_at)").eq("id", bookingId).single();
+  if (!b?.class_sessions || new Date(b.class_sessions.starts_at) > new Date()) return; // A-083: Remove is for upcoming classes
   await db().from("bookings").update({ status: "no_show", checked_in_at: null }).eq("id", bookingId).eq("status", "confirmed");
   revalidatePath("/admin");
 }
