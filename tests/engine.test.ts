@@ -1083,6 +1083,89 @@ describe("WP3: engine hardening", () => {
     }
   });
 
+  test("A-006: Mark as paid on a late-cancelled or no-show unpaid class records the fee and never re-books", async () => {
+    const p = await client("wp3-fee");
+    const s = await session(3 * H + 3000, 1);
+    const b = bid(await book(p, s, "drop_in", "online", "cash"));
+    await cancel(b, p);
+    assert.ifError((await book(await client("wp3-fee-o"), s, "manual", "manual")).error); // the class is full again
+    const pay = await payOf(b);
+    assert.equal(pay.status, "pending");
+    const { data, error } = await confirm(pay.id);
+    assert.ifError(error);
+    assert.equal((data as { status: string }).status, "fee_paid");
+    assert.equal((await payOf(b)).status, "paid");
+    assert.equal((await db.from("bookings").select("status").eq("id", b).single()).data?.status, "late_cancelled");
+    assert.equal((await db.from("bookings").select("id", { count: "exact", head: true }).eq("session_id", s).eq("status", "confirmed")).count, 1);
+
+    const q = await client("wp3-fee-ns");
+    const past = bid(await book(q, await session(-2 * H + 3000), "pay_at_studio", "manual"));
+    assert.ifError((await db.from("bookings").update({ status: "no_show" }).eq("id", past)).error);
+    assert.equal(((await confirm((await payOf(past)).id)).data as { status: string }).status, "fee_paid");
+    assert.equal((await db.from("bookings").select("status").eq("id", past).single()).data?.status, "no_show");
+  });
+
+  test("A-007: a trial product can't be paid as a package", async () => {
+    const p = await client("wp3-pack");
+    const prod = (await db.from("products").select("id, price_cents").eq("tag", "trial").eq("active", true).limit(1).single()).data!;
+    const { data: pay } = await db.from("payments").insert({ profile_id: p, provider: "offline", amount_cents: prod.price_cents, purpose: "pack", product_id: prod.id, description: "Trial", status: "pending" }).select("id").single();
+    assert.equal(status(await confirm(pay!.id)), "not_a_package");
+    assert.equal((await db.from("credit_lots").select("id").eq("profile_id", p)).data!.length, 0);
+  });
+
+  test("A-038: reward classes are added inside Mark as paid, exactly once", async () => {
+    const p = await client("wp3-reward");
+    const { data: code } = await db.from("discount_codes").insert({ code: `RW-WP3${Date.now().toString(36).toUpperCase()}`, kind: "free_classes", value: 2, profile_id: p }).select("id").single();
+    const prod = (await db.from("products").select("id, credits").eq("tag", "package").eq("credit_kind", "reformer").eq("active", true).limit(1).single()).data!;
+    const { data: pay } = await db.from("payments").insert({ profile_id: p, provider: "offline", amount_cents: 7000, purpose: "pack", product_id: prod.id, description: "Pack", status: "pending", discount_code_id: code!.id }).select("id").single();
+    const first = await confirm(pay!.id);
+    assert.deepEqual([(first.data as { status: string }).status, (first.data as { extra: number }).extra], ["credits_added", 2]);
+    assert.equal(((await confirm(pay!.id)).data as { status: string }).status, "already_paid");
+    const { data: lots } = await db.from("credit_lots").select("total, remaining").eq("payment_id", pay!.id);
+    assert.deepEqual(lots, [{ total: prod.credits + 2, remaining: prod.credits + 2 }]);
+    await assertLedgerInvariant();
+  });
+
+  test("studio cancels a class: a 2-class booking gets both classes back on the same package (studio_cancel)", async () => {
+    const { data: t } = await db.from("class_types").insert({ slug: `wp3-double-${Date.now()}`, name: "WP3 double", kind: "reformer", credit_kind: "reformer", credit_cost: 2, default_capacity: 3, default_duration_minutes: 50, price_cents: 0, active: false }).select("id").single();
+    const start = iso(4 * D + 11_000);
+    const { data: s } = await db.from("class_sessions").insert({ class_type_id: t!.id, starts_at: start, ends_at: iso(4 * D + 11_000 + 50 * 60_000), capacity: 3, title: "WP3 double" }).select("id").single();
+    const p = await client("wp3-sc");
+    const lot = await grant(p, 3, 30 * D);
+    const b = bid(await book(p, s!.id));
+    assert.equal(await lotRemaining(lot), 1);
+    const { data: rows, error } = await db.rpc("cancel_sessions", { p_sessions: [s!.id], p_reason: "test" });
+    assert.ifError(error);
+    assert.deepEqual(rows?.map((r) => r.booking_id), [b]);
+    assert.equal(await lotRemaining(lot), 3);
+    const { data: led } = await db.from("credit_ledger").select("delta, note, lot_id").eq("booking_id", b).eq("entry_type", "cancel_refund");
+    assert.deepEqual(led, [{ delta: 2, note: "studio_cancel", lot_id: lot }]);
+    await assertLedgerInvariant();
+  });
+
+  test("A-038: confirming a closure cancels its classes, credits clients and blocks bookings in one call", async () => {
+    const day = addDaysKey(todayKey(), 20);
+    const start = localToUtc(day, "07:13");
+    const { data: s } = await db.from("class_sessions").insert({ class_type_id: reformer, starts_at: start, ends_at: new Date(Date.parse(start) + 50 * 60_000).toISOString(), capacity: 3, title: "Closure" }).select("id").single();
+    const p = await client("wp3-closure");
+    const lot = await grant(p, 1, 90 * D);
+    assert.ifError((await bookFar(p, s!.id)).error);
+    const { data: c } = await db.from("closures").insert({ name: "WP3 closure", starts_on: day, ends_on: day }).select("id").single();
+    const { data, error } = await db.rpc("confirm_closure", { p_closure: c!.id });
+    assert.ifError(error);
+    const res = data as { classes: number; people: { profile_id: string }[] };
+    assert.ok(res.classes >= 1);
+    assert.ok(res.people.some((x) => x.profile_id === p));
+    assert.equal(await lotRemaining(lot), 1);
+    const later = await db.from("class_sessions").insert({ class_type_id: reformer, starts_at: localToUtc(day, "18:17"), ends_at: localToUtc(day, "19:07"), capacity: 3, title: "Closure 2" }).select("id").single();
+    try {
+      assert.ifError(later.error);
+      assert.equal(status(await book(p, later.data!.id)), "studio_closed");
+    } finally {
+      await db.from("closures").delete().eq("id", c!.id);
+    }
+  });
+
   test("A-064: events can't be cancelled by clients in the engine; the studio can remove someone", async () => {
     const event = (await db.from("class_types").select("id").eq("kind", "event").limit(1).single()).data!.id;
     const { data: s } = await db.from("class_sessions").insert({ class_type_id: event, starts_at: iso(9 * D + 13_000), ends_at: iso(9 * D + 13_000 + 90 * 60_000), capacity: 5, title: "WP3 event", price_cents: 0 }).select("id").single();

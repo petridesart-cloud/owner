@@ -1725,9 +1725,18 @@ export type Database = {
           profile_id: string;
         }[];
       };
+      cancel_sessions: {
+        Args: { p_reason: string; p_sessions: string[] };
+        Returns: {
+          booking_id: string;
+          profile_id: string;
+          session_id: string;
+        }[];
+      };
       clear_health_data: { Args: { p_profile: string; p_version: string }; Returns: boolean };
       closed_days: { Args: { p_from: string; p_to: string }; Returns: number };
       compute_expiry: { Args: { p_start: string; p_validity: number }; Returns: string };
+      confirm_closure: { Args: { p_closure: string }; Returns: Json };
       confirm_payment: { Args: { p_method?: string; p_payment: string; p_provider_ref?: string }; Returns: Json };
       credit_balance: {
         Args: { p_profile: string };
@@ -1932,6 +1941,7 @@ export type Database = {
         Args: { p_kind: Database["public"]["Enums"]["credit_kind"]; p_profile: string };
         Returns: boolean;
       };
+      update_session: { Args: { p_patch: Json; p_session: string }; Returns: Json };
       usable_credits: {
         Args: { p_class: string; p_kind: Database["public"]["Enums"]["credit_kind"]; p_profile: string };
         Returns: {
@@ -2122,6 +2132,7 @@ export const Constants = {
         "private_reformer",
         "private_prenatal_mat",
         "private_prenatal_reformer",
+        "pre_natal_mw5dofp8",
       ],
       ledger_entry: [
         "grant",

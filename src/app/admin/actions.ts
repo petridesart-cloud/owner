@@ -5,7 +5,7 @@ import { z } from "zod";
 import { getSettings, requireAdmin } from "@/lib/auth";
 import { env } from "@/lib/env";
 import { db } from "@/lib/supabase/admin";
-import { EVENT_POLICY, cancelBooking, cancelSession, notifyOffers, onPaymentPaid, policyLine, runTick, sessionInfo } from "@/lib/booking";
+import { EVENT_POLICY, cancelBooking, cancelSession, cancelSessions, notifyCancelled, notifyOffers, onPaymentPaid, policyLine, runTick, sessionInfo } from "@/lib/booking";
 import { notify } from "@/lib/notifications";
 import { applyRecurring } from "@/lib/recurring";
 import { rewardCode } from "@/lib/rewards";
@@ -397,13 +397,15 @@ export async function setCodeActive(id: string, active: boolean) {
 // ── Payments (offline "Mark as paid" and memberships) ──────────────────
 export async function markPaid(paymentId: string, method: "cash" | "card_in_person" | "bank_transfer" | "revolut"): Promise<ActionResult> {
   await admin("mark_paid", { paymentId, method });
+  let res: Awaited<ReturnType<typeof onPaymentPaid>>;
   try {
-    await onPaymentPaid(paymentId, undefined, method);
+    res = await onPaymentPaid(paymentId, undefined, method);
   } catch (e) {
     return { ok: false, error: friendlyError(e) };
   }
   revalidatePath("/admin", "layout");
-  return { ok: true, message: "Marked as paid." };
+  // Once the payment is recorded it's a success, even if a follow-up (email, weekly bookings) failed (A-038).
+  return { ok: true, message: res.warning ?? (res.status === "fee_paid" ? "Marked as paid (fee for a missed or late-cancelled class)." : "Marked as paid.") };
 }
 
 /**
@@ -464,8 +466,12 @@ export async function cancelToday(_: ActionResult, form: FormData): Promise<Acti
   const today = todayKey();
   const { data: list } = await db().from("class_sessions").select("id").eq("status", "scheduled")
     .gt("starts_at", new Date().toISOString()).lt("starts_at", localToUtc(addDaysKey(today, 1), "00:00"));
-  let people = 0;
-  for (const s of list ?? []) people += await cancelSession(s.id, reason);
+  let people: number;
+  try {
+    people = await cancelSessions((list ?? []).map((s) => s.id), reason); // all or nothing (A-038)
+  } catch (e) {
+    return { ok: false, error: friendlyError(e) };
+  }
   revalidatePath("/admin", "layout");
   return { ok: true, message: `Cancelled ${list?.length ?? 0} classes. ${people} client${people === 1 ? "" : "s"} notified and credited.` };
 }
@@ -498,13 +504,13 @@ export async function confirmClosure(closureId: string): Promise<ActionResult> {
   await admin("confirm_closure", { closureId });
   const { data: c } = await db().from("closures").select("*").eq("id", closureId).single();
   if (!c) return { ok: false, error: "Not found." };
-  const { data: list } = await db().from("class_sessions").select("id").eq("status", "scheduled")
-    .gte("starts_at", localToUtc(c.starts_on, "00:00")).lt("starts_at", localToUtc(addDaysKey(c.ends_on, 1), "00:00"));
-  let people = 0;
-  for (const s of list ?? []) people += await cancelSession(s.id, `The studio is closed (${c.name}).`);
-  const { data: frozen } = await db().rpc("apply_closure", { p_closure: closureId });
+  // Cancelling the classes, crediting clients and extending packages happen in one transaction (A-038).
+  const { data, error } = await db().rpc("confirm_closure", { p_closure: closureId });
+  if (error) return { ok: false, error: friendlyError(error) };
+  const res = data as { classes: number; frozen: number; people: { session_id: string; booking_id: string; profile_id: string }[] };
+  await notifyCancelled(res.people, `The studio is closed (${c.name}).`);
   revalidatePath("/admin/closures");
-  return { ok: true, message: `${c.name} confirmed: ${list?.length ?? 0} classes cancelled (${people} clients credited), ${frozen ?? 0} packages extended.` };
+  return { ok: true, message: `${c.name} confirmed: ${res.classes} classes cancelled (${res.people.length} clients credited), ${res.frozen} packages extended.` };
 }
 
 export async function dismissClosure(closureId: string) {

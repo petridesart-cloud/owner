@@ -67,7 +67,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
       )}
       {(pendingRefunds ?? 0) > 0 && (
         <p role="status" className="mb-5 rounded-2xl border border-burgundy/25 bg-burgundy-soft px-4 py-3 text-sm text-burgundy">
-          {pendingRefunds} payment{pendingRefunds === 1 ? "" : "s"} need a manual refund in Stripe (paid after the spot was gone, or a cancelled event).
+          {pendingRefunds} payment{pendingRefunds === 1 ? "" : "s"} need a refund or a credit by hand (paid after the spot was gone, or an event you cancelled). Settle each with the client the way they paid.
         </p>
       )}
 

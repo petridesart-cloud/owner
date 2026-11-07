@@ -33,7 +33,22 @@ export type TemplateData = {
   note?: string;      // extra sentence (refund info, offer expiry, ...)
   policy?: string;    // cancellation policy line for booking emails
   link?: string;
+  outcome?: string;   // class_cancelled: what happens to what they paid with (cancelledOutcome)
 };
+
+/**
+ * When the studio cancels a class: what happens to what the client paid with (A-031).
+ * Package classes (and online-paid classes of a type with packages) come back as a class. A paid event has no class
+ * to return: the studio sorts the money out by hand (refund or credit: her decision, docs/AUDIT.md "Open after Phase 4").
+ */
+export function cancelledOutcome(paidWith: string | null, hasCreditKind: boolean): string {
+  if (paidWith === "credit" || (paidWith === "payment" && hasCreditKind)) {
+    return "Any class I cancel is always replaced: your class is back in your account, so just pick another time that suits you.";
+  }
+  if (paidWith === "payment") return "You've already paid for this, so I'll be in touch about your payment.";
+  if (paidWith === "pay_at_studio") return "There's nothing to pay for this one. Book another time that suits you.";
+  return "There's nothing to pay. Book another time that suits you.";
+}
 
 type Rendered = { subject: string; heading: string; lines: string[]; cta?: { label: string; href: string }; sms: string };
 
@@ -110,9 +125,9 @@ export function render(t: TemplateName, raw: TemplateData): Rendered {
       return {
         subject: `Class cancelled: ${d.className}, ${d.when}`,
         heading: "We're so sorry",
-        lines: [`I've had to cancel <strong>${d.className}</strong> on ${d.when}.`, d.note ?? "", "Any class I cancel is always replaced: your class is back in your account, so just pick another time that suits you."],
+        lines: [`I've had to cancel <strong>${d.className}</strong> on ${d.when}.`, d.note ?? "", d.outcome ?? cancelledOutcome("credit", true)],
         cta: { label: "Rebook a class", href: `${link}/schedule` },
-        sms: `Re·Form: sorry, ${d.className} on ${d.when} is cancelled. Your class is back in your account, so rebook any time.`,
+        sms: `Re·Form: sorry, ${d.className} on ${d.when} is cancelled. ${raw.outcome && raw.outcome !== cancelledOutcome("credit", true) ? raw.outcome : "Your class is back in your account, so rebook any time."}`,
       };
     case "credits_added":
       return {

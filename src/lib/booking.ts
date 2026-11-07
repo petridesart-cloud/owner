@@ -8,6 +8,7 @@ import { friendlyError, type ActionResult } from "@/lib/errors";
 import { spokenDateTime, time, relativeHours, todayKey } from "@/lib/time";
 import { eur, vatPortion } from "@/lib/money";
 import { applyRecurring } from "@/lib/recurring";
+import { cancelledOutcome } from "@/lib/notifications/templates";
 
 type OfferRow = { entry_id: string; profile_id: string; offer_expires_at: string | null };
 
@@ -259,7 +260,7 @@ async function startSubscription(profile: Profile, product: { id: string; name: 
 
 export { paymentReference, productPrice, paymentInstructions } from "@/lib/pricing";
 import { paymentInstructions, paymentReference, productPrice } from "@/lib/pricing";
-import { discountLabel, withDiscount } from "@/lib/discount";
+import { withDiscount } from "@/lib/discount";
 import { findCode } from "@/lib/rewards";
 import { getKinds, getTabs, kindLabel } from "@/lib/kinds";
 import { alertBooking, alertStudio } from "@/lib/studio-alerts";
@@ -291,12 +292,25 @@ export async function buyPack(profile: Profile, productId: string, code?: string
 }
 
 /** Called by the Stripe webhook or the mock checkout once money has moved. */
-export async function onPaymentPaid(paymentId: string, providerRef?: string, method: "online" | "cash" | "card_in_person" | "bank_transfer" | "revolut" = "online") {
+export async function onPaymentPaid(paymentId: string, providerRef?: string, method: "online" | "cash" | "card_in_person" | "bank_transfer" | "revolut" = "online"): Promise<PaidResult> {
+  // The payment, its classes and any reward classes are recorded in one transaction (A-038).
   const { data, error } = await db().rpc("confirm_payment", { p_payment: paymentId, p_provider_ref: providerRef, p_method: method });
   if (error) throw error;
-  const res = data as { status: string; booking_id?: string };
+  const res = data as PaidResult;
+  // Messages and weekly bookings come after: if one fails, the payment still stands (and says so).
+  try {
+    await afterPaid(paymentId, res);
+  } catch (e) {
+    console.error("after payment", e);
+    return { ...res, warning: "The payment is recorded, but the confirmation email or weekly bookings didn't go through. Check Messages." };
+  }
+  return res;
+}
+type PaidResult = { status: string; booking_id?: string; extra?: number; warning?: string };
+
+async function afterPaid(paymentId: string, res: PaidResult) {
   const { data: pay } = await db().from("payments").select("*, products(*)").eq("id", paymentId).single();
-  if (!pay?.profile_id) return res;
+  if (!pay?.profile_id) return;
   const profile = await profileById(pay.profile_id);
   const to = { profileId: profile.id, email: profile.email, phone: profile.phone };
   if (res.status === "confirmed" && res.booking_id) {
@@ -309,27 +323,12 @@ export async function onPaymentPaid(paymentId: string, providerRef?: string, met
     await notify(to, "credits_added", { name: profile.full_name ?? undefined, note: `${pay.products.credits} ${pay.products.credit_kind} classes are in your account${m ? `, valid until ${spokenDateTime(m.current_period_end).split(",")[0]}` : ""}.` },
       { dedupeKey: `credits:${paymentId}` });
   } else if (res.status === "credits_added" && pay.products) {
-    const extra = await rewardClasses(pay.id, pay.discount_code_id);
+    const extra = res.extra ?? 0;
     await notify(to, "credits_added", { name: profile.full_name ?? undefined, note: `${pay.products.credits + extra} ${await kindLabel(pay.products.credit_kind)} classes are in your account${extra ? `, including ${extra} free from your reward` : ""}.` },
       { dedupeKey: `credits:${paymentId}` });
   }
-  if (res.status !== "confirmed") await applyRecurring(profile.id);
-  return res;
-}
-
-/** A "free classes" reward: added to the package the payment just created, as a ledger entry. Runs once (only on credits_added). */
-async function rewardClasses(paymentId: string, codeId: string | null) {
-  if (!codeId) return 0;
-  const { data: c } = await db().from("discount_codes").select("code, kind, value, profile_id").eq("id", codeId).maybeSingle();
-  if (!c || c.kind !== "free_classes") return 0;
-  const { data: lot } = await db().from("credit_lots").select("id").eq("payment_id", paymentId).order("created_at").limit(1).maybeSingle();
-  if (!lot) return 0;
-  const { error } = await db().rpc("admin_adjust_lot", {
-    p_lot: lot.id, p_action: "add", p_credits: c.value, p_days: 0, p_date: null as unknown as string, p_actor: null as unknown as string,
-    p_reason: `${c.profile_id ? "Reward" : `Code ${c.code}`}: ${discountLabel("free_classes", c.value)}`,
-  });
-  if (error) { console.error("reward classes", error); return 0; }
-  return c.value;
+  // A fee for a class they cancelled late or missed (fee_paid): nothing to confirm, nothing to book.
+  if (res.status === "credits_added" || res.status === "membership_active") await applyRecurring(profile.id);
 }
 
 // ---------------------------------------------------------------------------
@@ -414,17 +413,34 @@ export async function cancelBooking(profile: Profile, bookingId: string, asAdmin
   return { ok: true, data: { status: res.status } };
 }
 
-export async function cancelSession(sessionId: string, reason: string) {
-  const s = await sessionInfo(sessionId);
-  const { data, error } = await db().rpc("cancel_session", { p_session: sessionId, p_reason: reason });
+/** The studio cancels classes: all of them in one transaction (credits back), then everyone is told. Returns the people told. */
+export async function cancelSessions(sessionIds: string[], reason: string) {
+  if (!sessionIds.length) return 0;
+  const { data, error } = await db().rpc("cancel_sessions", { p_sessions: sessionIds, p_reason: reason });
   if (error) throw error;
-  for (const row of (data ?? []) as { booking_id: string; profile_id: string }[]) {
-    const p = await profileById(row.profile_id);
-    await notify({ profileId: p.id, email: p.email, phone: p.phone }, "class_cancelled",
-      { name: p.full_name ?? undefined, ...tmpl(s), note: reason || undefined },
-      { sms: true, bookingId: row.booking_id, sessionId, dedupeKey: `session-cancel:${row.booking_id}` });
-  }
+  await notifyCancelled(data ?? [], reason);
   return (data ?? []).length;
+}
+export const cancelSession = (sessionId: string, reason: string) => cancelSessions([sessionId], reason);
+
+/** "Class cancelled" emails, each saying what happens to what they paid with. */
+export async function notifyCancelled(rows: { session_id: string; booking_id: string; profile_id: string }[], reason: string) {
+  if (!rows.length) return;
+  const { data: paid } = await db().from("bookings").select("id, paid_with").in("id", rows.map((r) => r.booking_id));
+  const infos = new Map<string, SessionInfo>();
+  for (const row of rows) {
+    try {
+      const s = infos.get(row.session_id) ?? (await sessionInfo(row.session_id));
+      infos.set(row.session_id, s);
+      const p = await profileById(row.profile_id);
+      const outcome = cancelledOutcome(paid?.find((b) => b.id === row.booking_id)?.paid_with ?? null, !!s.type.credit_kind);
+      await notify({ profileId: p.id, email: p.email, phone: p.phone }, "class_cancelled",
+        { name: p.full_name ?? undefined, ...tmpl(s), note: reason || undefined, outcome },
+        { sms: true, bookingId: row.booking_id, sessionId: s.id, dedupeKey: `session-cancel:${row.booking_id}` });
+    } catch (e) {
+      console.error("class cancelled email", row.booking_id, e); // the cancellation itself is already saved
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------

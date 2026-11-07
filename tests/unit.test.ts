@@ -4,6 +4,8 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { ipFrom, keyHash, limitOutcome, normEmail } from "../src/lib/request-keys";
 import { needsHealthConsent } from "../src/lib/health";
+import { cancelledOutcome, render } from "../src/lib/notifications/templates";
+import { friendlyError } from "../src/lib/errors";
 
 describe("rate limits and email keys (A-045, A-092, A-103, A-008)", () => {
   test("sign-in and code limits fail closed when the check errors; booking limits fail open", () => {
@@ -43,5 +45,30 @@ describe("health consent rule (A-105)", () => {
     assert.equal(needsHealthConsent({ conditions: [], bpMeds: true, medication: null }), true);
     assert.equal(needsHealthConsent({ conditions: ["back"], bpMeds: false }), true);
     assert.equal(needsHealthConsent({ conditions: [], details: "something" }), true);
+  });
+});
+
+describe("studio-cancelled class: what happens to what they paid with (A-031)", () => {
+  test("package classes come back; a paid event isn't promised a class; unpaid and free say nothing to pay", () => {
+    assert.match(cancelledOutcome("credit", true), /class is back in your account/);
+    assert.match(cancelledOutcome("payment", true), /class is back in your account/);
+    assert.match(cancelledOutcome("payment", false), /in touch about your payment/);
+    assert.doesNotMatch(cancelledOutcome("payment", false), /back in your account/);
+    assert.match(cancelledOutcome("pay_at_studio", true), /nothing to pay/);
+    assert.match(cancelledOutcome("free", false), /nothing to pay/);
+  });
+
+  test("the class_cancelled email and SMS use that outcome", () => {
+    const r = render("class_cancelled", { className: "SUP Pilates", when: "Sat", outcome: cancelledOutcome("payment", false) });
+    assert.ok(r.lines.some((l) => /in touch about your payment/.test(l)));
+    assert.ok(!r.lines.some((l) => /back in your account/.test(l)));
+    assert.match(r.sms, /in touch about your payment/);
+    assert.match(render("class_cancelled", { className: "Reformer", when: "Mon" }).sms, /back in your account/);
+  });
+
+  test("new engine refusals have their own words", () => {
+    for (const k of ["waitlist_first", "code_used_up", "not_a_package", "type_locked", "moved_outside_package", "class_not_started"]) {
+      assert.notEqual(friendlyError({ message: k }), "Something went wrong. Please try again.", k);
+    }
   });
 });
