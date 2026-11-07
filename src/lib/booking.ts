@@ -193,7 +193,10 @@ export async function buyProduct(profile: Profile, productId: string, method: "c
   }
 
   if (!cfg.online_payments_enabled) {
-    const { data: existing } = await db().from("payments").select("id, amount_cents").eq("profile_id", profile.id).eq("product_id", product.id).eq("status", "pending").eq("provider", "offline").maybeSingle();
+    // One pending request per package (unique index, A-034): a double tap updates the same request.
+    const pendingRequest = async () => (await db().from("payments").select("id, amount_cents").eq("profile_id", profile.id).eq("product_id", product.id)
+      .eq("status", "pending").eq("provider", "offline").is("booking_id", null).order("created_at").limit(1)).data?.[0] ?? null;
+    let existing = await pendingRequest();
     const price = await packagePrice(profile, product, cfg, code, existing?.id);
     if (!price.ok) return price;
     const fields = { intended_method: method, amount_cents: price.cents, discount_code_id: price.codeId, discount_note: price.note };
@@ -205,6 +208,12 @@ export async function buyProduct(profile: Profile, productId: string, method: "c
       const { data: pay, error } = await db().from("payments").insert({
         ...fields, profile_id: profile.id, provider: "offline", purpose, product_id: product.id, description: product.name, status: "pending",
       }).select("id").single();
+      if (error?.code === "23505" && error.message.includes("payments_one_pending_request")) {
+        // The other tap got there first: that request stands.
+        existing = await pendingRequest();
+        if (!existing) return { ok: false, error: friendlyError(error) };
+        return { ok: true, data: { redirect: "/bookings?requested=1" } };
+      }
       if (error) return { ok: false, error: friendlyError(error) };
       payId = pay.id;
     }

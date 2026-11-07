@@ -363,9 +363,10 @@ describe("studio policy", () => {
 
   test("unpaid package requests expire after the configured hours", async () => {
     const p = await client("unpaid");
-    const product = (await db.from("products").select("id").eq("kind", "pack").limit(1).single()).data!.id;
+    // Two different packages: one client has at most one pending request per package (A-034).
+    const [product, other] = (await db.from("products").select("id").eq("kind", "pack").limit(2)).data!.map((r) => r.id);
     const old = (await db.from("payments").insert({ profile_id: p, provider: "offline", amount_cents: 7500, purpose: "pack", product_id: product, description: "old", status: "pending", created_at: iso(-49 * H) }).select("id").single()).data!.id;
-    const fresh = (await db.from("payments").insert({ profile_id: p, provider: "offline", amount_cents: 7500, purpose: "pack", product_id: product, description: "fresh", status: "pending", created_at: iso(-2 * H) }).select("id").single()).data!.id;
+    const fresh = (await db.from("payments").insert({ profile_id: p, provider: "offline", amount_cents: 7500, purpose: "pack", product_id: other, description: "fresh", status: "pending", created_at: iso(-2 * H) }).select("id").single()).data!.id;
     await db.rpc("expire_unpaid_requests");
     assert.equal((await db.from("payments").select("status").eq("id", old).single()).data!.status, "cancelled");
     assert.equal((await db.from("payments").select("status").eq("id", fresh).single()).data!.status, "pending");
@@ -997,6 +998,15 @@ describe("WP3: engine hardening", () => {
     assert.deepEqual(res.sort(), ["already_booked", "ok"]);
     assert.equal(await lotRemaining(lot), 1);
     await assertLedgerInvariant();
+  });
+
+  test("A-034: two package requests at once leave one pending row", async () => {
+    const p = await client("wp3-req");
+    const prod = (await db.from("products").select("id").eq("tag", "package").eq("active", true).limit(1).single()).data!.id;
+    const res = await parallel(2, (c) => c`insert into payments (profile_id, provider, amount_cents, purpose, product_id, description, status)
+      values (${p}, 'offline', 7000, 'pack', ${prod}, 'WP3', 'pending')`.then(() => "ok", (e: Error) => e.message));
+    assert.equal(res.filter((r) => r === "ok").length, 1);
+    assert.match(res.find((r) => r !== "ok") ?? "", /payments_one_pending_request/);
   });
 
   test("cancellation exactly at the 6h cutoff: 1 ms inside is late, exactly 6h is in time", async () => {

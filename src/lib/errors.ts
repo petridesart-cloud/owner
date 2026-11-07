@@ -37,6 +37,7 @@ const MESSAGES: Record<string, string> = {
 export function friendlyError(e: unknown): string {
   const msg = typeof e === "object" && e && "message" in e ? String((e as { message: string }).message) : String(e);
   if (msg.includes("payments_one_code_per_client")) return "You've already used this code.";
+  if (msg.includes("payments_one_pending_request")) return "You've already requested this package. It's waiting under My classes.";
   return MESSAGES[msg] ?? "Something went wrong. Please try again.";
 }
 
