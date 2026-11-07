@@ -12,9 +12,13 @@ export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 /** The signed-in user and their profile, or null. Cached for the request. */
 export const getViewer = cache(async (): Promise<{ userId: string; email: string; profile: Profile } | null> => {
   const supabase = await supabaseServer();
-  const { data } = await supabase.auth.getUser();
+  const { data, error } = await supabase.auth.getUser();
   const user = data.user;
-  if (!user) return null;
+  // A-055: "not signed in" is null; a failure to reach Auth is an error (the error page), never a sign-out.
+  if (!user) {
+    if (error && (error.name === "AuthRetryableFetchError" || (error.status ?? 0) >= 500)) throw unavailable(error);
+    return null;
+  }
   const profile = await ensureProfile(user.id, user.email);
   if (!profile) return null;
   return { userId: user.id, email: user.email ?? "", profile };
@@ -27,11 +31,13 @@ export const getViewer = cache(async (): Promise<{ userId: string; email: string
  * the database links it when the email is confirmed (handle_user_confirmed).
  */
 export async function ensureProfile(userId: string, email?: string | null, opts: { link?: boolean } = {}): Promise<Profile | null> {
-  const { data: mine } = await db().from("profiles").select("*").eq("user_id", userId).is("deleted_at", null).maybeSingle();
+  const { data: mine, error } = await db().from("profiles").select("*").eq("user_id", userId).is("deleted_at", null).maybeSingle();
+  if (error) throw unavailable(error);
   if (mine) return mine;
   const address = email ? normEmail(email) : null;
   if (address) {
-    const { data: other } = await db().from("profiles").select("id, user_id").eq("email", address).is("deleted_at", null).maybeSingle();
+    const { data: other, error: e2 } = await db().from("profiles").select("id, user_id").eq("email", address).is("deleted_at", null).maybeSingle();
+    if (e2) throw unavailable(e2);
     if (other) {
       if (!opts.link || other.user_id) return null;
       const { data: linked } = await db().from("profiles").update({ user_id: userId })
@@ -76,7 +82,14 @@ export const canViewHealth = cache(async (): Promise<boolean> => {
 });
 
 export const getSettings = cache(async () => {
-  const { data } = await db().from("studio_settings").select("*").eq("id", 1).single();
-  return data!;
+  const { data, error } = await db().from("studio_settings").select("*").eq("id", 1).single();
+  if (error || !data) throw unavailable(error);
+  return data;
 });
+
+/** A-055: a database hiccup is an error the error page handles, never a crash on `null` or a sign-out. */
+export function unavailable(cause: unknown) {
+  console.error("database unavailable", cause);
+  return new Error("db_unavailable");
+}
 export type Settings = Awaited<ReturnType<typeof getSettings>>;

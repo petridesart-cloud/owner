@@ -27,6 +27,12 @@ export function BookActions(props: Props) {
   const [message, setMessage] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
+  // A-020: a lost response on a phone (the request may still have gone through) shows a calm notice,
+  // never the "Application error" screen, and refreshes so the page shows what really happened.
+  const LOST = "We lost the connection. Check My classes before trying again.";
+  const safely = (fn: () => Promise<void>) => start(async () => {
+    try { await fn(); } catch { setError(LOST); router.refresh(); }
+  });
   const go = (url: string) => (url.startsWith("http") ? window.location.assign(url) : router.push(url));
 
   const [payBy, setPayBy] = useState<"cash" | "revolut">("cash");
@@ -37,7 +43,7 @@ export function BookActions(props: Props) {
   const [code, setCode] = useState("");
   const [codeError, setCodeError] = useState<string | null>(null);
   const book = (method: "credit" | "pay" | "studio" | "trial" | "drop_in" | "free", useCode: string | null = null) =>
-    start(async () => {
+    safely(async () => {
       setError(null);
       const res = await bookAction(props.sessionId, method, payBy, answer, useCode);
       if (!res.ok) { setError(res.error); router.refresh(); return; }
@@ -48,7 +54,7 @@ export function BookActions(props: Props) {
     return (
       <div className="space-y-3">
         {error && <Notice tone="error">{error}</Notice>}
-        <Button className="w-full" disabled={pending} onClick={() => start(async () => {
+        <Button className="w-full" disabled={pending} onClick={() => safely(async () => {
           const res = await joinWaitlistAction(props.sessionId);
           if (!res.ok) setError(res.error); else router.refresh();
         })}>
@@ -63,7 +69,7 @@ export function BookActions(props: Props) {
       <div className="space-y-3">
         {error && <Notice tone="error">{error}</Notice>}
         {message && <Notice>{message}</Notice>}
-        <Button variant="ghost" className="w-full" disabled={pending} onClick={() => start(async () => {
+        <Button variant="ghost" className="w-full" disabled={pending} onClick={() => safely(async () => {
           const res = await leaveWaitlistAction(props.entryId, props.sessionId);
           if (!res.ok) setError(res.error); else { setMessage("You've left the waitlist."); router.refresh(); }
         })}>
@@ -121,9 +127,9 @@ export function BookActions(props: Props) {
             <div className="flex gap-2">
               <input id="code" value={code} onChange={(e) => { setCode(e.target.value); setCodeError(null); }} autoCapitalize="characters" autoComplete="off" spellCheck={false}
                 aria-invalid={!!codeError} aria-describedby={codeError ? "code-error" : undefined} className={`${inputClass} uppercase`} />
-              <Button type="button" variant="soft" disabled={pending || !code.trim()} className="shrink-0 px-5" onClick={() => start(async () => {
+              <Button type="button" variant="soft" disabled={pending || !code.trim()} className="shrink-0 px-5" onClick={() => safely(async () => {
                 const res = await checkSingleCodeAction(props.sessionId, singles.map((o) => o.mode), code);
-                if (!res.ok) return setCodeError(res.error);
+                if (!res.ok) { setCodeError(res.error); return; }
                 setDiscount(res.data!); setCodeOpen(false); setCode("");
               })}>Apply</Button>
             </div>

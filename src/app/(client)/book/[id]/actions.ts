@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { getViewer } from "@/lib/auth";
 import { bookAtStudio, bookFree, bookSingle, bookWithCredit, bookWithPayment, joinWaitlist, leaveWaitlist, saveAnswer } from "@/lib/booking";
-import type { ActionResult } from "@/lib/errors";
+import { messageFor, type ActionResult } from "@/lib/errors";
 import { TOO_MANY, bookingLimited, rateLimited } from "@/lib/rate-limit";
 import { findCode } from "@/lib/rewards";
 import { db } from "@/lib/supabase/admin";
@@ -31,6 +31,12 @@ export async function bookAction(
     : await bookWithPayment(v.profile, sessionId);
   if (res.ok && typeof answer === "string") await saveAnswer(v.profile.id, sessionId, answer);
   revalidatePath("/schedule");
+  // A-020: a retry after a lost response finds the booking already made: that's a success, not an error.
+  if (!res.ok && res.error === messageFor("already_booked")) {
+    const { data: b } = await db().from("bookings").select("id").eq("profile_id", v.profile.id).eq("session_id", sessionId)
+      .in("status", ["held", "confirmed"]).maybeSingle();
+    if (b) return { ok: true, data: { redirect: `/bookings/${b.id}/confirmed` } };
+  }
   return res;
 }
 

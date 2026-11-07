@@ -24,8 +24,14 @@ export function CancelButton({ bookingId, late, label, warning }: { bookingId: s
       <div className="flex gap-2">
         <Button variant="ghost" className="min-h-11 flex-1 text-[0.72rem]" onClick={() => setConfirming(false)} disabled={pending}>Keep it</Button>
         <Button variant="danger" className="min-h-11 flex-1 text-[0.72rem]" disabled={pending} autoFocus onClick={() => start(async () => {
-          const res = await cancelAction(bookingId);
-          if (!res.ok) setError(res.error); else router.refresh();
+          try {
+            const res = await cancelAction(bookingId);
+            if (!res.ok) setError(res.error); else router.refresh();
+          } catch {
+            // A-020: the cancellation may have gone through; refresh shows the real state.
+            setError("We lost the connection. Check My classes before trying again.");
+            router.refresh();
+          }
         })}>{pending ? "Cancelling…" : "Yes, cancel"}</Button>
       </div>
     </div>

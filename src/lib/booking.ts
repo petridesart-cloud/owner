@@ -2,7 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { db } from "@/lib/supabase/admin";
 import { env } from "@/lib/env";
-import { getSettings, type Profile, type Settings } from "@/lib/auth";
+import { getSettings, unavailable, type Profile, type Settings } from "@/lib/auth";
 import { later, notify, pool, retryFailed } from "@/lib/notifications";
 import { paymentProvider } from "@/lib/payments";
 import { friendlyError, type ActionResult } from "@/lib/errors";
@@ -11,7 +11,7 @@ import { eur, vatPortion } from "@/lib/money";
 import { applyRecurring } from "@/lib/recurring";
 import { cancelledOutcome } from "@/lib/notifications/templates";
 
-type OfferRow = { entry_id: string; profile_id: string; offer_expires_at: string | null };
+export type OfferRow = { entry_id: string; profile_id: string; offer_expires_at: string | null };
 
 /** A class with its type and policy. Cached per request: the messages after a booking reuse it. */
 export const sessionInfo = cache(async (sessionId: string) => {
@@ -49,7 +49,8 @@ const tmpl = (s: SessionInfo) => ({
 
 /** A client's profile, or null (e.g. erased meanwhile): callers skip that message. Cached per request. */
 const profileById = cache(async (id: string) => {
-  const { data } = await db().from("profiles").select("*").eq("id", id).maybeSingle();
+  const { data, error } = await db().from("profiles").select("*").eq("id", id).maybeSingle();
+  if (error) throw unavailable(error);
   return data;
 });
 
@@ -93,19 +94,23 @@ export async function bookWithPayment(profile: Profile, sessionId: string): Prom
     })
     .select("id")
     .single();
+  if (!pay) {
+    await releaseBooking(bookingId, profile.id);
+    return { ok: false, error: "We couldn't start the payment. Please try again." };
+  }
   try {
     const checkout = await paymentProvider().createCheckout({
-      paymentId: pay!.id, amountCents: s.price, description, customerEmail: profile.email,
-      successUrl: `${env.siteUrl}/bookings/${bookingId}/confirmed?payment=${pay!.id}`,
+      paymentId: pay.id, amountCents: s.price, description, customerEmail: profile.email,
+      successUrl: `${env.siteUrl}/bookings/${bookingId}/confirmed?payment=${pay.id}`,
       cancelUrl: `${env.siteUrl}/book/${sessionId}?cancelled=1`,
     });
-    await db().from("payments").update({ provider_ref: checkout.providerRef }).eq("id", pay!.id);
+    await db().from("payments").update({ provider_ref: checkout.providerRef }).eq("id", pay.id);
     later("booking alert", () => alertBooking(profile, sessionId, `paying ${eur(s.price)} online`, bookingId));
     return { ok: true, data: { redirect: checkout.url } };
   } catch (e) {
     console.error("checkout failed", e);
     await releaseBooking(bookingId, profile.id);
-    await db().from("payments").update({ status: "failed" }).eq("id", pay!.id);
+    await db().from("payments").update({ status: "failed" }).eq("id", pay.id);
     return { ok: false, error: "We couldn't open the payment page. Please try again." };
   }
 }
@@ -157,10 +162,12 @@ export async function bookSingle(profile: Profile, sessionId: string, mode: "tri
     }
   }
   const how = method === "revolut" ? "by Revolut" : "in cash at the studio";
-  const amount = pay?.amount_cents ?? s.price, payId = pay!.id;
+  // The spot is booked whatever happens next (A-019): without the payment row the email just skips the reference.
+  if (!pay) console.error("bookSingle: payment row not found after booking", bookingId);
+  const amount = pay?.amount_cents ?? s.price, payId = pay?.id ?? null;
   later("booking emails", async () => {
     await notify({ profileId: profile.id, email: profile.email, phone: profile.phone }, "booking_confirmed",
-      { name: profile.full_name ?? undefined, ...tmpl(s), note: `${mode === "trial" ? "Your trial class. " : ""}Please pay ${eur(amount)} ${how} before class (reference ${paymentReference(payId)}).` },
+      { name: profile.full_name ?? undefined, ...tmpl(s), note: `${mode === "trial" ? "Your trial class. " : ""}Please pay ${eur(amount)} ${how} before class${payId ? ` (reference ${paymentReference(payId)})` : ""}.` },
       { bookingId, sessionId });
     const what = s.type.kind === "event" ? "a spot" : mode === "trial" ? "a trial" : "a drop-in";
     await alertBooking(profile, sessionId, `${what}, paying ${eur(amount)} ${method === "revolut" ? "by Revolut" : "in cash"}`, bookingId);
@@ -278,14 +285,15 @@ async function startSubscription(profile: Profile, product: { id: string; name: 
     vat_cents: vatPortion(product.price_cents, Number(cfg.vat_rate), cfg.vat_registered),
     purpose: "membership", product_id: product.id, description: product.name,
   }).select("id").single();
+  if (!pay) return { ok: false, error: "We couldn't start the payment. Please try again." };
   const req = {
-    paymentId: pay!.id, amountCents: product.price_cents, description: product.name, customerEmail: profile.email,
-    successUrl: `${env.siteUrl}/membership?started=${pay!.id}`, cancelUrl: `${env.siteUrl}/packs?cancelled=1`,
+    paymentId: pay.id, amountCents: product.price_cents, description: product.name, customerEmail: profile.email,
+    successUrl: `${env.siteUrl}/membership?started=${pay.id}`, cancelUrl: `${env.siteUrl}/packs?cancelled=1`,
   };
   const checkout = provider.createSubscriptionCheckout
     ? await provider.createSubscriptionCheckout({ ...req, periodDays: product.period_days ?? 30, calendarMonth: cfg.membership_period_mode === "calendar", customerId: profile.stripe_customer_id, profileId: profile.id, productId: product.id })
     : await provider.createCheckout(req);
-  await db().from("payments").update({ provider_ref: checkout.providerRef }).eq("id", pay!.id);
+  await db().from("payments").update({ provider_ref: checkout.providerRef }).eq("id", pay.id);
   return { ok: true, data: { redirect: checkout.url } };
 }
 
@@ -314,11 +322,11 @@ export async function buyPack(profile: Profile, productId: string, code?: string
     .single();
   if (error) return { ok: false, error: friendlyError(error) };
   const checkout = await paymentProvider().createCheckout({
-    paymentId: pay!.id, amountCents: price.cents, description: product.name, customerEmail: profile.email,
-    successUrl: `${env.siteUrl}/bookings?purchased=${pay!.id}`,
+    paymentId: pay.id, amountCents: price.cents, description: product.name, customerEmail: profile.email,
+    successUrl: `${env.siteUrl}/bookings?purchased=${pay.id}`,
     cancelUrl: `${env.siteUrl}/packs?cancelled=1`,
   });
-  await db().from("payments").update({ provider_ref: checkout.providerRef }).eq("id", pay!.id);
+  await db().from("payments").update({ provider_ref: checkout.providerRef }).eq("id", pay.id);
   return { ok: true, data: { redirect: checkout.url } };
 }
 
@@ -429,6 +437,11 @@ export async function cancelBooking(profile: Profile, bookingId: string, asAdmin
   // The engine refuses client cancellations of events (event_no_cancel) and moves the waitlist up
   // in the same transaction; `offers` are the people to tell (A-005, A-064).
   const { data, error } = await db().rpc("cancel_booking", { p_booking: bookingId, p_profile: profile.id, p_admin: asAdmin });
+  if (error?.message === "not_cancellable") {
+    // A-020: a retry after a lost response: already cancelled by this person is a success.
+    const { data: b } = await db().from("bookings").select("status, profile_id").eq("id", bookingId).maybeSingle();
+    if (b && (asAdmin || b.profile_id === profile.id) && ["cancelled", "late_cancelled"].includes(b.status)) return { ok: true, data: { status: b.status } };
+  }
   if (error) return { ok: false, error: friendlyError(error) };
   const res = data as CancelResult;
   later("cancellation emails", () => cancelEmails(profile, bookingId, res, asAdmin));
