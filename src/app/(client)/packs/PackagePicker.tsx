@@ -13,8 +13,10 @@ const eur = (c: number) => `€${(c / 100).toFixed(c % 100 ? 2 : 0)}`;
 const METHOD_LABEL: Record<PayMethod, string> = { cash: "Cash", revolut: "Revolut", bank_transfer: "Bank transfer" };
 
 /** Pick a package (per week × months), choose cash or Revolut, accept the terms, request it. */
-export function PackagePicker({ groups, methods, online, cutoff, rewards = [], signedIn = false }: {
+export function PackagePicker({ groups, methods, online, cutoff, rewards = [], signedIn = false, seller = null, vatNote = null }: {
   groups: Group[]; methods: PayMethod[]; online: boolean; cutoff: number; rewards?: Discount[]; signedIn?: boolean;
+  /** Who sells it (name, address) and "no VAT charged": shown before the request (A-012). */
+  seller?: string | null; vatNote?: string | null;
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Option | null>(null);
@@ -125,6 +127,8 @@ export function PackagePicker({ groups, methods, online, cutoff, rewards = [], s
             <li>Classes can&apos;t be booked after the expiry date; unused classes expire and are non-refundable.</li>
             <li>{online ? "Paid now by secure checkout." : "Paid in advance. Your classes appear as soon as your instructor confirms the payment."}</li>
             <li>Personal: packages can&apos;t be shared or transferred.</li>
+            <li>You can withdraw within 14 days of payment: a full refund if you haven&apos;t used a class, otherwise minus the classes used (see the Terms).</li>
+            <li>Total {eur(price(selected).cents)}{vatNote ? ` (${vatNote})` : ""}.{seller ? ` Sold by ${seller}.` : ""}</li>
           </ul>
           <Checkbox id="accept" checked={accepted} onChange={(e) => setAccepted(e.target.checked)}>
             I accept these package terms and the <a href="/legal/terms" target="_blank" className="font-medium underline underline-offset-4">Terms</a>.

@@ -35,7 +35,7 @@ export const sessionInfo = cache(async (sessionId: string) => {
 });
 export type SessionInfo = Awaited<ReturnType<typeof sessionInfo>>;
 
-export const EVENT_POLICY = "Events can't be cancelled or refunded in the app. If you can't make it, message the studio.";
+export const EVENT_POLICY = "Events can't be cancelled or refunded in the app. If you can't make it, message the studio. If the studio cancels the event, you get a full refund.";
 
 /**
  * The cancellation policy, stated in every booking email. A class booked inside the cutoff (from the waitlist, or

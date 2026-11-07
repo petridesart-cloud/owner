@@ -247,6 +247,7 @@ export default async function BookPage({ params, searchParams }: { params: Promi
               {creditCount === 0 && !singles.length && !unpaid && !requestedPack && <PriceSummary price={c.price_cents} settings={settings} event={c.kind === "event"} policy={policy} />}
               {creditCount === 0 && singles.length > 0 && c.kind === "event" && <p className="text-sm text-ink-soft">Please read the event terms above.</p>}
               {creditCount === 0 && singles.length > 0 && c.kind !== "event" && <p className="text-sm text-ink-soft">Free cancellation up to {settings.cancellation_cutoff_hours}h before class. <Link href="/policy" className="underline underline-offset-4">Policies</Link></p>}
+              {creditCount === 0 && singles.length > 0 && c.price_cents > 0 && <NoWithdrawal />}
               {creditCount > 0 && <p className="text-sm text-ink-soft">Free cancellation up to {settings.cancellation_cutoff_hours}h before class.</p>}
               {(creditCount > 0 || singles.length > 0 || settings.online_payments_enabled || settings.allow_pay_later) && (
                 <BookActions
@@ -284,7 +285,17 @@ function PriceSummary({ price, settings, event = false, policy = null }: { price
           <Link href="/policy/payments" className="underline underline-offset-4">Cancellation policy</Link>
         </p>
       )}
+      {price > 0 && <NoWithdrawal />}
     </div>
+  );
+}
+
+/** A-012: a single class or event is a leisure service for a set date, so there's no 14-day withdrawal right. */
+function NoWithdrawal() {
+  return (
+    <p className="mt-2 text-xs leading-relaxed text-ink-soft">
+      Booked for this date and time, so the 14-day right of withdrawal doesn&apos;t apply (EU Directive 2011/83/EU, art. 16(l)). See the <Link href="/legal/terms" className="underline underline-offset-4">Terms</Link>.
+    </p>
   );
 }
 
