@@ -1781,7 +1781,64 @@ export type Database = {
       };
     };
     Views: {
-      [_ in never]: never;
+      studio_public: {
+        Row: {
+          address: string | null;
+          booking_window_days: number | null;
+          cancellation_cutoff_hours: number | null;
+          contact_email: string | null;
+          contact_phone: string | null;
+          currency: string | null;
+          id: number | null;
+          instagram_handle: string | null;
+          intro_line: string | null;
+          map_url: string | null;
+          policy_version: string | null;
+          status_banner: string | null;
+          studio_name: string | null;
+          timezone: string | null;
+          trader_name: string | null;
+          waitlist_close_minutes: number | null;
+        };
+        ComputedFields: never;
+        Insert: {
+          address?: string | null;
+          booking_window_days?: number | null;
+          cancellation_cutoff_hours?: number | null;
+          contact_email?: string | null;
+          contact_phone?: string | null;
+          currency?: string | null;
+          id?: number | null;
+          instagram_handle?: string | null;
+          intro_line?: string | null;
+          map_url?: string | null;
+          policy_version?: string | null;
+          status_banner?: string | null;
+          studio_name?: string | null;
+          timezone?: string | null;
+          trader_name?: string | null;
+          waitlist_close_minutes?: number | null;
+        };
+        Update: {
+          address?: string | null;
+          booking_window_days?: number | null;
+          cancellation_cutoff_hours?: number | null;
+          contact_email?: string | null;
+          contact_phone?: string | null;
+          currency?: string | null;
+          id?: number | null;
+          instagram_handle?: string | null;
+          intro_line?: string | null;
+          map_url?: string | null;
+          policy_version?: string | null;
+          status_banner?: string | null;
+          studio_name?: string | null;
+          timezone?: string | null;
+          trader_name?: string | null;
+          waitlist_close_minutes?: number | null;
+        };
+        Relationships: [];
+      };
     };
     Functions: {
       add_credit_kind: { Args: { p_label: string }; Returns: string };
@@ -1829,6 +1886,7 @@ export type Database = {
         Returns: Json;
       };
       can_access_event: { Args: { p_profile: string; p_session: string }; Returns: boolean };
+      can_see_session: { Args: { p_session: string }; Returns: boolean };
       can_view_health: { Args: Record<PropertyKey, never>; Returns: boolean };
       cancel_booking: {
         Args: { p_admin?: boolean; p_booking: string; p_profile: string; p_return_credit?: boolean };
@@ -2342,11 +2400,7 @@ export const Constants = {
         "private_reformer",
         "private_prenatal_mat",
         "private_prenatal_reformer",
-        "pre_natal_ybng",
-        "pre_natal_mw5oz5pb",
-        "pre_natal_mw5ozkfx",
-        "pre_natal_mw5ozsul",
-        "pre_natal_mw5ppq7q",
+        "pre_natal_9lxl",
       ],
       ledger_entry: [
         "grant",

@@ -1582,3 +1582,133 @@ describe("WP8: adults only (A-062)", () => {
     assert.ifError((await book(p, sid)).error);
   });
 });
+
+// ---------------------------------------------------------------------------
+// WP11: direct access with the public anon key, signed out or as a client (A-041, A-086).
+// The app itself only uses the service role; this is what anyone holding the anon key gets.
+// ---------------------------------------------------------------------------
+describe("RLS: anon key and client JWTs (A-041, A-086)", () => {
+  const pg = postgres(env.DATABASE_URL || "postgresql://postgres:postgres@127.0.0.1:54322/postgres", { max: 1, onnotice: () => {} });
+  after(() => pg.end());
+  const anonClient = () => createClient<Database>(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY, { auth: { persistSession: false } });
+  /** A confirmed login with a linked client profile, signed in on its own anon-key client. */
+  async function signedIn(tag: string) {
+    const email = `rls-${tag}-${Date.now()}${Math.random().toString(36).slice(2, 6)}@example.com`;
+    const { data: u, error } = await db.auth.admin.createUser({ email, password: "pw-12345678", email_confirm: true });
+    assert.ifError(error);
+    const id = (await db.from("profiles").select("id").eq("user_id", u.user!.id).single()).data!.id;
+    const c = anonClient();
+    assert.ifError((await c.auth.signInWithPassword({ email, password: "pw-12345678" })).error);
+    return { id, c };
+  }
+  async function withData(tag: string) {
+    const who = await signedIn(tag);
+    await grant(who.id, 2, 30 * 24 * H);
+    assert.ifError((await book(who.id, await session(72 * H))).error);
+    assert.ifError((await db.from("payments").insert({ profile_id: who.id, provider: "offline", amount_cents: 100, purpose: "pack", description: "RLS test" })).error);
+    assert.ifError((await db.from("health_notes").insert({ profile_id: who.id, consent_at: new Date().toISOString() })).error);
+    return who;
+  }
+  const own = ["bookings", "payments", "credit_lots", "credit_ledger", "health_notes", "consents", "waitlist_entries"] as const;
+
+  test("client A reads only A's rows; client B and anon read none of A's", async () => {
+    const a = await withData("a");
+    const b = await signedIn("b");
+    const anon = anonClient();
+    for (const t of own) {
+      const mine = await a.c.from(t).select("profile_id");
+      assert.ifError(mine.error);
+      assert.ok(mine.data!.every((r) => r.profile_id === a.id), `${t}: A sees only own rows`);
+      const theirs = await b.c.from(t).select("profile_id").eq("profile_id", a.id);
+      assert.ifError(theirs.error);
+      assert.equal(theirs.data!.length, 0, `${t}: B can't see A's rows`);
+      const out = await anon.from(t).select("profile_id").eq("profile_id", a.id);
+      assert.equal(out.data?.length ?? 0, 0, `${t}: anon sees nothing`);
+    }
+    for (const t of ["bookings", "payments", "credit_lots", "health_notes"] as const)
+      assert.ok((await a.c.from(t).select("profile_id")).data!.length >= 1, `${t}: A sees their own row`);
+    assert.equal((await b.c.from("profiles").select("id").eq("id", a.id)).data!.length, 0, "B can't read A's profile");
+    assert.equal((await a.c.from("profiles").select("id")).data!.length, 1, "A reads only their own profile");
+    for (const t of ["notifications", "audit_log", "health_history", "rate_events", "otp_requests", "discount_codes"] as const)
+      assert.equal(((await a.c.from(t as "notifications").select("id")).data ?? []).length, 0, `${t}: nothing for a client`);
+  });
+
+  test("engine functions can't be executed with the anon key or a client JWT", async () => {
+    const a = await signedIn("rpc");
+    const s = await session(72 * H);
+    for (const c of [anonClient(), a.c]) {
+      for (const [fn, args] of [
+        ["book_session", { p_profile: a.id, p_session: s, p_mode: "credit", p_source: "online" }],
+        ["grant_lot", { p_profile: a.id, p_kind: "reformer", p_credits: 5, p_expires: null, p_note: "x" }],
+        ["confirm_payment", { p_payment: a.id }],
+        ["erase_profile", { p_profile: a.id }],
+      ] as const) {
+        const r = await c.rpc(fn as "grant_lot", args as never);
+        assert.ok(r.error, `${fn} must be refused`);
+      }
+    }
+    assert.equal(await balance(a.id), 0);
+  });
+
+  test("clients-only events and private sessions are hidden from people who can't see them", async () => {
+    const ev = await clientsOnlyEvent(96 * H);
+    const privType = (await db.from("class_types").select("id").eq("private", true).limit(1).single()).data!.id;
+    const priv = (await db.from("class_sessions").insert({ class_type_id: privType, starts_at: iso(100 * H), ends_at: iso(101 * H), capacity: 1, title: "Private RLS" }).select("id").single()).data!.id;
+    const open = await session(98 * H);
+    const anon = anonClient();
+    const seen = async (c: ReturnType<typeof anonClient>, id: string) => (await c.from("class_sessions").select("id, description, event_policy").eq("id", id)).data?.length ?? 0;
+    assert.equal(await seen(anon, open), 1, "regular classes stay public");
+    assert.equal(await seen(anon, ev), 0, "anon can't read a clients-only event");
+    assert.equal(await seen(anon, priv), 0, "anon can't read a private session");
+    const stranger = await signedIn("stranger");
+    assert.equal(await seen(stranger.c, ev), 0, "a non-client can't read it");
+    assert.equal(await seen(stranger.c, priv), 0);
+    const member = await signedIn("member");
+    await grant(member.id, 2, 30 * 24 * H);
+    assert.equal(await seen(member.c, ev), 1, "a studio client reads the event");
+    assert.equal(await seen(member.c, priv), 0, "but not someone else's private session");
+  });
+
+  test("anon reads class types and products without errors, and only public studio settings", async () => {
+    const anon = anonClient();
+    for (const t of ["class_types", "products", "credit_kinds", "package_tabs", "site_content", "media", "closures"] as const) {
+      const r = await anon.from(t).select("*").limit(1);
+      assert.ifError(r.error);
+    }
+    const raw = await anon.from("studio_settings").select("alert_email, bank_iban, last_tick_error");
+    assert.ok(raw.error || (raw.data ?? []).length === 0, "private settings columns are not readable");
+    const pub = await anon.from("studio_public").select("*").single();
+    assert.ifError(pub.error);
+    const keys = Object.keys(pub.data!);
+    assert.ok(keys.includes("studio_name") && keys.includes("intro_line"));
+    for (const k of ["alert_email", "bank_iban", "revolut_link", "last_tick_error", "last_cron_tick_at", "retention_health_months"]) assert.ok(!keys.includes(k), `${k} is not public`);
+  });
+
+  test("clients and anon can't write the server-only tables", async () => {
+    const a = await signedIn("write");
+    for (const c of [anonClient(), a.c]) {
+      assert.ok((await c.from("compliance_items").insert({ key: `rls-${Date.now()}` })).error, "compliance_items");
+      assert.ok((await c.from("health_notes").insert({ profile_id: a.id, consent_at: new Date().toISOString() })).error, "health_notes");
+      assert.ok((await c.from("consents").insert({ profile_id: a.id, consent_type: "photos", granted: true } as never)).error, "consents");
+      assert.ok((await c.from("timetable_templates").insert({} as never)).error, "timetable_templates");
+    }
+    const grants = await pg`select table_name, grantee, privilege_type from information_schema.role_table_grants
+      where table_schema = 'public' and grantee in ('anon', 'authenticated')
+        and (privilege_type in ('TRUNCATE', 'TRIGGER', 'REFERENCES')
+          or (privilege_type <> 'SELECT' and table_name in ('health_notes', 'health_history', 'consents', 'compliance_items', 'template_slots', 'timetable_templates')))`;
+    assert.deepEqual([...grants], [], "no TRUNCATE/TRIGGER/REFERENCES, and no writes on health, consent or admin tables");
+  });
+
+  test("TRUNCATE credit_ledger is refused even for the database owner", async () => {
+    const before = Number((await pg`select count(*)::int n from credit_ledger`)[0].n);
+    let msg = "";
+    try {
+      await pg.begin(async (sql) => {
+        await sql`truncate public.credit_ledger cascade`;
+        throw new Error("rolled_back");
+      });
+    } catch (e) { msg = (e as Error).message; }
+    assert.match(msg, /append-only|append_only/i);
+    assert.equal(Number((await pg`select count(*)::int n from credit_ledger`)[0].n), before);
+  });
+});
