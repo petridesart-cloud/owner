@@ -1437,7 +1437,7 @@ describe("WP7: privacy lifecycle (A-010, A-011)", () => {
         oldRate: Number((await t`select count(*) from public.rate_events where key_hash = 'old'`)[0].count),
         recentRate: Number((await t`select count(*) from public.rate_events where key_hash = 'recent'`)[0].count),
         healthAfterWarning: Number((await t`select count(*) from public.health_notes where profile_id = ${oldP}`)[0].count),
-        log: Number((await t`select count(*) from public.audit_log where action = 'retention' and actor_profile_id is null and not (details::text ilike '%@%')`)[0].count),
+        log: Number((await t`select count(*) from public.audit_log where action = 'retention' and actor_profile_id is null and created_at = now() and not (details::text ilike '%@%')`)[0].count),
         lastRun: Number((await t`select count(*) from public.studio_settings where last_retention_at is not null`)[0].count),
       };
       // 31 days later the notice has run out: the health answers go; the old client was warned and is erased later.

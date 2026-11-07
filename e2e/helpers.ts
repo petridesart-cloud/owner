@@ -5,8 +5,19 @@ import type { Database } from "../src/lib/supabase/types";
 
 export const uniqueEmail = (tag: string) => `e2e-${tag}-${Date.now()}-${Math.floor(Math.random() * 1e4)}@example.com`;
 
+/**
+ * The whole suite signs in from one IP (127.0.0.1), more than the per-IP limit allows in 15 minutes.
+ * Locally, clear only the IP-wide buckets before each sign-in; per-email limits stay (no e2e test covers
+ * the IP limits; the engine tests do).
+ */
+async function resetIpLimits() {
+  if (process.env.E2E_BASE_URL) return;
+  await serviceDb().from("rate_events").delete().in("kind", ["signin_ip", "code_ip", "code_all"]);
+}
+
 /** Sign in with email + password (demo clients share the demo password). */
 export async function signIn(page: Page, email: string, next = "/", password = "reform-demo") {
+  await resetIpLimits();
   await page.goto(`/login?next=${encodeURIComponent(next)}`);
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
@@ -21,6 +32,7 @@ export async function adminSignIn(page: Page, email: string, password: string) {
 
 /** Create an account (demo shows the email code on screen), then answer the health questions. */
 export async function signUp(page: Page, email: string, next = "/", name = "Test Client") {
+  await resetIpLimits();
   await page.goto(`/signup?next=${encodeURIComponent(next)}`);
   const [first, ...rest] = name.split(" ");
   await page.getByLabel("Name", { exact: true }).fill(first);
