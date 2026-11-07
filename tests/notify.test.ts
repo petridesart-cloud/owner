@@ -173,3 +173,57 @@ describe("A-017: a hanging provider can't hold anything up", () => {
     assert.ok((await row(key)).next_attempt_at);
   });
 });
+
+describe("A-018: one failing tick step doesn't stop the others, and it shows", () => {
+  const settings = async () => (await db.from("studio_settings").select("last_tick_ok_at, last_tick_error, last_cron_tick_at").eq("id", 1).single()).data!;
+
+  test("a throwing offers step still runs extend_timetable, returns errors ['offers'] and doesn't advance last_tick_ok_at", async () => {
+    const { runTick } = await import("../src/lib/booking");
+    const before = await settings();
+    let extended = 0;
+    intercept = (url) => {
+      if (url.endsWith("/rest/v1/rpc/tick")) return pgError("XX000", "boom", 500);
+      if (url.endsWith("/rest/v1/rpc/extend_timetable")) extended++;
+      return null;
+    };
+    const t = Date.now();
+    const r = await runTick("cron");
+    assert.deepEqual(r.errors, ["offers"]);
+    assert.equal(extended, 1, "the timetable was still topped up");
+    const after = await settings();
+    assert.equal(after.last_tick_ok_at, before.last_tick_ok_at);
+    assert.match(after.last_tick_error ?? "", /offers/);
+    assert.ok(new Date(after.last_cron_tick_at!).getTime() >= t - 1000, "the run itself is recorded");
+  });
+
+  test("the cron route answers 500 when a step failed, 200 when all worked (and clears the error), 401 without the secret", async () => {
+    const { GET } = await import("../src/app/api/cron/tick/route");
+    const req = (auth?: string) => new Request("http://localhost/api/cron/tick", { headers: auth ? { authorization: auth } : {} });
+    assert.equal((await GET(req())).status, 401);
+    assert.equal((await GET(req("Bearer wrong-secret-same-len"))).status, 401);
+    intercept = (url) => (url.endsWith("/rest/v1/rpc/tick") ? pgError("XX000", "boom", 500) : null);
+    assert.equal((await GET(req("Bearer cron-test-secret"))).status, 500);
+    intercept = () => null;
+    const ok = await GET(req("Bearer cron-test-secret"));
+    assert.equal(ok.status, 200, JSON.stringify(await ok.clone().json()));
+    const s = await settings();
+    assert.equal(s.last_tick_error, null);
+    assert.ok(s.last_tick_ok_at);
+  });
+
+  test("a missing profile is skipped, not thrown (profileById)", async () => {
+    const { notifyOffers } = await import("../src/lib/booking");
+    const { data: w } = await db.from("waitlist_entries").select("id").limit(1).maybeSingle();
+    await notifyOffers([{ entry_id: w?.id ?? "00000000-0000-0000-0000-000000000000", profile_id: "00000000-0000-0000-0000-000000000000", offer_expires_at: new Date(Date.now() + 3_600_000).toISOString() }]);
+  });
+});
+
+describe("A-049: the page-view tick is only a fallback", () => {
+  test("runs only when the last tick is 10 minutes old (or never ran)", async () => {
+    const { pageTickDue } = await import("../src/lib/tick");
+    const now = Date.now();
+    assert.equal(pageTickDue(null, now), true);
+    assert.equal(pageTickDue(new Date(now - 9 * 60_000).toISOString(), now), false);
+    assert.equal(pageTickDue(new Date(now - 10 * 60_000).toISOString(), now), true);
+  });
+});

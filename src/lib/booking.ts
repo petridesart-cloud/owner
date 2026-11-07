@@ -3,7 +3,7 @@ import { cache } from "react";
 import { db } from "@/lib/supabase/admin";
 import { env } from "@/lib/env";
 import { getSettings, type Profile, type Settings } from "@/lib/auth";
-import { later, notify, pool } from "@/lib/notifications";
+import { later, notify, pool, retryFailed } from "@/lib/notifications";
 import { paymentProvider } from "@/lib/payments";
 import { friendlyError, type ActionResult } from "@/lib/errors";
 import { spokenDateTime, time, relativeHours, todayKey } from "@/lib/time";
@@ -493,114 +493,166 @@ export async function notifyCancelled(rows: { session_id: string; booking_id: st
 
 // ---------------------------------------------------------------------------
 // Periodic work: waitlist offers + reminders. Safe to call often (deduplicated).
+// Every step runs on its own (A-018): one that fails is reported in `errors` and in
+// studio_settings.last_tick_error, and the others (timetable top-up, weekly bookings) still run.
 // ---------------------------------------------------------------------------
-export async function runTick(source: "cron" | "page" | "admin" = "page") {
-  const now = new Date().toISOString();
-  await db().from("studio_settings").update(source === "cron" ? { last_tick_at: now, last_cron_tick_at: now } : { last_tick_at: now }).eq("id", 1);
-  const { data: offers } = await db().rpc("tick");
-  await notifyOffers((offers ?? []) as OfferRow[]);
+export type TickResult = { offers: number; reminders: number; notices: number; retried: number; weekly: number; errors: string[] };
 
-  const cfg = await getSettings();
-  const offsets = [...cfg.reminder_offsets_minutes].sort((a, b) => a - b); // e.g. [120, 1440]
-  let sent = 0;
-  for (let i = 0; i < offsets.length; i++) {
-    const offset = offsets[i];
-    const smaller = i > 0 ? offsets[i - 1] : 0;
-    const now = Date.now();
-    const { data: rows } = await db()
-      .from("bookings")
-      .select("id, confirmed_at, profile_id, session_id, class_sessions!inner(starts_at, status)")
-      .eq("status", "confirmed")
-      .eq("class_sessions.status", "scheduled")
-      .gt("class_sessions.starts_at", new Date(now + smaller * 60_000).toISOString())
-      .lte("class_sessions.starts_at", new Date(now + offset * 60_000).toISOString());
-    for (const b of rows ?? []) {
-      const start = new Date(b.class_sessions.starts_at).getTime();
-      if (!(await profileById(b.profile_id))?.reminder_emails) continue; // turned off in Account
-      // Booked after this reminder would have gone out: the confirmation is enough.
-      if (b.confirmed_at && new Date(b.confirmed_at).getTime() > start - offset * 60_000) continue;
-      const [s, p] = await Promise.all([sessionInfo(b.session_id), profileById(b.profile_id)]);
-      if (!p) continue;
-      const template = offset <= 180 ? "reminder_2h" : "reminder_24h";
-      await notify({ profileId: p.id, email: p.email, phone: p.phone }, template,
-        { name: p.full_name ?? undefined, ...tmpl(s), when: offset <= 180 ? time(s.starts_at) : spokenDateTime(s.starts_at),
-          note: s.type.kind === "event" ? undefined : "Remember your grip socks · arrive 5–10 minutes early." },
-        { sms: offset <= 180, bookingId: b.id, sessionId: s.id, dedupeKey: `reminder:${offset}:${b.id}` });
-      sent++;
+export async function runTick(source: "cron" | "page" | "admin" = "page"): Promise<TickResult> {
+  const errors: string[] = [];
+  async function step<T>(name: string, fn: () => Promise<T>, fallback: T): Promise<T> {
+    try {
+      return await fn();
+    } catch (e) {
+      console.error(`tick step ${name} failed`, e);
+      errors.push(name);
+      return fallback;
     }
   }
-  sent += await creditAndRenewalNotices();
-  await db().rpc("extend_timetable", {}); // the timetable repeats by itself, ~9 weeks ahead
+  const cfg = await getSettings();
+  const offers = await step("offers", async () => {
+    const { data, error } = await db().rpc("tick");
+    if (error) throw error;
+    await notifyOffers((data ?? []) as OfferRow[], cfg);
+    return (data ?? []).length;
+  }, 0);
+  const reminders = await step("reminders", () => sendReminders(cfg), 0);
+  const notices = await step("notices", () => creditAndRenewalNotices(cfg, step), 0);
+  const retried = await step("retries", async () => (await retryFailed()).sent, 0);
+  await step("timetable", async () => {
+    const { error } = await db().rpc("extend_timetable", {}); // the timetable repeats by itself, ~9 weeks ahead
+    if (error) throw error;
+  }, undefined);
   // Demo only: Sofia always has her birthday today, so the cake and the birthday email can be tried.
-  if (env.demoMode) await db().from("profiles").update({ date_of_birth: `1995-${todayKey().slice(5) === "02-29" ? "02-28" : todayKey().slice(5)}` }).eq("email", "sofia@example.com");
-  const weekly = await applyRecurring();
-  return { offers: (offers ?? []).length, reminders: sent, weekly: weekly.booked };
+  if (env.demoMode) await step("demo", async () => {
+    await db().from("profiles").update({ date_of_birth: `1995-${todayKey().slice(5) === "02-29" ? "02-28" : todayKey().slice(5)}` }).eq("email", "sofia@example.com");
+  }, undefined);
+  const weekly = await step("weekly", async () => (await applyRecurring()).booked, 0);
+
+  // The heartbeat comes last, so a tick that died half-way never looks healthy.
+  const now = new Date().toISOString();
+  const { error } = await db().from("studio_settings").update({
+    last_tick_at: now,
+    ...(source === "cron" ? { last_cron_tick_at: now } : {}),
+    ...(errors.length ? { last_tick_error: `${errors.join(", ")} (${now})` } : { last_tick_ok_at: now, last_tick_error: null }),
+  }).eq("id", 1);
+  if (error) { console.error("tick heartbeat", error); errors.push("heartbeat"); }
+  return { offers, reminders, notices, retried, weekly, errors };
 }
 
+/** Reminders due now (one query per offset, already-reminded bookings left out in SQL), five at a time. */
+async function sendReminders(cfg: Settings) {
+  let sent = 0;
+  for (const offset of [...cfg.reminder_offsets_minutes].sort((a, b) => a - b)) { // e.g. [120, 1440]
+    const { data: rows, error } = await db().rpc("due_reminders", { p_offset: offset });
+    if (error) throw error;
+    if (!rows?.length) continue;
+    const people = await profilesById(rows.map((r) => r.profile_id));
+    const template = offset <= 180 ? "reminder_2h" : "reminder_24h";
+    await pool(rows, 5, async (b) => {
+      try {
+        const p = people.get(b.profile_id);
+        if (!p) return;
+        const s = await sessionInfo(b.session_id);
+        await notify({ profileId: p.id, email: p.email, phone: p.phone }, template,
+          { name: p.full_name ?? undefined, ...tmpl(s), when: offset <= 180 ? time(s.starts_at) : spokenDateTime(s.starts_at),
+            note: s.type.kind === "event" ? undefined : "Remember your grip socks · arrive 5–10 minutes early." },
+          { sms: offset <= 180, bookingId: b.booking_id, sessionId: s.id, dedupeKey: `reminder:${offset}:${b.booking_id}` });
+        sent++;
+      } catch (e) {
+        console.error("reminder", b.booking_id, e);
+      }
+    });
+  }
+  return sent;
+}
+
+/** Profiles by id in one query (chunks of 200). Erased profiles are left out. */
+async function profilesById(ids: string[]) {
+  const unique = [...new Set(ids)];
+  const out = new Map<string, Profile>();
+  for (let i = 0; i < unique.length; i += 200) {
+    const { data, error } = await db().from("profiles").select("*").in("id", unique.slice(i, i + 200)).is("deleted_at", null);
+    if (error) throw error;
+    for (const p of data ?? []) out.set(p.id, p);
+  }
+  return out;
+}
+
+/** Dedupe keys (email channel) that already have an Outbox row, so the tick doesn't re-render them every run. */
+async function alreadyInOutbox(keys: string[]) {
+  const have = new Set<string>();
+  for (let i = 0; i < keys.length; i += 200) {
+    const { data, error } = await db().from("notifications").select("dedupe_key").in("dedupe_key", keys.slice(i, i + 200).map((k) => `${k}:email`));
+    if (error) throw error;
+    for (const r of data ?? []) if (r.dedupe_key) have.add(r.dedupe_key.slice(0, -":email".length));
+  }
+  return have;
+}
+
+type Step = <T>(name: string, fn: () => Promise<T>, fallback: T) => Promise<T>;
+type Notice = { profileId: string; key: string; send: (p: Profile) => Promise<unknown> };
+
 /** Expire credits; warn about expiring credits (7 days), low credits (1 left) and renewals (3 days). */
-async function creditAndRenewalNotices() {
-  await db().rpc("expire_credits");
-  const cfg = await getSettings();
-  let n = 0;
+async function creditAndRenewalNotices(cfg: Settings, step: Step) {
+  await step("expire_credits", async () => { const { error } = await db().rpc("expire_credits"); if (error) throw error; }, undefined);
   const now = Date.now();
   const in7 = new Date(now + cfg.expiry_reminder_days * 86_400_000).toISOString();
+  const notices: Notice[] = [];
 
   // Unpaid package requests expire (default 48h) and the client is told.
-  const { data: expiredReqs } = await db().rpc("expire_unpaid_requests");
-  for (const row of (expiredReqs ?? []) as unknown as (string | { expire_unpaid_requests: string })[]) {
-    const id = typeof row === "string" ? row : row.expire_unpaid_requests;
-    const { data: pay } = await db().from("payments").select("profile_id, description").eq("id", id).single();
-    if (!pay?.profile_id) continue;
-    const p = await profileById(pay.profile_id);
-    if (!p) continue;
-    await notify({ profileId: p.id, email: p.email }, "payment_request",
+  await step("expire_requests", async () => {
+    const { data: expiredReqs, error } = await db().rpc("expire_unpaid_requests");
+    if (error) throw error;
+    const ids = ((expiredReqs ?? []) as unknown as (string | { expire_unpaid_requests: string })[]).map((row) => (typeof row === "string" ? row : row.expire_unpaid_requests));
+    if (!ids.length) return;
+    const { data: pays, error: e2 } = await db().from("payments").select("id, profile_id, description").in("id", ids);
+    if (e2) throw e2;
+    for (const pay of pays ?? []) if (pay.profile_id) notices.push({ profileId: pay.profile_id, key: `request-expired:${pay.id}`, send: (p) => notify({ profileId: p.id, email: p.email }, "payment_request",
       { name: p.full_name ?? undefined, className: pay.description, note: `We didn't receive payment within ${cfg.unpaid_request_expiry_hours} hours, so this request has expired. You're welcome to request it again any time.` },
-      { dedupeKey: `request-expired:${id}` });
-    n++;
-  }
+      { dedupeKey: `request-expired:${pay.id}` }) });
+  }, undefined);
 
-  const { data: expiring } = await db().from("credit_lots").select("id, profile_id, credit_kind, remaining, expires_at, membership_id")
-    .gt("remaining", 0).gt("expires_at", new Date(now).toISOString()).lte("expires_at", in7);
-  for (const lot of expiring ?? []) {
-    if (lot.membership_id) continue; // membership credits renew; the renewal notice covers them
-    const p = await profileById(lot.profile_id);
-    if (!p) continue;
-    await notify({ profileId: p.id, email: p.email }, "credits_expiring",
+  await step("expiring", async () => {
+    const { data: expiring, error } = await db().from("credit_lots").select("id, profile_id, credit_kind, remaining, expires_at, membership_id")
+      .gt("remaining", 0).gt("expires_at", new Date(now).toISOString()).lte("expires_at", in7).is("membership_id", null); // membership credits renew; the renewal notice covers them
+    if (error) throw error;
+    for (const lot of expiring ?? []) notices.push({ profileId: lot.profile_id, key: `expiring:${lot.id}`, send: (p) => notify({ profileId: p.id, email: p.email }, "credits_expiring",
       { name: p.full_name ?? undefined, note: `${lot.remaining} ${lot.credit_kind} class${lot.remaining === 1 ? "" : "es"} expire on ${spokenDateTime(lot.expires_at!).split(",")[0]}.` },
-      { dedupeKey: `expiring:${lot.id}` });
-    n++;
-  }
+      { dedupeKey: `expiring:${lot.id}` }) });
+  }, undefined);
 
-  // Low credits: exactly 1 usable credit left of a kind (once per lot set).
-  const { data: lots } = await db().from("credit_lots").select("id, profile_id, credit_kind, remaining").gt("remaining", 0)
-    .or(`expires_at.is.null,expires_at.gt.${new Date(now).toISOString()}`);
-  const totals = new Map<string, { sum: number; ids: string[] }>();
-  for (const l of lots ?? []) {
-    const k = `${l.profile_id}|${l.credit_kind}`;
-    const t = totals.get(k) ?? { sum: 0, ids: [] };
-    t.sum += l.remaining; t.ids.push(l.id); totals.set(k, t);
-  }
-  for (const [k, t] of totals) {
-    if (t.sum !== 1) continue;
-    const [profileId, kind] = k.split("|");
-    const p = await profileById(profileId);
-    if (!p) continue;
-    await notify({ profileId: p.id, email: p.email }, "credits_low", { name: p.full_name ?? undefined, className: kind }, { dedupeKey: `low:${t.ids.sort().join(",")}` });
-    n++;
-  }
+  // Low credits: exactly 1 usable credit left of a kind (once per lot set), worked out in SQL.
+  await step("low_credits", async () => {
+    const { data: low, error } = await db().rpc("low_credit_groups");
+    if (error) throw error;
+    for (const g of low ?? []) notices.push({ profileId: g.profile_id, key: `low:${g.lot_ids}`, send: (p) => notify({ profileId: p.id, email: p.email }, "credits_low",
+      { name: p.full_name ?? undefined, className: g.credit_kind }, { dedupeKey: `low:${g.lot_ids}` }) });
+  }, undefined);
 
   // Renewal reminders 3 days ahead.
-  const { data: due } = await db().from("memberships").select("id, profile_id, provider, current_period_end, cancel_at_period_end, products!memberships_product_id_fkey(name, price_cents)")
-    .eq("status", "active").eq("cancel_at_period_end", false)
-    .gt("current_period_end", new Date(now).toISOString()).lte("current_period_end", new Date(now + 3 * 86_400_000).toISOString());
-  for (const m of due ?? []) {
-    const p = await profileById(m.profile_id);
-    if (!p) continue;
-    await notify({ profileId: p.id, email: p.email }, "renewal_upcoming",
+  await step("renewals", async () => {
+    const { data: due, error } = await db().from("memberships").select("id, profile_id, provider, current_period_end, cancel_at_period_end, products!memberships_product_id_fkey(name, price_cents)")
+      .eq("status", "active").eq("cancel_at_period_end", false)
+      .gt("current_period_end", new Date(now).toISOString()).lte("current_period_end", new Date(now + 3 * 86_400_000).toISOString());
+    if (error) throw error;
+    for (const m of due ?? []) notices.push({ profileId: m.profile_id, key: `renewal:${m.id}:${m.current_period_end}`, send: (p) => notify({ profileId: p.id, email: p.email }, "renewal_upcoming",
       { name: p.full_name ?? undefined, className: m.products?.name, when: spokenDateTime(m.current_period_end).split(",")[0],
         note: m.provider === "stripe" ? "It renews automatically; manage or cancel any time from your Membership page." : `Renew at the studio (${eur(m.products?.price_cents ?? 0)}, cash or card) to keep your classes coming.` },
-      { dedupeKey: `renewal:${m.id}:${m.current_period_end}` });
-    n++;
-  }
-  return n;
+      { dedupeKey: `renewal:${m.id}:${m.current_period_end}` }) });
+  }, undefined);
+
+  // Only what hasn't been sent yet, with the profiles in one query, five at a time.
+  return step("notices_send", async () => {
+    const have = await alreadyInOutbox(notices.map((n) => n.key));
+    const todo = notices.filter((n) => !have.has(n.key));
+    const people = await profilesById(todo.map((n) => n.profileId));
+    let n = 0;
+    await pool(todo, 5, async (x) => {
+      const p = people.get(x.profileId);
+      if (!p) return;
+      try { await x.send(p); n++; } catch (e) { console.error("notice", x.key, e); }
+    });
+    return n;
+  }, 0);
 }

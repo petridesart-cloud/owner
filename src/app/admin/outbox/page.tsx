@@ -37,6 +37,7 @@ export default async function OutboxPage() {
           <Badge tone={schedulerOk ? "open" : "full"}>{s.last_cron_tick_at ? `Last ran ${ago(s.last_cron_tick_at)}` : "Not running yet"}</Badge>
         </p>
         <p className="text-ink-soft">Every 5 minutes: reminders, waitlist, expiring requests.</p>
+        {s.last_tick_error && <p className="text-burgundy">Last run had a problem: {s.last_tick_error}.{s.last_tick_ok_at ? ` Last fully working run ${ago(s.last_tick_ok_at)}.` : ""}</p>}
       </section>
       <div className="mb-5"><ActionForm action={runTickNow} submit="Send due reminders & waitlist offers now" variant="ghost" /></div>
       <ul className="space-y-3">

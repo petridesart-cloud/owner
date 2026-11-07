@@ -1232,3 +1232,58 @@ describe("WP3: engine hardening", () => {
     assert.ifError((await book(p, s!.id, "credit", "manual")).error);
   });
 });
+
+describe("WP5: tick queries", () => {
+  // Cyprus clocks go forward on Sunday 28 March 2027 (03:00 → 04:00). A class at 08:00 local the day after
+  // is 05:00 UTC; its reminders are due 24h and 2h before in real elapsed time.
+  test("DST: due_reminders(1440) and (120) select a booking at 08:00 the day after spring-forward exactly once, then not again (A-049)", async () => {
+    const start = localToUtc("2027-03-29", "08:00");
+    assert.equal(start, "2027-03-29T05:00:00.000Z");
+    const startMs = new Date(start).getTime();
+    const { data: s } = await db.from("class_sessions").insert({ class_type_id: reformer, starts_at: start, ends_at: new Date(startMs + 50 * 60_000).toISOString(), capacity: 3, title: "DST reminder test" }).select("id").single();
+    const p = await client("dst-reminder");
+    const off = await client("dst-reminder-off");
+    await db.from("profiles").update({ reminder_emails: false }).eq("id", off);
+    for (const who of [p, off]) { await grant(who, 1, null); assert.ifError((await bookFar(who, s!.id)).error); }
+    const bookingId = (await db.from("bookings").select("id").eq("session_id", s!.id).eq("profile_id", p).single()).data!.id;
+    const due = async (offset: number, minutesBefore: number) =>
+      ((await db.rpc("due_reminders", { p_offset: offset, p_now: new Date(startMs - minutesBefore * 60_000).toISOString() })).data ?? [])
+        .filter((r) => r.session_id === s!.id).map((r) => r.booking_id);
+
+    assert.deepEqual(await due(1440, 1441), [], "not before 24h");
+    assert.deepEqual(await due(1440, 1439), [bookingId], "24h reminder, once, and not for someone who turned reminders off");
+    assert.equal(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Nicosia", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(startMs - 1440 * 60_000)), "08:00", "24h earlier is 08:00 local too (after the jump)");
+    assert.deepEqual(await due(1440, 119), [], "inside 2h it's the 2h reminder's turn");
+    assert.deepEqual(await due(120, 119), [bookingId], "2h reminder, once");
+
+    await db.from("notifications").insert({ channel: "email", template: "reminder_24h", recipient: "x@example.com", body: "x", status: "logged", dedupe_key: `reminder:1440:${bookingId}:email`, booking_id: bookingId });
+    assert.deepEqual(await due(1440, 1439), [], "not again once the reminder is in the Outbox");
+    assert.deepEqual(await due(120, 119), [bookingId], "the 2h reminder is separate");
+    await db.from("class_sessions").update({ status: "cancelled" }).eq("id", s!.id);
+  });
+
+  test("low_credit_groups: exactly one usable class left of a kind, once per set of packages (A-049)", async () => {
+    const p = await client("low");
+    const lot = await grant(p, 1, 30 * 24 * H);
+    const mine = async () => ((await db.rpc("low_credit_groups")).data ?? []).filter((g) => g.profile_id === p);
+    assert.deepEqual(await mine(), [{ profile_id: p, credit_kind: "reformer", lot_ids: lot }]);
+    await db.from("notifications").insert({ channel: "email", template: "credits_low", recipient: "x@example.com", body: "x", status: "logged", dedupe_key: `low:${lot}:email` });
+    assert.deepEqual(await mine(), [], "told once");
+    await grant(p, 1, 30 * 24 * H);
+    assert.deepEqual(await mine(), [], "two left: not low");
+  });
+
+  test("extend_timetable keeps classes at least booking window + 14 days ahead (QUAL-12)", async () => {
+    const { data: cfg } = await db.from("studio_settings").select("booking_window_days, timezone").eq("id", 1).single();
+    await db.from("studio_settings").update({ booking_window_days: 84 }).eq("id", 1);
+    try {
+      assert.ifError((await db.rpc("extend_timetable", {})).error);
+      const { data: t } = await db.from("timetable_templates").select("valid_to").eq("repeats", true).order("created_at", { ascending: false }).limit(1).maybeSingle();
+      if (!t) return; // no repeating timetable on this database
+      const today = new Intl.DateTimeFormat("en-CA", { timeZone: cfg!.timezone }).format(new Date());
+      assert.ok(t.valid_to >= addDaysKey(today, 84 + 14), `${t.valid_to} < today + 98 days`);
+    } finally {
+      await db.from("studio_settings").update({ booking_window_days: cfg!.booking_window_days }).eq("id", 1);
+    }
+  });
+});

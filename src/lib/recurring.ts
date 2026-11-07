@@ -68,8 +68,21 @@ export async function applyRecurring(profileId?: string, opts: { defer?: boolean
     .in("class_type_id", typeIds).eq("status", "scheduled")
     .gt("starts_at", new Date(Date.now() + 60 * 60_000).toISOString()).lt("starts_at", until).order("starts_at");
 
+  // What everyone already booked or waitlisted among these classes: two queries in all, not two per client (A-049).
+  const pids = [...new Set(rules.map((r) => r.profile_id))];
+  const allIds = (sessions ?? []).map((s) => s.id);
+  const taken = new Set<string>();
+  for (let i = 0; i < allIds.length; i += 100) {
+    const chunk = allIds.slice(i, i + 100);
+    const [{ data: had }, { data: waiting }] = await Promise.all([
+      db().from("bookings").select("profile_id, session_id").in("profile_id", pids).in("session_id", chunk),
+      db().from("waitlist_entries").select("profile_id, session_id").in("profile_id", pids).in("session_id", chunk),
+    ]);
+    for (const r of [...(had ?? []), ...(waiting ?? [])]) taken.add(`${r.profile_id}|${r.session_id}`);
+  }
+
   let total = 0;
-  for (const pid of [...new Set(rules.map((r) => r.profile_id))]) {
+  for (const pid of pids) {
     const mine = rules.filter((r) => r.profile_id === pid);
     const profile = mine[0].profiles!;
     const matches = (sessions ?? []).filter((s) => {
@@ -77,12 +90,7 @@ export async function applyRecurring(profileId?: string, opts: { defer?: boolean
       return mine.some((r) => r.class_type_id === s.class_type_id && r.weekday === weekday && r.start_time.slice(0, 5) === hhmm);
     });
     if (!matches.length) continue;
-    const ids = matches.map((s) => s.id);
-    const [{ data: had }, { data: waiting }] = await Promise.all([
-      db().from("bookings").select("session_id").eq("profile_id", pid).in("session_id", ids),
-      db().from("waitlist_entries").select("session_id").eq("profile_id", pid).in("session_id", ids),
-    ]);
-    const skip = new Set([...(had ?? []), ...(waiting ?? [])].map((r) => r.session_id));
+    const skip = new Set(matches.filter((s) => taken.has(`${pid}|${s.id}`)).map((s) => s.id));
     const booked: string[] = [];
     const usedUp = new Set<string>(); // credit kinds with no usable class left (reformer and mat run separately)
     for (const s of matches) {

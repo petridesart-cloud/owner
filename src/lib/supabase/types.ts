@@ -1399,6 +1399,8 @@ export type Database = {
           intro_line: string;
           last_cron_tick_at: string | null;
           last_tick_at: string | null;
+          last_tick_error: string | null;
+          last_tick_ok_at: string | null;
           legal_name: string;
           map_url: string;
           membership_period_mode: string;
@@ -1448,6 +1450,8 @@ export type Database = {
           intro_line?: string;
           last_cron_tick_at?: string | null;
           last_tick_at?: string | null;
+          last_tick_error?: string | null;
+          last_tick_ok_at?: string | null;
           legal_name?: string;
           map_url?: string;
           membership_period_mode?: string;
@@ -1496,6 +1500,8 @@ export type Database = {
           intro_line?: string;
           last_cron_tick_at?: string | null;
           last_tick_at?: string | null;
+          last_tick_error?: string | null;
+          last_tick_ok_at?: string | null;
           legal_name?: string;
           map_url?: string;
           membership_period_mode?: string;
@@ -1753,6 +1759,15 @@ export type Database = {
           remaining: number;
         }[];
       };
+      due_reminders: {
+        Args: { p_now?: string; p_offset: number };
+        Returns: {
+          booking_id: string;
+          profile_id: string;
+          session_id: string;
+          starts_at: string;
+        }[];
+      };
       erase_profile: { Args: { p_profile: string }; Returns: string };
       expire_credits: { Args: Record<PropertyKey, never>; Returns: number };
       expire_unpaid_requests: { Args: Record<PropertyKey, never>; Returns: string[] };
@@ -1801,6 +1816,14 @@ export type Database = {
           >;
         };
         Returns: boolean;
+      };
+      low_credit_groups: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          credit_kind: string;
+          lot_ids: string;
+          profile_id: string;
+        }[];
       };
       my_profile_id: { Args: Record<PropertyKey, never>; Returns: string };
       notification_reclaim: {
@@ -1918,6 +1941,8 @@ export type Database = {
           intro_line: string;
           last_cron_tick_at: string | null;
           last_tick_at: string | null;
+          last_tick_error: string | null;
+          last_tick_ok_at: string | null;
           legal_name: string;
           map_url: string;
           membership_period_mode: string;
@@ -2183,6 +2208,7 @@ export const Constants = {
         "private_prenatal_mat",
         "private_prenatal_reformer",
         "pre_natal_9f1b",
+        "pre_natal_mw5nqcyx",
       ],
       ledger_entry: [
         "grant",

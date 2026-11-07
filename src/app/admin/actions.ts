@@ -6,7 +6,7 @@ import { getSettings, requireAdmin } from "@/lib/auth";
 import { emailLive, env, paymentsLive } from "@/lib/env";
 import { db } from "@/lib/supabase/admin";
 import { EVENT_POLICY, cancelBooking, cancelSession, cancelSessions, notifyCancelled, notifyOffers, onPaymentPaid, policyLine, runTick, sessionInfo } from "@/lib/booking";
-import { later, notify, retryFailed } from "@/lib/notifications";
+import { later, notify, pool, retryFailed } from "@/lib/notifications";
 import { applyRecurring } from "@/lib/recurring";
 import { rewardCode } from "@/lib/rewards";
 import { defaultTerms } from "@/lib/terms";
@@ -857,7 +857,9 @@ export async function runTickNow(): Promise<ActionResult> {
   await admin("run_tick");
   const r = await runTick("admin");
   revalidatePath("/admin/outbox");
-  return { ok: true, message: `Done: ${r.reminders} reminders, ${r.offers} waitlist offers.` };
+  const done = `${r.reminders} reminders, ${r.offers} waitlist offers, ${r.retried} resent.`;
+  if (r.errors.length) return { ok: false, error: `Partly done (${done}) Some steps failed: ${r.errors.join(", ")}. Let your developer know.` };
+  return { ok: true, message: `Done: ${done}` };
 }
 
 // ── Import ─────────────────────────────────────────────────────────────
@@ -874,24 +876,38 @@ const ImportClient = z.object({
 export async function importClients(rows: Record<string, unknown>[]): Promise<ActionResult<{ created: number; updated: number; skipped: number }>> {
   await admin("import_clients", { count: rows.length });
   let created = 0, updated = 0, skipped = 0;
+  const valid: z.infer<typeof ImportClient>[] = [];
   for (const raw of rows.slice(0, 2000)) {
     const r = ImportClient.safeParse(raw);
-    if (!r.success) { skipped++; continue; }
-    const c = r.data;
-    const existing = c.email ? (await db().from("profiles").select("id").eq("email", c.email).is("deleted_at", null).maybeSingle()).data : null;
-    let id = existing?.id;
-    if (id) { await db().from("profiles").update({ full_name: c.full_name, phone: c.phone ?? undefined, admin_notes: c.notes ?? undefined }).eq("id", id); updated++; }
-    else {
-      const { data } = await db().from("profiles").insert({ full_name: c.full_name, email: c.email, phone: c.phone, admin_notes: c.notes }).select("id").single();
-      id = data?.id; created++;
-    }
-    if (!id) continue;
-    const expires = c.credits_expire && !Number.isNaN(Date.parse(c.credits_expire)) ? new Date(c.credits_expire).toISOString() : null;
-    for (const [kind, n] of [["reformer", c.reformer_credits], ["mat", c.mat_credits]] as const) {
-      if (!n) continue;
-      await db().rpc("grant_lot", { p_profile: id, p_kind: kind, p_credits: n, p_expires: expires as string /* null = never expires */, p_note: "Imported balance" });
-    }
+    if (r.success) valid.push(r.data); else skipped++;
   }
+  // Existing clients looked up in chunks, not one query per row (A-049), so a big file fits in the time limit.
+  const emails = [...new Set(valid.map((c) => c.email).filter((e): e is string => !!e))];
+  const known = new Map<string, string>();
+  for (let i = 0; i < emails.length; i += 200) {
+    const { data } = await db().from("profiles").select("id, email").in("email", emails.slice(i, i + 200)).is("deleted_at", null);
+    for (const p of data ?? []) if (p.email) known.set(p.email, p.id);
+  }
+  // Rows for the same email stay in file order (later rows update the first); different people run 5 at a time.
+  const groups = new Map<string, z.infer<typeof ImportClient>[]>();
+  valid.forEach((c, n) => { const k = c.email ?? `#${n}`; groups.set(k, [...(groups.get(k) ?? []), c]); });
+  await pool([...groups.values()], 5, async (group) => {
+    for (const c of group) {
+      let id = c.email ? known.get(c.email) : undefined;
+      if (id) { await db().from("profiles").update({ full_name: c.full_name, phone: c.phone ?? undefined, admin_notes: c.notes ?? undefined }).eq("id", id); updated++; }
+      else {
+        const { data } = await db().from("profiles").insert({ full_name: c.full_name, email: c.email, phone: c.phone, admin_notes: c.notes }).select("id").single();
+        id = data?.id; created++;
+        if (id && c.email) known.set(c.email, id);
+      }
+      if (!id) continue;
+      const expires = c.credits_expire && !Number.isNaN(Date.parse(c.credits_expire)) ? new Date(c.credits_expire).toISOString() : null;
+      for (const [kind, n] of [["reformer", c.reformer_credits], ["mat", c.mat_credits]] as const) {
+        if (!n) continue;
+        await db().rpc("grant_lot", { p_profile: id, p_kind: kind, p_credits: n, p_expires: expires as string /* null = never expires */, p_note: "Imported balance" });
+      }
+    }
+  });
   revalidatePath("/admin/clients");
   return { ok: true, data: { created, updated, skipped } };
 }
