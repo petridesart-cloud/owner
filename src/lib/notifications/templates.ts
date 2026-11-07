@@ -41,13 +41,13 @@ export type TemplateData = {
 /**
  * When the studio cancels a class: what happens to what the client paid with (A-031).
  * Package classes (and online-paid classes of a type with packages) come back as a class. A paid event has no class
- * to return: the studio sorts the money out by hand (refund or credit: her decision, docs/AUDIT.md "Open after Phase 4").
+ * to return, so it's refunded in full (her answer, 7 Nov): the payment shows on Today as a refund she pays back by hand.
  */
 export function cancelledOutcome(paidWith: string | null, hasCreditKind: boolean): string {
   if (paidWith === "credit" || (paidWith === "payment" && hasCreditKind)) {
     return "Any class I cancel is always replaced: your class is back in your account, so just pick another time that suits you.";
   }
-  if (paidWith === "payment") return "You've already paid for this, so I'll be in touch about your payment.";
+  if (paidWith === "payment") return "You've already paid for this, so you'll get a full refund. I'll pay it back the way you paid.";
   if (paidWith === "pay_at_studio") return "There's nothing to pay for this one. Book another time that suits you.";
   return "There's nothing to pay. Book another time that suits you.";
 }

@@ -448,6 +448,16 @@ export async function cancelPaymentRequest(paymentId: string): Promise<ActionRes
   return { ok: true };
 }
 
+/** A refund she paid back by hand (a paid event the studio cancelled, or a payment that came after the spot was gone; A-031). */
+export async function markRefunded(paymentId: string): Promise<ActionResult> {
+  await admin("mark_refunded", { paymentId });
+  const { data, error } = await db().from("payments").update({ status: "refunded" }).eq("id", paymentId).eq("status", "needs_refund").select("id");
+  if (error) return failed(error);
+  if (!data?.length) return { ok: false, error: "Already settled." };
+  revalidatePath("/admin", "layout");
+  return { ok: true };
+}
+
 /** Record an in-person renewal for an offline monthly package and grant the next period. */
 export async function renewMembership(membershipId: string, method: "cash" | "card_in_person" | "bank_transfer" | "revolut"): Promise<ActionResult> {
   await admin("renew_membership", { membershipId, method });

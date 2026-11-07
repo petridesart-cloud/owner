@@ -1,6 +1,6 @@
 "use client";
 import { useState, useTransition } from "react";
-import { cancelPaymentRequest, markPaid, renewMembership, setMembershipState } from "./actions";
+import { cancelPaymentRequest, markPaid, markRefunded, renewMembership, setMembershipState } from "./actions";
 
 const btn = "min-h-10 rounded-full border px-3 text-xs font-medium transition active:scale-[0.97] disabled:opacity-50";
 
@@ -33,6 +33,20 @@ export function RemoveRequest({ paymentId, label }: { paymentId: string; label: 
       onClick={() => confirm(`Remove this unpaid request?\n${label}`) && start(async () => { const r = await cancelPaymentRequest(paymentId); setMsg(r.ok ? "Removed" : r.error); })}
       className="min-h-10 rounded-full px-2 text-xs font-medium text-burgundy underline-offset-4 hover:underline disabled:opacity-50">
       Remove
+    </button>
+  );
+}
+
+/** "Refunded": she has paid the money back by hand (A-031). */
+export function MarkRefunded({ paymentId, label }: { paymentId: string; label: string }) {
+  const [pending, start] = useTransition();
+  const [msg, setMsg] = useState<string | null>(null);
+  if (msg) return <span role="status" className="text-xs font-medium text-plum-700">{msg}</span>;
+  return (
+    <button disabled={pending} aria-label={`Mark as refunded: ${label}`}
+      onClick={() => confirm(`Have you paid this back?\n${label}`) && start(async () => { const r = await markRefunded(paymentId); setMsg(r.ok ? "Refunded ✓" : r.error); })}
+      className={`${btn} shrink-0 border-ink bg-ink text-paper`}>
+      Refunded
     </button>
   );
 }

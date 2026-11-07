@@ -52,10 +52,10 @@ describe("health consent rule (A-105)", () => {
 });
 
 describe("studio-cancelled class: what happens to what they paid with (A-031)", () => {
-  test("package classes come back; a paid event isn't promised a class; unpaid and free say nothing to pay", () => {
+  test("package classes come back; a paid event is refunded in full (her answer, 7 Nov); unpaid and free say nothing to pay", () => {
     assert.match(cancelledOutcome("credit", true), /class is back in your account/);
     assert.match(cancelledOutcome("payment", true), /class is back in your account/);
-    assert.match(cancelledOutcome("payment", false), /in touch about your payment/);
+    assert.match(cancelledOutcome("payment", false), /full refund/);
     assert.doesNotMatch(cancelledOutcome("payment", false), /back in your account/);
     assert.match(cancelledOutcome("pay_at_studio", true), /nothing to pay/);
     assert.match(cancelledOutcome("free", false), /nothing to pay/);
@@ -63,9 +63,9 @@ describe("studio-cancelled class: what happens to what they paid with (A-031)", 
 
   test("the class_cancelled email and SMS use that outcome", () => {
     const r = render("class_cancelled", { className: "SUP Pilates", when: "Sat", outcome: cancelledOutcome("payment", false) });
-    assert.ok(r.lines.some((l) => /in touch about your payment/.test(l)));
+    assert.ok(r.lines.some((l) => /full refund/.test(l)));
     assert.ok(!r.lines.some((l) => /back in your account/.test(l)));
-    assert.match(r.sms, /in touch about your payment/);
+    assert.match(r.sms, /full refund/);
     assert.match(render("class_cancelled", { className: "Reformer", when: "Mon" }).sms, /back in your account/);
   });
 

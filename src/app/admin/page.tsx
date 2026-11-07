@@ -5,7 +5,7 @@ import { db } from "@/lib/supabase/admin";
 import { addDaysKey, localToUtc, longDate, time, todayKey } from "@/lib/time";
 import { scheduleTick } from "@/lib/tick";
 import { CheckInToggle } from "./RosterControls";
-import { MarkPaid, RemoveRequest, RenewButtons } from "./PaymentButtons";
+import { MarkPaid, MarkRefunded, RemoveRequest, RenewButtons } from "./PaymentButtons";
 import { ActionForm } from "@/components/ActionForm";
 import { Field, inputClass } from "@/components/ui";
 import { cancelToday } from "./actions";
@@ -34,8 +34,8 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const booked = live.reduce((n, s) => n + s.roster.length, 0);
   const cap = live.reduce((n, s) => n + s.capacity, 0);
   const isToday = key === todayKey();
-  const [{ count: pendingRefunds }, { data: awaiting }, { data: renewals }] = await Promise.all([
-    db().from("payments").select("id", { count: "exact", head: true }).eq("status", "needs_refund"),
+  const [{ data: refunds }, { data: awaiting }, { data: renewals }] = await Promise.all([
+    db().from("payments").select("id, description, amount_cents, method, profiles(id, full_name)").eq("status", "needs_refund").order("created_at"),
     db().from("payments").select("id, description, amount_cents, created_at, purpose, intended_method, discount_note, profiles(id, full_name)").eq("status", "pending").eq("provider", "offline").order("created_at"),
     db().from("memberships").select("id, current_period_end, status, profiles(id, full_name), products!memberships_product_id_fkey(name, price_cents)")
       .eq("provider", "offline").eq("cancel_at_period_end", false).in("status", ["active", "past_due"])
@@ -69,10 +69,22 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
           Part of the automatic work didn&apos;t run last time ({settings.last_tick_error}). Open <Link href="/admin/outbox" className="font-medium underline underline-offset-4">Settings → Messages</Link> and tap &ldquo;Send due reminders now&rdquo;; if it keeps showing, let your developer know.
         </p>
       ) : null}
-      {(pendingRefunds ?? 0) > 0 && (
-        <p role="status" className="mb-5 rounded-2xl border border-burgundy/25 bg-burgundy-soft px-4 py-3 text-sm text-burgundy">
-          {pendingRefunds} payment{pendingRefunds === 1 ? "" : "s"} need a refund or a credit by hand (paid after the spot was gone, or an event you cancelled). Settle each with the client the way they paid.
-        </p>
+      {(refunds ?? []).length > 0 && (
+        <section className="card mb-5 overflow-hidden border-burgundy/25" aria-labelledby="refunds">
+          <h2 id="refunds" className="display border-b border-line px-4 py-3 text-[0.95rem] text-burgundy">Refunds to pay back</h2>
+          <p className="px-4 pt-3 text-xs text-ink-soft">A full refund by hand, the way they paid (an event you cancelled, or paid after the spot was gone). Tap Refunded once you&apos;ve paid it back.</p>
+          <ul className="divide-y divide-line">
+            {refunds!.map((p) => (
+              <li key={p.id} className="flex items-center gap-3 px-4 py-3">
+                <div className="min-w-0 flex-1">
+                  <Link href={`/admin/clients/${p.profiles?.id}`} className="block truncate text-sm font-medium text-ink hover:underline">{p.profiles?.full_name ?? "Client"}</Link>
+                  <p className="truncate text-xs text-ink-soft">{p.description} · {eur(p.amount_cents)}{p.method ? ` · paid by ${METHOD[p.method] ?? p.method}` : ""}</p>
+                </div>
+                <MarkRefunded paymentId={p.id} label={`${p.profiles?.full_name ?? "Client"}: ${p.description}`} />
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       {isToday && (awaiting ?? []).length > 0 && (
