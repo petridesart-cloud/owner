@@ -217,7 +217,8 @@ describe("memberships", () => {
     const { membershipId } = await startMembership(p);
     const before = (await db.from("memberships").select("current_period_end").eq("id", membershipId).single()).data!.current_period_end;
     await db.rpc("pause_membership", { p_membership: membershipId });
-    await new Promise((r) => setTimeout(r, 1200));
+    // Backdate the pause instead of sleeping: the paused time is what resume adds to the period.
+    await db.from("memberships").update({ paused_at: new Date(Date.now() - 2000).toISOString() }).eq("id", membershipId);
     await db.rpc("resume_membership", { p_membership: membershipId });
     const afterEnd = (await db.from("memberships").select("current_period_end").eq("id", membershipId).single()).data!.current_period_end;
     assert.ok(new Date(afterEnd).getTime() - new Date(before).getTime() >= 1000);

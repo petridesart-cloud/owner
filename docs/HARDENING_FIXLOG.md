@@ -116,3 +116,22 @@
 | A-108 | Low | credit→class copy pass, `monthsLabel`, `eur` shared, `dotDate(keyToDate())`, imports ordered. Not done: tmpl export, parq alias | typecheck, unit | A-108 |
 | A-064 | Medium | `lotIsCurrent()` shared; events guard and capacity in SQL (WP3); freeze days in SQL (WP12); timezone documented fixed. Left: low-class notice ignores freezes | typecheck | A-064 |
 | A-003 | Critical | Runbook `docs/launch/3-backup-restore.md`, disabled `.github/workflows/backup.yml` template, setup.sql "DEMO / LOCAL ONLY" header. Owner: Pro plan and/or the nightly dump secrets, one restore drill | docs only | A-003, A-058, A-069: runbook and docs |
+
+## Test map
+
+The nine mandatory tests of AUDIT §4.1. `E` = `tests/engine.test.ts`, `U` = `tests/unit.test.ts`, `N` = `tests/notify.test.ts`.
+
+| Mandatory test | File | Test name |
+|---|---|---|
+| Concurrent last-spot booking | E | "concurrent bookings never exceed capacity"; "concurrent last spot: two parallel bookings for one remaining spot, exactly one gets it"; "A-005: a free spot with people waiting is refused online (waitlist_first)…" |
+| Double-tap booking | E; `e2e/resilience.spec.ts` | "double tap: same client, same class, twice at once…"; "concurrent bookings never overspend credits"; "A-004: parallel trials, parallel drop-ins…"; "A-034: two package requests at once leave one pending row"; e2e "a lost response while booking shows a calm notice, and the booking exists once" |
+| Cancellation at the cutoff boundary | E; U | "cancellation exactly at the 6h cutoff: 1 ms inside is late, exactly 6h is in time"; "cancellation cutoff is 6 hours"; "6h cutoff is real elapsed time across the clock change"; U "late-cancel wording (A-028)" |
+| DST-boundary reminders | E; U | E "DST: due_reminders(1440) and (120) select a booking at 08:00 the day after spring-forward exactly once…"; U "A-095: localToUtc round-trips every 30 minutes on the four clock-change days", "A-097: reminder wording follows the class day…", "A-046: the expiry email names the last day…"; E "A-047: extending a fixed end across the 2027 clock changes…" |
+| Credit ledger invariants | E | `assertLedgerInvariant()` in the race, payment, waitlist and studio-cancel tests; "ledger and cached balances agree for every lot"; "the ledger is append-only"; "TRUNCATE credit_ledger is refused even for the database owner"; "the erasure exception only clears ledger notes…"; "A-038: reward classes are added inside Mark as paid, exactly once" |
+| Waitlist promotion | E; `e2e/waitlist.spec.ts` | "a spot that opens more than 1h before class books the first in line…"; "without a usable class, the first in line gets a held offer"; "A-005: a cancel books the first in line in the same call…"; "A-082"; "A-083"; "A-081"; e2e "full class offers the waitlist" |
+| Authorization: client A vs B | `e2e/authz.spec.ts`; E | e2e "client B can't open client A's receipt, calendar file, package or booking, or cancel A's class"; E "RLS: anon key and client JWTs": "client A reads only A's rows…", "engine functions can't be executed…", "clients-only events and private sessions are hidden…" |
+| Authorization: client vs admin | `e2e/authz.spec.ts`, `e2e/admin.spec.ts`; E | e2e "a client can't use the studio's actions or exports"; E "RLS: only a studio member with can_view_health reads health notes"; "Studio-team invites aren't admin profiles…" |
+| Studio cancels a class: refunds | E; U | "studio cancels a class: a 2-class booking gets both classes back on the same package (studio_cancel)"; "A-033"; "A-031"; "A-038: confirming a closure cancels its classes, credits clients and blocks bookings in one call"; U "studio-cancelled class: what happens to what they paid with (A-031)" |
+| Account deletion | E; `e2e/account.spec.ts` | E "account deletion leaves nothing identifiable, keeps anonymised records and moves the waitlist up"; "erasing a profile clears the round-1 personal fields…"; e2e "a client exports their data, deletes their account, and their spot is freed" |
+
+A-067 backfill (private sessions, `credit_cost>1`, closures, `applyRecurring` in `N`, reminders and opt-out, health, email matching, `extend_timetable`, RLS) was already covered by WP2 to WP13; WP14 only replaced the fixed 1.2 s sleep in the pause/resume test by backdating `paused_at`.

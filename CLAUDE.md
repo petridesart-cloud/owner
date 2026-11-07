@@ -179,13 +179,15 @@ npx supabase db reset         # migrations + demo seed
 cp .env.example .env.local    # fill in the local keys printed by `supabase start`; DEMO_MODE=true
 npm run dev                   # http://localhost:3000
 npm run typecheck && npm run lint
-PW_CHROMIUM=/opt/pw-browsers/chromium npm run test:e2e   # 11 flows (incl. hidden tabs): sign-up/password/reset, booking, cancel, waitlist, packages, rewards, building a class type, admin access
-npm run test:engine          # booking-engine tests (local Supabase)
-npm run test:unit            # pure TypeScript helpers (no database)
-npm run test:notify          # notifications (retry, timeouts) and tick isolation, provider stubbed (local Supabase)
+npm run check:dead            # knip: unused files/exports (informational)
+PW_CHROMIUM=/opt/pw-browsers/chromium npm run test:e2e   # 32 tests in 15 files (build first, serve with `next start -p 3000`): sign-up/password/reset, linking, booking, cancel, waitlist, packages, rewards, offers, health, account export/delete, legal, a11y (axe), authz, resilience, admin
+npm run test:engine          # 109 booking-engine and RLS tests (local Supabase)
+npm run test:unit            # 41 pure TypeScript helper tests (no database)
+npm run test:notify          # 16 notification, tick and recurring tests, provider stubbed (local Supabase)
+npm run test:migrate         # 2 tests: migration runner, parallel runs take a lock
 # Stripe webhooks (signature, credits once, expired): start the app with test-only keys, then
 STRIPE_SECRET_KEY=sk_test_dummy STRIPE_WEBHOOK_SECRET=whsec_test_dummy npx next start -p 3002 &
-npm run test:webhook
+npm run test:webhook         # 3 tests
 npm run db:types              # after schema changes
 ```
 - **Live admins:** petridesart@gmail.com and elysia.stephani@gmail.com (`ADMIN_EMAILS` in Vercel); more can be added in Admin → Settings → Studio team.
