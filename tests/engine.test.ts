@@ -1123,6 +1123,14 @@ describe("WP3: engine hardening", () => {
     assert.equal((await db.from("credit_lots").select("id").eq("profile_id", p)).data!.length, 0);
   });
 
+  test("A-037: a code limited to one use can't be used twice at once", async () => {
+    const { data: code } = await db.from("discount_codes").insert({ code: `WP3${Date.now().toString(36).toUpperCase()}`, kind: "percent", value: 10, max_uses: 1 }).select("id").single();
+    const [a, b] = [await client("wp3-code-a"), await client("wp3-code-b")];
+    const res = await parallel(2, (c, i) => c`insert into payments (profile_id, provider, amount_cents, purpose, description, status, discount_code_id)
+      values (${i ? b : a}, 'offline', 6300, 'pack', 'WP3 code', 'pending', ${code!.id})`.then(() => "ok", (e: Error) => e.message));
+    assert.deepEqual(res.sort(), ["code_used_up", "ok"]);
+  });
+
   test("A-038: reward classes are added inside Mark as paid, exactly once", async () => {
     const p = await client("wp3-reward");
     const { data: code } = await db.from("discount_codes").insert({ code: `RW-WP3${Date.now().toString(36).toUpperCase()}`, kind: "free_classes", value: 2, profile_id: p }).select("id").single();

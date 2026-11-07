@@ -138,8 +138,14 @@ export async function bookSingle(profile: Profile, sessionId: string, mode: "tri
     const d = withDiscount(pay.amount_cents, pay.amount_cents, found.discount);
     if (d.applies && d.cents < pay.amount_cents) {
       const note = `${found.discount.personal ? "Reward" : `Code ${found.discount.code}`}: ${found.discount.label}`;
+      // The database re-checks the code's limits with the code locked (A-037). If it was used up in the
+      // meantime, don't leave them booked at a price they didn't agree to: release the spot and say why.
       const { error: e } = await db().from("payments").update({ amount_cents: d.cents, discount_code_id: found.discount.id, discount_note: note }).eq("id", pay.id);
-      if (!e) pay = { ...pay, amount_cents: d.cents };
+      if (e) {
+        await releaseBooking(bookingId, profile.id, true);
+        return { ok: false, error: `${friendlyError(e)} Your spot wasn't kept. Book again without the code, or try another one.` };
+      }
+      pay = { ...pay, amount_cents: d.cents };
     }
   }
   const how = method === "revolut" ? "by Revolut" : "in cash at the studio";
