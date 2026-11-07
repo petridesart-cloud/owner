@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { openBookableClass, serviceDb, signUp, startSignUp, uniqueEmail } from "./helpers";
+import { adminSignIn, openBookableClass, serviceDb, signUp, startSignUp, uniqueEmail } from "./helpers";
 
 // A-001 / A-105: health data is a real choice, never pre-ticked, and can be deleted.
 
@@ -90,4 +90,25 @@ test("'No injuries' with only other medication asks for consent and saves (A-105
   await page.waitForURL(/\/account/);
   const db = serviceDb();
   expect((await db.from("health_notes").select("medication").eq("profile_id", await profileId(email)).single()).data?.medication).toBe("Thyroxine");
+});
+
+test("a studio member without health access gets no health answers in a client export (V-001)", async ({ page }) => {
+  const db = serviceDb();
+  const { data: c } = await db.from("profiles").insert({ full_name: "Hana Health", email: uniqueEmail("hexp"), phone: "+357 99 555111" }).select("id").single();
+  await db.from("health_notes").insert({ profile_id: c!.id, conditions: ["back"], details: "V001-HEALTH-MARKER", consent_at: new Date().toISOString() });
+  await db.from("health_history").insert({ profile_id: c!.id, conditions: ["back"], details: "V001-HEALTH-MARKER" });
+  // A second studio member (not the instructor): admin, but no can_view_health.
+  const staff = uniqueEmail("staff");
+  await db.from("profiles").insert({ full_name: "Sam Staff", email: staff, role: "admin", can_view_health: false });
+  await adminSignIn(page, staff, process.env.E2E_ADMIN_CODE ?? "24681357");
+  const res = await page.request.get(`/admin/clients/${c!.id}/export`);
+  expect(res.status()).toBe(200);
+  const body = await res.text();
+  expect(body).toContain("Hana Health");
+  expect(body).not.toContain("V001-HEALTH-MARKER");
+  expect((await db.from("profiles").select("can_view_health").eq("email", staff).single()).data?.can_view_health).toBe(false);
+  // The instructor's export still has them.
+  await page.context().clearCookies();
+  await adminSignIn(page, process.env.E2E_ADMIN_EMAIL ?? "studio@example.com", process.env.E2E_ADMIN_CODE ?? "24681357");
+  expect(await (await page.request.get(`/admin/clients/${c!.id}/export`)).text()).toContain("V001-HEALTH-MARKER");
 });

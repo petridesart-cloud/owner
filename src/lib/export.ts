@@ -12,12 +12,16 @@ function rows<T>(res: { data: T; error: { message: string } | null }, what: stri
   return res.data;
 }
 
+const HEALTH_WITHHELD = "[not included: only the instructor can export health answers]";
+
 /**
  * GDPR art. 15/20 (A-063, A-059): everything the studio holds about one person, as plain JSON, with the
  * Art. 15 information (who, why, how long, who else sees it, their rights). Used by the client's own
  * download (Account → Privacy & data) and by the studio for people without a login.
  */
-export async function exportProfile(profileId: string) {
+export async function exportProfile(profileId: string, opts: { health?: boolean } = {}) {
+  // Health answers only for the person themselves or the instructor (can_view_health, A-001 / V-001).
+  const withHealth = opts.health ?? true;
   const { data: profile, error } = await db().from("profiles").select("*").eq("id", profileId).maybeSingle();
   if (error) throw new Error("db_unavailable");
   if (!profile) return null;
@@ -25,8 +29,8 @@ export async function exportProfile(profileId: string) {
   const lots = rows(await db().from("credit_lots").select("id, credit_kind, total, remaining, expires_at, created_at, note").eq("profile_id", id), "lots") ?? [];
   const lotIds = lots.map((l) => l.id);
   const [health, healthHistory, consents, bookings, waitlist, ledger, freezes, payments, messages, about, weekly, rewards, memberships, events, audit] = await Promise.all([
-    db().from("health_notes").select("note, injuries, medication, parq_yes, conditions, details, pregnancy, pregnancy_weeks, postpartum_months, bp_meds, clearance_needed, clearance_received_at, consent_at, updated_at").eq("profile_id", id).maybeSingle(),
-    db().from("health_history").select("conditions, details, pregnancy, pregnancy_weeks, postpartum_months, bp_meds, medication, clearance_needed, created_at").eq("profile_id", id).order("created_at"),
+    !withHealth ? Promise.resolve({ data: null, error: null }) : db().from("health_notes").select("note, injuries, medication, parq_yes, conditions, details, pregnancy, pregnancy_weeks, postpartum_months, bp_meds, clearance_needed, clearance_received_at, consent_at, updated_at").eq("profile_id", id).maybeSingle(),
+    !withHealth ? Promise.resolve({ data: [], error: null }) : db().from("health_history").select("conditions, details, pregnancy, pregnancy_weeks, postpartum_months, bp_meds, medication, clearance_needed, created_at").eq("profile_id", id).order("created_at"),
     db().from("consents").select("type, granted, version, created_at").eq("profile_id", id).order("created_at"),
     db().from("bookings").select("status, source, paid_with, answer, note, created_at, cancelled_at, checked_in_at, class_sessions(starts_at, title, class_types(name))").eq("profile_id", id),
     db().from("waitlist_entries").select("status, created_at, offered_at, offer_expires_at, class_sessions(starts_at)").eq("profile_id", id),
@@ -73,8 +77,8 @@ export async function exportProfile(profileId: string) {
     },
     profile: mine,
     login: auth,
-    health_info: rows(health, "health"),
-    health_info_history: rows(healthHistory, "health history"),
+    health_info: withHealth ? rows(health, "health") : HEALTH_WITHHELD,
+    health_info_history: withHealth ? rows(healthHistory, "health history") : HEALTH_WITHHELD,
     consents: rows(consents, "consents"),
     bookings: rows(bookings, "bookings"),
     waitlist: rows(waitlist, "waitlist"),

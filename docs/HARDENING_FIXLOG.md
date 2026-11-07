@@ -116,6 +116,7 @@
 | A-108 | Low | credit→class copy pass, `monthsLabel`, `eur` shared, `dotDate(keyToDate())`, imports ordered. Not done: tmpl export, parq alias | typecheck, unit | A-108 |
 | A-064 | Medium | `lotIsCurrent()` shared; events guard and capacity in SQL (WP3); freeze days in SQL (WP12); timezone documented fixed. Left: low-class notice ignores freezes | typecheck | A-064 |
 | A-003 | Critical | Runbook `docs/launch/3-backup-restore.md`, disabled `.github/workflows/backup.yml` template, setup.sql "DEMO / LOCAL ONLY" header. Owner: Pro plan and/or the nightly dump secrets, one restore drill | docs only | A-003, A-058, A-069: runbook and docs |
+| V-001 | High | The studio's client export (`/admin/clients/[id]/export`) leaves out health answers and their history unless the admin has `can_view_health`; it said so in the file instead | e2e "a studio member without health access gets no health answers in a client export (V-001)" | V-001 |
 
 ## Test map
 

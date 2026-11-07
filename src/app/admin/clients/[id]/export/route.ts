@@ -1,4 +1,4 @@
-import { getViewer } from "@/lib/auth";
+import { canViewHealth, getViewer } from "@/lib/auth";
 import { db } from "@/lib/supabase/admin";
 import { exportProfile } from "@/lib/export";
 
@@ -9,7 +9,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   if (viewer?.profile.role !== "admin") return new Response("Not found", { status: 404 });
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/.test(id)) return new Response("Not found", { status: 404 });
-  const body = await exportProfile(id);
+  const body = await exportProfile(id, { health: await canViewHealth() });
   if (!body) return new Response("Not found", { status: 404 });
   // Who exported whom, without personal data.
   await db().from("audit_log").insert({ actor_profile_id: viewer.profile.id, action: "export_client", details: { profileId: id } });
