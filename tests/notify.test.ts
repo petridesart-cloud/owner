@@ -277,3 +277,24 @@ describe("A-032: nothing promises a free-cancel time that has passed (her answer
     assert.ok(ids.includes(s2), "the next week's class was");
   });
 });
+
+describe("a deleted login's leftover token (WP13)", () => {
+  test("ensureProfile creates nothing for a user id that no longer exists in Auth, and still works for a real login", async () => {
+    const { ensureProfile } = await import("../src/lib/auth");
+    const ghost = crypto.randomUUID();
+    assert.equal(await ensureProfile(ghost, mail("ghost")), null);
+    const { count } = await db.from("profiles").select("id", { count: "exact", head: true }).eq("user_id", ghost);
+    assert.equal(count, 0);
+    const email = mail("real");
+    const { data: made, error } = await db.auth.admin.createUser({ email, email_confirm: true });
+    assert.ifError(error);
+    const p = await ensureProfile(made.user!.id, email);
+    assert.ok(p, "a real login still gets its profile");
+    // Delete the login, as erasure does: the same token can no longer create another profile.
+    await db.from("profiles").delete().eq("id", p.id);
+    await db.auth.admin.deleteUser(made.user!.id);
+    assert.equal(await ensureProfile(made.user!.id, email), null);
+    const { count: after } = await db.from("profiles").select("id", { count: "exact", head: true }).eq("user_id", made.user!.id);
+    assert.equal(after, 0);
+  });
+});

@@ -37,6 +37,9 @@ export async function ensureProfile(userId: string, email?: string | null, opts:
   const { data: mine, error } = await db().from("profiles").select("*").eq("user_id", userId).is("deleted_at", null).maybeSingle();
   if (error) throw unavailable(error);
   if (mine) return mine;
+  // WP13: with asymmetric keys a deleted login's token stays valid for up to an hour. Before a profile is created
+  // or linked for this id (the only way such a token could act), check that the login still exists.
+  if (!(await loginExists(userId))) return null;
   const address = email ? normEmail(email) : null;
   if (address) {
     const { data: other, error: e2 } = await db().from("profiles").select("id, user_id").eq("email", address).is("deleted_at", null).maybeSingle();
@@ -50,6 +53,15 @@ export async function ensureProfile(userId: string, email?: string | null, opts:
   }
   const { data: created } = await db().from("profiles").insert({ user_id: userId, email: address }).select("*").maybeSingle();
   return created;
+}
+
+/** Does this login still exist in Auth? A deleted or erased account's leftover token must never create a profile. */
+export async function loginExists(userId: string): Promise<boolean> {
+  const { data, error } = await db().auth.admin.getUserById(userId);
+  if (data?.user) return true;
+  if (error && (error.status === 404 || error.code === "user_not_found")) return false;
+  if (error) throw unavailable(error);
+  return false;
 }
 
 export async function requireViewer(next = "/") {
@@ -68,6 +80,8 @@ export async function requireAdmin() {
   const viewer = await getViewer();
   if (!viewer) redirect("/login?next=/admin");
   if (viewer.profile.role !== "admin") redirect("/");
+  // Studio pages only: one cheap check that the login behind the token still exists (the token can outlive it by an hour).
+  if (!(await loginExists(viewer.userId))) redirect("/login?next=/admin");
   return viewer;
 }
 

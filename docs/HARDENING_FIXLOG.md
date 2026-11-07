@@ -102,3 +102,4 @@
 | A-110 | Low | Demo banner inside header (role=note), legal table scroll region (focusable), class page title + sr-only dt (see A-024) | e2e axe | A-109, A-110 |
 | A-071 | Medium | (follow-up) ClassRow named from content + sr-only date/action; DayStrip text spaced; axe-core e2e on Sign-up, Home, Schedule, Packs, My classes, Account, Health | e2e/a11y.spec.ts | A-071: axe e2e |
 | A-075 | Medium | (follow-up) nowrap labels at 320px | screenshots 390/320 | A-075 follow-up |
+| A-021 | High | (follow-up, WP13) `loginExists()`: ensureProfile creates/links nothing and requireAdmin refuses when the Auth user is gone | notify.test.ts "a deleted login's leftover token" | A-021 follow-up |
