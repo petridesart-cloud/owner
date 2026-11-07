@@ -2,9 +2,10 @@
 import { redirect } from "next/navigation";
 import { safeNext } from "@/lib/safe-next";
 import { z } from "zod";
-import { db } from "@/lib/supabase/admin";
 import { getSettings, requireViewer } from "@/lib/auth";
-import { PHOTO_CONSENT, dobSchema, fullName, nameSchema, phoneSchema, type PhotoConsent } from "@/lib/profile";
+import { dobSchema, nameSchema, phoneSchema } from "@/lib/profile";
+import { onboard } from "@/lib/auth-flow";
+import { friendlyError } from "@/lib/errors";
 
 export type WelcomeState = { ok: boolean; errors?: Record<string, string>; redirect?: string };
 
@@ -24,24 +25,14 @@ export async function completeWelcome(_: WelcomeState, form: FormData): Promise<
   if (!policy) errors.policy = "Please accept the Studio Rules and Terms to book.";
   if (Object.keys(errors).length || !parsed.success) return { ok: false, errors };
 
-  const p = viewer.profile;
-  const marketingEmail = form.get("marketing_email") === "on";
-  const photoConsent: PhotoConsent | null = photos in PHOTO_CONSENT ? (photos as PhotoConsent) : null;
-  await db().from("profiles").update({
-    first_name: parsed.data.first_name, last_name: parsed.data.last_name, full_name: fullName(parsed.data.first_name, parsed.data.last_name),
-    phone: parsed.data.phone, date_of_birth: parsed.data.date_of_birth, email: viewer.email.toLowerCase(), photo_consent: photoConsent,
-    marketing_email: marketingEmail, marketing_sms: false, onboarded_at: new Date().toISOString(),
-  }).eq("id", p.id);
-
-  const v = settings.policy_version;
-  const rows: { profile_id: string; type: "policy" | "terms" | "fitness_declaration" | "marketing_email" | "marketing_sms" | "photos"; granted: boolean; version: string }[] = [
-    { profile_id: p.id, type: "policy", granted: true, version: v },
-    { profile_id: p.id, type: "terms", granted: true, version: v },
-    { profile_id: p.id, type: "fitness_declaration", granted: true, version: v },
-    { profile_id: p.id, type: "marketing_email", granted: marketingEmail, version: v },
-  ];
-  if (photoConsent) rows.push({ profile_id: p.id, type: "photos", granted: photoConsent !== "none", version: `${v}:${photoConsent}` });
-  await db().from("consents").insert(rows);
+  // Details and consents in one transaction (A-019), shared with sign-up confirmation.
+  try {
+    await onboard(viewer.profile, viewer.email, {
+      ...parsed.data, photo_consent: photos, marketing_email: form.get("marketing_email") === "on",
+    }, settings.policy_version);
+  } catch (e) {
+    return { ok: false, errors: { form: friendlyError(e) } };
+  }
   // Step 2: the health questions on their own page.
   const next = String(form.get("next") ?? "/");
   redirect(`/health?next=${encodeURIComponent(safeNext(next))}`);

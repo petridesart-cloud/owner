@@ -5,6 +5,8 @@ import { getSettings } from "@/lib/auth";
 import { later, notify } from "@/lib/notifications";
 import { env } from "@/lib/env";
 import { STUDIO_TZ, spokenDateTime, time } from "@/lib/time";
+import { must } from "@/lib/errors";
+import type { Json } from "@/lib/supabase/types";
 
 // Weekly repeat bookings: "every Monday 16:30 and Wednesday 19:00".
 // Weekdays are ISO (1 = Monday) in studio time.
@@ -124,12 +126,9 @@ export async function applyRecurring(profileId?: string, opts: { defer?: boolean
 
 /** Replace the client's weekly rules with the chosen slots, then book what's open. */
 export async function saveRecurring(profileId: string, slots: { classTypeId: string; weekday: number; hhmm: string }[]) {
-  await db().from("recurring_rules").update({ active: false }).eq("profile_id", profileId).eq("active", true);
-  if (slots.length) {
-    const { error } = await db().from("recurring_rules").insert(
-      slots.map((s) => ({ profile_id: profileId, class_type_id: s.classTypeId, weekday: s.weekday, start_time: s.hhmm })),
-    );
-    if (error) throw error;
-  }
+  // Old rules off and new ones on in one transaction (A-019): a failure leaves the old rules as they were.
+  must(await db().rpc("replace_recurring_rules", {
+    p_profile: profileId, p_slots: slots.map((s) => ({ class_type_id: s.classTypeId, weekday: s.weekday, time: s.hhmm })) as unknown as Json,
+  }), "replace_recurring_rules");
   return applyRecurring(profileId, { defer: true });
 }

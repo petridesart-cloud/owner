@@ -1287,3 +1287,43 @@ describe("WP5: tick queries", () => {
     }
   });
 });
+
+describe("WP6: atomic writes (A-019, A-054)", () => {
+  test("save_timetable with an unknown class type changes nothing (old future classes stay)", async () => {
+    const before = (await db.from("class_sessions").select("id", { count: "exact", head: true }).gt("starts_at", new Date().toISOString())).count;
+    const templates = (await db.from("timetable_templates").select("id", { count: "exact", head: true })).count;
+    const r = await db.rpc("save_timetable", { p_name: "bad", p_from: todayKey(), p_slots: [
+      { weekday: 1, time: "07:00", class_type_id: reformer },
+      { weekday: 2, time: "07:00", class_type_id: "00000000-0000-0000-0000-000000000000" },
+    ] as unknown as Json });
+    assert.equal(r.error?.message, "unknown_class_type");
+    assert.equal((await db.from("class_sessions").select("id", { count: "exact", head: true }).gt("starts_at", new Date().toISOString())).count, before);
+    assert.equal((await db.from("timetable_templates").select("id", { count: "exact", head: true })).count, templates);
+  });
+
+  test("onboard_profile saves details and consents together, or neither", async () => {
+    const p = (await db.from("profiles").insert({ email: `t-onb-${Date.now()}@example.com` }).select("id").single()).data!.id;
+    const args = { p_profile: p, p_first: "Ana", p_last: "K", p_full: "Ana K", p_phone: "+357 99 111111", p_dob: "1990-02-02", p_email: "ANA@example.com", p_marketing: false, p_version: "v1" };
+    // A photo choice the column refuses: the whole save rolls back (no onboarded_at, no consents).
+    const bad = await db.rpc("onboard_profile", { ...args, p_photo: "sideways" });
+    assert.ok(bad.error);
+    assert.equal((await db.from("profiles").select("onboarded_at").eq("id", p).single()).data!.onboarded_at, null);
+    assert.equal((await db.from("consents").select("id", { count: "exact", head: true }).eq("profile_id", p)).count, 0);
+    assert.ifError((await db.rpc("onboard_profile", { ...args, p_photo: "no_face" })).error);
+    const row = (await db.from("profiles").select("onboarded_at, email, full_name").eq("id", p).single()).data!;
+    assert.ok(row.onboarded_at);
+    assert.equal(row.email, "ana@example.com");
+    assert.equal((await db.from("consents").select("id", { count: "exact", head: true }).eq("profile_id", p)).count, 5);
+  });
+
+  test("replace_recurring_rules keeps the old rules when a new one is bad", async () => {
+    const p = await client("rr");
+    assert.ifError((await db.rpc("replace_recurring_rules", { p_profile: p, p_slots: [{ class_type_id: reformer, weekday: 1, time: "18:00" }] as unknown as Json })).error);
+    const bad = await db.rpc("replace_recurring_rules", { p_profile: p, p_slots: [
+      { class_type_id: reformer, weekday: 2, time: "18:00" }, { class_type_id: reformer, weekday: 9, time: "18:00" },
+    ] as unknown as Json });
+    assert.ok(bad.error);
+    const live = (await db.from("recurring_rules").select("weekday").eq("profile_id", p).eq("active", true)).data!;
+    assert.deepEqual(live.map((r) => r.weekday), [1]);
+  });
+});

@@ -8,6 +8,7 @@ import { normEmail } from "@/lib/request-keys";
 import { alertStudio } from "@/lib/studio-alerts";
 import { safeNext } from "@/lib/safe-next";
 import { fullName, PHOTO_CONSENT, type PhotoConsent } from "@/lib/profile";
+import { must } from "@/lib/errors";
 
 /** Demo only: every demo client (…@example.com) signs in with this password, shown on the sign-in page. */
 export const DEMO_CLIENT_PASSWORD = "reform-demo";
@@ -114,18 +115,10 @@ export type SignupDetails = {
 /** A new account's details, saved once the email is confirmed (with the consents she needs). */
 export async function onboard(profile: Profile, email: string, d: SignupDetails, version: string) {
   const photo: PhotoConsent | null = d.photo_consent in PHOTO_CONSENT ? (d.photo_consent as PhotoConsent) : null;
-  await db().from("profiles").update({
-    first_name: d.first_name, last_name: d.last_name, full_name: fullName(d.first_name, d.last_name),
-    phone: d.phone, date_of_birth: d.date_of_birth, email: email.toLowerCase(), photo_consent: photo,
-    marketing_email: d.marketing_email, marketing_sms: false, onboarded_at: new Date().toISOString(),
-  }).eq("id", profile.id);
-  const rows: { profile_id: string; type: "policy" | "terms" | "fitness_declaration" | "marketing_email" | "photos"; granted: boolean; version: string }[] = [
-    { profile_id: profile.id, type: "policy", granted: true, version },
-    { profile_id: profile.id, type: "terms", granted: true, version },
-    { profile_id: profile.id, type: "fitness_declaration", granted: true, version },
-    { profile_id: profile.id, type: "marketing_email", granted: d.marketing_email, version },
-  ];
-  if (photo) rows.push({ profile_id: profile.id, type: "photos", granted: photo !== "none", version: `${version}:${photo}` });
-  await db().from("consents").insert(rows);
-  return { ...profile, onboarded_at: new Date().toISOString() };
+  // Details and consents in one transaction (A-019): never onboarded without the consents on file.
+  must(await db().rpc("onboard_profile", {
+    p_profile: profile.id, p_first: d.first_name, p_last: d.last_name, p_full: fullName(d.first_name, d.last_name),
+    p_phone: d.phone, p_dob: d.date_of_birth, p_email: email.toLowerCase(), p_photo: photo as string, p_marketing: d.marketing_email, p_version: version,
+  }), "onboard_profile");
+  return { ...profile, first_name: d.first_name, last_name: d.last_name, full_name: fullName(d.first_name, d.last_name), phone: d.phone, onboarded_at: new Date().toISOString() };
 }

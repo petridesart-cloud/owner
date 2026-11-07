@@ -11,7 +11,7 @@ export function CheckInToggle({ bookingId, checked, name }: { bookingId: string;
       role="switch"
       aria-checked={optimistic}
       aria-label={`Checked in: ${name}`}
-      onClick={() => start(async () => { set(!optimistic); await toggleCheckIn(bookingId, !optimistic); })}
+      onClick={() => start(async () => { set(!optimistic); const r = await toggleCheckIn(bookingId, !optimistic); if (!r.ok) alert(r.error); })}
       className={`grid size-11 shrink-0 place-items-center rounded-full border transition ${optimistic ? "border-ink bg-ink text-paper" : "border-line bg-white text-ink-soft hover:border-lilac-300"}`}
     >
       <Check aria-hidden size={18} strokeWidth={optimistic ? 2.4 : 1.6} />

@@ -32,17 +32,22 @@ export async function saveProfile(_: SaveState, form: FormData): Promise<SaveSta
   const reminders = form.get("reminder_emails") === "on";
   const photos = String(form.get("photo_consent") ?? "");
   const photoConsent = photos in PHOTO_CONSENT ? (photos as PhotoConsent) : p.photo_consent;
-  await db().from("profiles").update({
+  const saved = await db().from("profiles").update({
     first_name: d.first_name, last_name: d.last_name, full_name: fullName(d.first_name, d.last_name), phone: d.phone,
     date_of_birth: d.date_of_birth, goal: d.goal || null,
     emergency_contact_name: d.emergency_contact_name || null, emergency_contact_phone: d.emergency_contact_phone || null,
     emergency_contact_relation: d.emergency_contact_relation || null,
     photo_consent: photoConsent, marketing_email: me, reminder_emails: reminders,
   }).eq("id", p.id);
+  if (saved.error) { console.error("profile save failed", saved.error); return { ok: false, error: "Your details couldn't be saved. Please try again." }; }
   const changes: { profile_id: string; type: "marketing_email" | "photos"; granted: boolean; version: string }[] = [];
   if (me !== p.marketing_email) changes.push({ profile_id: p.id, type: "marketing_email", granted: me, version: settings.policy_version });
   if (photoConsent && photoConsent !== p.photo_consent) changes.push({ profile_id: p.id, type: "photos", granted: photoConsent !== "none", version: `${settings.policy_version}:${photoConsent}` });
-  if (changes.length) await db().from("consents").insert(changes);
+  if (changes.length) {
+    const { error } = await db().from("consents").insert(changes);
+    // The new choice is saved but its consent record isn't: say so rather than "Saved" (A-019).
+    if (error) { console.error("consent log failed", error); return { ok: false, error: "Your details were saved, but your consent choice wasn't recorded. Please save again." }; }
+  }
   // Her note: an email when a client changes their details (which ones, not the values of anything sensitive).
   const LABELS: [string, unknown, unknown][] = [
     ["name", fullName(d.first_name, d.last_name), p.full_name], ["mobile number", d.phone, p.phone], ["date of birth", d.date_of_birth, p.date_of_birth],
@@ -71,9 +76,19 @@ export async function signOutAction() {
 export async function deleteAccount(form: FormData) {
   const viewer = await requireViewer("/account");
   if (String(form.get("confirm")).trim().toUpperCase() !== "DELETE") redirect("/account?delete=confirm");
-  const { data: uid } = await db().rpc("erase_profile", { p_profile: viewer.profile.id });
+  // Erase first; the login is deleted only once the data is gone (A-010, A-019).
+  const { data, error } = await db().rpc("erase_profile", { p_profile: viewer.profile.id });
+  if (error) {
+    console.error("erase_profile failed", error);
+    redirect("/account?delete=failed");
+  }
+  const res = { user_id: data as string | null };
   const supabase = await supabaseServer();
   await supabase.auth.signOut();
-  if (uid) await db().auth.admin.deleteUser(uid as string);
+  if (res.user_id) {
+    const { error: e } = await db().auth.admin.deleteUser(res.user_id);
+    // Their data is already erased and the profile unlinked; a leftover login can't reach anything.
+    if (e) console.error("auth user delete failed (profile already erased)", e);
+  }
   redirect("/?deleted=1");
 }

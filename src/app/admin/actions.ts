@@ -1,6 +1,6 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 import { z } from "zod";
 import { getSettings, requireAdmin } from "@/lib/auth";
 import { emailLive, env, paymentsLive } from "@/lib/env";
@@ -12,44 +12,58 @@ import { rewardCode } from "@/lib/rewards";
 import { defaultTerms } from "@/lib/terms";
 import { getKinds, kindLabel } from "@/lib/kinds";
 import { discountLabel, normaliseCode, targetsLabel } from "@/lib/discount";
-import { ERROR_KEYS, friendlyError, type ActionResult } from "@/lib/errors";
+import { ERROR_KEYS, friendlyError, must, type ActionResult } from "@/lib/errors";
 import { addDaysKey, localToUtc, spokenDateTime, todayKey } from "@/lib/time";
 import type { Json } from "@/lib/supabase/types";
 
 async function admin(action: string, details?: Record<string, unknown>) {
   const viewer = await requireAdmin();
-  await db().from("audit_log").insert({ actor_profile_id: viewer.profile.id, action, details: (details ?? null) as Json });
+  // A-054: no studio change without its audit entry (the error page explains; nothing else ran yet).
+  must(await db().from("audit_log").insert({ actor_profile_id: viewer.profile.id, action, details: (details ?? null) as Json }), "audit_log");
   return viewer;
 }
 
+/** A-054: a write that fails turns into an error result instead of a silent "Saved". */
+function failed(e: unknown): { ok: false; error: string } {
+  unstable_rethrow(e);
+  console.error("admin action failed", e);
+  return { ok: false, error: friendlyError(e) };
+}
+
 // ── Check-in & roster ──────────────────────────────────────────────────
-export async function toggleCheckIn(bookingId: string, checked: boolean) {
+export async function toggleCheckIn(bookingId: string, checked: boolean): Promise<ActionResult> {
   await admin("check_in", { bookingId, checked });
-  await db().from("bookings").update({ checked_in_at: checked ? new Date().toISOString() : null }).eq("id", bookingId);
+  const { error } = await db().from("bookings").update({ checked_in_at: checked ? new Date().toISOString() : null }).eq("id", bookingId);
+  if (error) return failed(error);
   revalidatePath("/admin");
+  return { ok: true };
 }
 
 /** Her answer: attendance stays editable (attended / no-show / not marked), in case of a mistake. */
-export async function setAttendance(bookingId: string, state: "attended" | "no_show" | "unmarked") {
+export async function setAttendance(bookingId: string, state: "attended" | "no_show" | "unmarked"): Promise<ActionResult> {
   await admin("attendance", { bookingId, state });
   const { data: b } = await db().from("bookings").select("status, checked_in_at, class_sessions(starts_at)").eq("id", bookingId).single();
-  if (!b || !["confirmed", "no_show"].includes(b.status)) return;
+  if (!b || !["confirmed", "no_show"].includes(b.status)) return { ok: false, error: "This booking can't be marked. Please refresh." };
   // Only once the class has started (A-083): before that a no-show would free the spot without the waitlist.
-  if (!b.class_sessions || new Date(b.class_sessions.starts_at) > new Date()) return;
-  await db().from("bookings").update(
+  if (!b.class_sessions || new Date(b.class_sessions.starts_at) > new Date()) return { ok: false, error: friendlyError("class_not_started") };
+  const { error } = await db().from("bookings").update(
     state === "attended" ? { status: "confirmed", checked_in_at: b.checked_in_at ?? new Date().toISOString() }
     : state === "no_show" ? { status: "no_show", checked_in_at: null }
     : { status: "confirmed", checked_in_at: null },
   ).eq("id", bookingId);
+  if (error) return failed(error);
   revalidatePath("/admin", "layout");
+  return { ok: true };
 }
 
-export async function markNoShow(bookingId: string) {
+export async function markNoShow(bookingId: string): Promise<ActionResult> {
   await admin("no_show", { bookingId });
   const { data: b } = await db().from("bookings").select("class_sessions(starts_at)").eq("id", bookingId).single();
-  if (!b?.class_sessions || new Date(b.class_sessions.starts_at) > new Date()) return; // A-083: Remove is for upcoming classes
-  await db().from("bookings").update({ status: "no_show", checked_in_at: null }).eq("id", bookingId).eq("status", "confirmed");
+  if (!b?.class_sessions || new Date(b.class_sessions.starts_at) > new Date()) return { ok: false, error: friendlyError("class_not_started") }; // A-083: Remove is for upcoming classes
+  const { error } = await db().from("bookings").update({ status: "no_show", checked_in_at: null }).eq("id", bookingId).eq("status", "confirmed");
+  if (error) return failed(error);
   revalidatePath("/admin");
+  return { ok: true };
 }
 
 export async function adminCancelBooking(bookingId: string, sessionId: string): Promise<ActionResult> {
@@ -205,7 +219,8 @@ export async function allowEventAccess(sessionId: string, _: ActionResult, form:
 
 export async function removeEventAccess(sessionId: string, profileId: string): Promise<ActionResult> {
   await admin("event_access_remove", { sessionId, profileId });
-  await db().from("event_access").delete().eq("session_id", sessionId).eq("profile_id", profileId);
+  const { error } = await db().from("event_access").delete().eq("session_id", sessionId).eq("profile_id", profileId);
+  if (error) return failed(error);
   revalidatePath(`/admin/classes/${sessionId}`);
   return { ok: true, message: "Removed." };
 }
@@ -221,13 +236,15 @@ export async function saveTimetable(_: ActionResult, form: FormData): Promise<Ac
   if (!slots.success || slots.data.length === 0) return { ok: false, error: "Add at least one class time." };
   const name = String(form.get("name") ?? "").trim() || `Timetable from ${from}`;
   // It repeats every week from the start date; each tick tops it up to ~9 weeks ahead (extend_timetable).
-  const { data: t, error } = await db().from("timetable_templates").insert({ name, valid_from: from, valid_to: addDaysKey(from, 62), repeats: true }).select("id").single();
-  if (error) return { ok: false, error: "Couldn't save the timetable." };
+  // Template, slots, retiring the old timetable and creating classes happen in one transaction (A-054).
   const unique = new Map(slots.data.map((s) => [`${s.weekday}-${s.time}`, s]));
-  await db().from("template_slots").insert([...unique.values()].map((s) => ({ template_id: t.id, weekday: s.weekday, start_time: s.time, class_type_id: s.class_type_id, capacity: s.capacity ?? null })));
-  const { data: kept } = await db().rpc("replace_timetable_from", { p_template: t.id });
-  await db().rpc("generate_sessions", { p_template: t.id });
-  await db().rpc("extend_timetable", {});
+  const { data: kept, error } = await db().rpc("save_timetable", {
+    p_name: name, p_from: from, p_slots: [...unique.values()].map((s) => ({ ...s, capacity: s.capacity ?? null })) as unknown as Json,
+  });
+  if (error) {
+    console.error("save_timetable failed", error);
+    return { ok: false, error: error.message in ERROR_KEYS ? friendlyError(error) : "Couldn't save the timetable. Nothing was changed." };
+  }
   await applyRecurring(undefined, { defer: true });
   revalidatePath("/admin/timetable");
   revalidatePath("/admin/classes");
@@ -238,7 +255,8 @@ export async function saveTimetable(_: ActionResult, form: FormData): Promise<Ac
 /** She has seen the doctor's written clearance (pregnancy / recent surgery). */
 export async function clearanceReceived(profileId: string): Promise<ActionResult> {
   await admin("clearance_received", { profileId });
-  await db().from("health_notes").update({ clearance_received_at: todayKey() }).eq("profile_id", profileId);
+  const { error } = await db().from("health_notes").update({ clearance_received_at: todayKey() }).eq("profile_id", profileId);
+  if (error) return failed(error);
   revalidatePath(`/admin/clients/${profileId}`);
   revalidatePath("/admin");
   return { ok: true, message: "Noted: doctor's note received." };
@@ -265,16 +283,6 @@ export async function updateClient(profileId: string, _: ActionResult, form: For
   return { ok: true, message: "Saved." };
 }
 
-const LOT_ERRORS: Record<string, string> = {
-  reason_required: "Please add a reason (it's kept in the client's history).",
-  bad_days: "Enter a number of days between 1 and 365.",
-  bad_date: "Pick a date from today on.",
-  booked_in_freeze: "They're booked into classes during those dates with this package. Cancel those first.",
-  no_end_date: "These classes have no end date, so there is nothing to extend.",
-  booked_after: "They're booked into classes after that date with this package. Cancel those first.",
-  bad_credits: "Enter between 1 and 50 classes.",
-  not_enough_credits: "They don't have that many classes left in this package.",
-};
 
 /** Extend, freeze, end earlier, add or remove classes on one package. */
 export async function adjustLot(profileId: string, _: ActionResult, form: FormData): Promise<ActionResult> {
@@ -297,7 +305,7 @@ export async function adjustLot(profileId: string, _: ActionResult, form: FormDa
     p_lot: lot, p_action: action, p_days: action === "extend" || action === "freeze" ? n : 0, p_date: /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : (null as unknown as string),
     p_credits: action === "add" || action === "remove" ? n : 0, p_reason: reason, p_actor: viewer.profile.id,
   });
-  if (error) return { ok: false, error: LOT_ERRORS[error.message] ?? "Couldn't change the package." };
+  if (error) return { ok: false, error: error.message in ERROR_KEYS ? friendlyError(error) : "Couldn't change the package." };
   revalidatePath(`/admin/clients/${profileId}`);
   const done: Record<string, string> = {
     extend: `Extended by ${n} day${n === 1 ? "" : "s"}.`, freeze: `Frozen for ${n} day${n === 1 ? "" : "s"}: no bookings with this package in those days, and the end date moved by the same.`,
@@ -433,7 +441,8 @@ export async function cancelPaymentRequest(paymentId: string): Promise<ActionRes
   if (b?.status === "confirmed" && b.class_sessions && new Date(b.class_sessions.starts_at) > new Date()) {
     return { ok: false, error: "This class is still booked. Remove the client from the class instead." };
   }
-  await db().from("payments").update({ status: "cancelled" }).eq("id", paymentId).eq("status", "pending");
+  const { error } = await db().from("payments").update({ status: "cancelled" }).eq("id", paymentId).eq("status", "pending");
+  if (error) return failed(error);
   revalidatePath("/admin", "layout");
   return { ok: true };
 }
@@ -445,21 +454,29 @@ export async function renewMembership(membershipId: string, method: "cash" | "ca
   if (!m) return { ok: false, error: "Membership not found." };
   const productId = m.next_product_id ?? m.product_id;
   const { data: prod } = await db().from("products").select("*").eq("id", productId).single();
-  const { data: pay } = await db().from("payments").insert({
-    profile_id: m.profile_id, provider: "offline", amount_cents: prod!.price_cents, purpose: "renewal", membership_id: m.id,
-    product_id: productId, description: `${prod!.name} (renewal)`, status: "pending",
+  if (!prod) return { ok: false, error: "Package not found." };
+  const { data: pay, error } = await db().from("payments").insert({
+    profile_id: m.profile_id, provider: "offline", amount_cents: prod.price_cents, purpose: "renewal", membership_id: m.id,
+    product_id: productId, description: `${prod.name} (renewal)`, status: "pending",
   }).select("id").single();
-  await onPaymentPaid(pay!.id, undefined, method);
+  if (error || !pay) return failed(error);
+  try {
+    await onPaymentPaid(pay.id, undefined, method);
+  } catch (e) {
+    return failed(e);
+  }
   revalidatePath(`/admin/clients/${m.profile_id}`);
   return { ok: true, message: "Renewed. Next period's classes added." };
 }
 
 export async function setMembershipState(membershipId: string, action: "pause" | "resume" | "cancel" | "reactivate"): Promise<ActionResult> {
   await admin("membership_" + action, { membershipId });
-  if (action === "pause") await db().rpc("pause_membership", { p_membership: membershipId });
-  if (action === "resume") await db().rpc("resume_membership", { p_membership: membershipId });
-  if (action === "cancel") await db().from("memberships").update({ cancel_at_period_end: true }).eq("id", membershipId);
-  if (action === "reactivate") await db().from("memberships").update({ cancel_at_period_end: false }).eq("id", membershipId);
+  const res = action === "pause" ? await db().rpc("pause_membership", { p_membership: membershipId })
+    : action === "resume" ? await db().rpc("resume_membership", { p_membership: membershipId })
+    : action === "cancel" ? await db().from("memberships").update({ cancel_at_period_end: true }).eq("id", membershipId)
+    : action === "reactivate" ? await db().from("memberships").update({ cancel_at_period_end: false }).eq("id", membershipId)
+    : { error: { message: "bad_action" } };
+  if (res.error) return failed(res.error);
   revalidatePath("/admin", "layout");
   return { ok: true };
 }
@@ -467,7 +484,8 @@ export async function setMembershipState(membershipId: string, action: "pause" |
 export async function changeMembershipProduct(membershipId: string, _: ActionResult, form: FormData): Promise<ActionResult> {
   await admin("membership_change", { membershipId });
   const productId = String(form.get("product_id"));
-  await db().from("memberships").update({ next_product_id: productId }).eq("id", membershipId);
+  const { error } = await db().from("memberships").update({ next_product_id: productId }).eq("id", membershipId);
+  if (error) return failed(error);
   revalidatePath("/admin", "layout");
   return { ok: true, message: "Changes from the next period." };
 }
@@ -495,7 +513,8 @@ export async function setStudent(profileId: string, _: ActionResult, form: FormD
   await admin("student_verification", { profileId });
   const until = String(form.get("student_verified_until") ?? "");
   if (until && !/^\d{4}-\d{2}-\d{2}$/.test(until)) return { ok: false, error: "Pick a valid date." };
-  await db().from("profiles").update({ student_verified_until: until || null }).eq("id", profileId);
+  const { error } = await db().from("profiles").update({ student_verified_until: until || null }).eq("id", profileId);
+  if (error) return failed(error);
   revalidatePath(`/admin/clients/${profileId}`);
   return { ok: true, message: until ? `Student price active until ${until}.` : "Student price removed." };
 }
@@ -528,7 +547,7 @@ export async function confirmClosure(closureId: string): Promise<ActionResult> {
 
 export async function dismissClosure(closureId: string) {
   await admin("dismiss_closure", { closureId });
-  await db().from("closures").delete().eq("id", closureId).eq("confirmed", false);
+  must(await db().from("closures").delete().eq("id", closureId).eq("confirmed", false), "dismiss closure");
   revalidatePath("/admin/closures");
 }
 
@@ -644,10 +663,11 @@ export async function saveClassType(id: string | null, _: ActionResult, form: Fo
   if (isEvent) {
     const name = String(form.get("name") ?? "").trim();
     if (!name) return { ok: false, error: "Give it a name." };
-    await db().from("class_types").update({
+    const { error } = await db().from("class_types").update({
       name, active, description: String(form.get("description") ?? "").trim() || null,
       default_location: String(form.get("default_location") ?? "").trim() || null,
     }).eq("id", id!);
+    if (error) return failed(error);
     revalidatePath("/admin/settings");
     return { ok: true, message: "Saved." };
   }
@@ -693,8 +713,9 @@ export async function deleteClassType(id: string): Promise<ActionResult> {
     .eq("class_type_id", id).eq("status", "scheduled").gt("starts_at", new Date().toISOString());
   if (upcoming) return { ok: false, error: `${ct.name} has ${upcoming} class${upcoming === 1 ? "" : "es"} coming up. Cancel or change them in Classes first, then delete it.` };
   // Stop it repeating: out of the timetable and clients' weekly picks.
-  await db().from("template_slots").delete().eq("class_type_id", id);
-  await db().from("recurring_rules").delete().eq("class_type_id", id);
+  for (const res of [await db().from("template_slots").delete().eq("class_type_id", id), await db().from("recurring_rules").delete().eq("class_type_id", id)]) {
+    if (res.error) return failed(res.error);
+  }
   const { count: used } = await db().from("class_sessions").select("id", { count: "exact", head: true }).eq("class_type_id", id);
   if (used) await db().from("class_types").update({ archived_at: new Date().toISOString(), active: false }).eq("id", id);
   else await db().from("class_types").delete().eq("id", id);
@@ -736,11 +757,12 @@ export async function saveTab(key: string, _: ActionResult, form: FormData): Pro
   const tabs = new Set(((await db().from("package_tabs").select("key")).data ?? []).map((t) => t.key));
   for (const k of form.getAll("kinds").map(String)) {
     const tab = String(form.get(`tab_${k}`) ?? key);
-    await db().from("credit_kinds").update({
+    const { error: e } = await db().from("credit_kinds").update({
       sub_label: String(form.get(`sub_${k}`) ?? "").trim().slice(0, 60) || null,
       description: String(form.get(`desc_${k}`) ?? "").trim().slice(0, 600) || null,
       ...(tabs.has(tab) ? { tab } : {}),
     }).eq("key", k);
+    if (e) return failed(e);
   }
   revalidatePath("/admin/settings");
   revalidatePath("/packs");
@@ -829,7 +851,7 @@ export async function deleteProduct(id: string): Promise<ActionResult> {
 
 export async function toggleCompliance(key: string, done: boolean) {
   await admin("compliance", { key, done });
-  await db().from("compliance_items").update({ done, updated_at: new Date().toISOString() }).eq("key", key);
+  must(await db().from("compliance_items").update({ done, updated_at: new Date().toISOString() }).eq("key", key), "compliance");
   revalidatePath("/admin/compliance");
 }
 
@@ -875,7 +897,7 @@ const ImportClient = z.object({
 
 export async function importClients(rows: Record<string, unknown>[]): Promise<ActionResult<{ created: number; updated: number; skipped: number }>> {
   await admin("import_clients", { count: rows.length });
-  let created = 0, updated = 0, skipped = 0;
+  let created = 0, updated = 0, skipped = 0, failedGrants = 0;
   const valid: z.infer<typeof ImportClient>[] = [];
   for (const raw of rows.slice(0, 2000)) {
     const r = ImportClient.safeParse(raw);
@@ -894,21 +916,28 @@ export async function importClients(rows: Record<string, unknown>[]): Promise<Ac
   await pool([...groups.values()], 5, async (group) => {
     for (const c of group) {
       let id = c.email ? known.get(c.email) : undefined;
-      if (id) { await db().from("profiles").update({ full_name: c.full_name, phone: c.phone ?? undefined, admin_notes: c.notes ?? undefined }).eq("id", id); updated++; }
-      else {
+      if (id) {
+        const { error } = await db().from("profiles").update({ full_name: c.full_name, phone: c.phone ?? undefined, admin_notes: c.notes ?? undefined }).eq("id", id);
+        if (error) { console.error("import update failed", error); skipped++; continue; }
+        updated++;
+      } else {
         const { data } = await db().from("profiles").insert({ full_name: c.full_name, email: c.email, phone: c.phone, admin_notes: c.notes }).select("id").single();
-        id = data?.id; created++;
+        id = data?.id;
+        if (!id) { skipped++; continue; } // A-054: not counted as created when it wasn't
+        created++;
         if (id && c.email) known.set(c.email, id);
       }
       if (!id) continue;
       const expires = c.credits_expire && !Number.isNaN(Date.parse(c.credits_expire)) ? new Date(c.credits_expire).toISOString() : null;
       for (const [kind, n] of [["reformer", c.reformer_credits], ["mat", c.mat_credits]] as const) {
         if (!n) continue;
-        await db().rpc("grant_lot", { p_profile: id, p_kind: kind, p_credits: n, p_expires: expires as string /* null = never expires */, p_note: "Imported balance" });
+        const { error } = await db().rpc("grant_lot", { p_profile: id, p_kind: kind, p_credits: n, p_expires: expires as string /* null = never expires */, p_note: "Imported balance" });
+        if (error) { console.error("import grant failed", error); failedGrants++; }
       }
     }
   });
   revalidatePath("/admin/clients");
+  if (failedGrants) return { ok: false, error: `${created} added and ${updated} updated, but ${failedGrants} class balance${failedGrants === 1 ? "" : "s"} couldn't be added. Check those clients' packages.` };
   return { ok: true, data: { created, updated, skipped } };
 }
 
@@ -982,7 +1011,8 @@ export async function addTeamMember(_: ActionResult, form: FormData): Promise<Ac
 /** Withdraw a Studio-team invite that hasn't been used yet. */
 export async function removeTeamInvite(email: string): Promise<ActionResult> {
   await admin("team_invite_remove", { email });
-  await db().from("team_invites").delete().eq("email", String(email).trim().toLowerCase());
+  const { error } = await db().from("team_invites").delete().eq("email", String(email).trim().toLowerCase());
+  if (error) return failed(error);
   revalidatePath("/admin/team");
   return { ok: true };
 }
@@ -990,7 +1020,8 @@ export async function removeTeamInvite(email: string): Promise<ActionResult> {
 export async function removeTeamMember(profileId: string): Promise<ActionResult> {
   const viewer = await admin("team_remove", { profileId });
   if (profileId === viewer.profile.id) return { ok: false, error: "You can't remove yourself." };
-  await db().from("profiles").update({ role: "client" }).eq("id", profileId);
+  const { error } = await db().from("profiles").update({ role: "client" }).eq("id", profileId);
+  if (error) return failed(error);
   revalidatePath("/admin/team");
   return { ok: true };
 }

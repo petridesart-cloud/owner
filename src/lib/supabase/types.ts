@@ -1869,6 +1869,21 @@ export type Database = {
         };
         Returns: boolean;
       };
+      onboard_profile: {
+        Args: {
+          p_dob: string;
+          p_email: string;
+          p_first: string;
+          p_full: string;
+          p_last: string;
+          p_marketing: boolean;
+          p_phone: string;
+          p_photo: string;
+          p_profile: string;
+          p_version: string;
+        };
+        Returns: undefined;
+      };
       pause_membership: { Args: { p_membership: string }; Returns: undefined };
       period_end: { Args: { p_days: number; p_start: string }; Returns: string };
       phone_key: { Args: { p: string }; Returns: string };
@@ -1885,6 +1900,7 @@ export type Database = {
         Returns: boolean;
       };
       recalc_lot_expiry: { Args: { p_lot: string }; Returns: undefined };
+      replace_recurring_rules: { Args: { p_profile: string; p_slots: Json }; Returns: number };
       replace_timetable_from: { Args: { p_template: string }; Returns: number };
       reset_demo_data: { Args: Record<PropertyKey, never>; Returns: undefined };
       resume_membership: { Args: { p_membership: string }; Returns: string };
@@ -1893,6 +1909,7 @@ export type Database = {
         Args: { p_answers: Json; p_consent: boolean; p_mode: string; p_profile: string; p_version: string };
         Returns: Json;
       };
+      save_timetable: { Args: { p_from: string; p_name: string; p_slots: Json }; Returns: number };
       seed_demo: { Args: Record<PropertyKey, never>; Returns: undefined };
       seed_demo_profiles: { Args: Record<PropertyKey, never>; Returns: undefined };
       session_availability: {
@@ -2207,8 +2224,8 @@ export const Constants = {
         "private_reformer",
         "private_prenatal_mat",
         "private_prenatal_reformer",
-        "pre_natal_9f1b",
-        "pre_natal_mw5nqcyx",
+        "pre_natal_vc8w",
+        "pre_natal_mw5nw8b3",
       ],
       ledger_entry: [
         "grant",

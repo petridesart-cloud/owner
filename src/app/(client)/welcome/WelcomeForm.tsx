@@ -17,7 +17,7 @@ export function WelcomeForm({ email, first, last, phone, next }: { email: string
   return (
     <form onSubmit={keepValues(action)} className="space-y-5" noValidate>
       <input type="hidden" name="next" value={next} />
-      {Object.keys(e).length > 0 && <Notice tone="error">Please check the highlighted fields below.</Notice>}
+      {Object.keys(e).length > 0 && <Notice tone="error">{e.form ?? "Please check the highlighted fields below."}</Notice>}
       <div className="grid grid-cols-2 gap-3">
         <Field id="first_name" label="First name" error={e.first_name}>
           <input id="first_name" name="first_name" autoComplete="given-name" required defaultValue={first} className={inputClass} {...err("first_name")} />

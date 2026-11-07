@@ -36,16 +36,21 @@ export async function uploadPhoto(slot: string, form: FormData): Promise<ActionR
   const { error } = await db().storage.from("media").upload(path, Buffer.from(await file.arrayBuffer()), { contentType: file.type, cacheControl: "3600" });
   if (error) return { ok: false, error: "Upload failed. Please try again." };
 
-  if (slot === "logo" || slot.startsWith("event-cover:")) { // one picture: replace the old one
-    const { data: old } = await db().from("media").select("id, path").eq("slot", slot);
-    if (old?.length) {
-      await db().storage.from("media").remove(old.map((o) => o.path));
-      await db().from("media").delete().in("id", old.map((o) => o.id));
-    }
-  }
+  const single = slot === "logo" || slot.startsWith("event-cover:"); // one picture: replace the old one
+  const { data: old } = single ? await db().from("media").select("id, path").eq("slot", slot) : { data: [] };
   const caption = String(form.get("caption") ?? "").trim().slice(0, 80) || null;
   const { count } = await db().from("media").select("id", { count: "exact", head: true }).eq("slot", slot);
-  await db().from("media").insert({ slot, path, caption, sort: count ?? 0 });
+  // A-054: the row first; if it fails, remove the uploaded file and say so (the old picture stays).
+  const { error: rowError } = await db().from("media").insert({ slot, path, caption, sort: count ?? 0 });
+  if (rowError) {
+    console.error("media insert failed", rowError);
+    await db().storage.from("media").remove([path]);
+    return { ok: false, error: "The photo couldn't be saved. Please try again." };
+  }
+  if (old?.length) {
+    await db().from("media").delete().in("id", old.map((o) => o.id));
+    await db().storage.from("media").remove(old.map((o) => o.path));
+  }
   await db().from("audit_log").insert({ actor_profile_id: viewer.profile.id, action: "upload_photo", details: { slot, path } });
   revalidatePath("/", "layout");
   return { ok: true, message: "Photo added." };
@@ -55,8 +60,9 @@ export async function deletePhoto(id: string): Promise<ActionResult> {
   const viewer = await requireAdmin();
   const { data: m } = await db().from("media").select("id, path, slot").eq("id", id).maybeSingle();
   if (!m) return { ok: false, error: "Already removed." };
+  const { error } = await db().from("media").delete().eq("id", id);
+  if (error) return { ok: false, error: "Couldn't remove the photo. Please try again." };
   await db().storage.from("media").remove([m.path]);
-  await db().from("media").delete().eq("id", id);
   await db().from("audit_log").insert({ actor_profile_id: viewer.profile.id, action: "delete_photo", details: { slot: m.slot, path: m.path } });
   revalidatePath("/", "layout");
   return { ok: true };

@@ -5,9 +5,10 @@ import { createHash } from "node:crypto";
 import { ipFrom, keyHash, limitOutcome, normEmail } from "../src/lib/request-keys";
 import { needsHealthConsent } from "../src/lib/health";
 import { cancelledOutcome, render } from "../src/lib/notifications/templates";
-import { friendlyError } from "../src/lib/errors";
+import { friendlyError, must } from "../src/lib/errors";
 import { cronAuthorized } from "../src/lib/cron-auth";
 import { schedulerWarning } from "../src/lib/scheduler";
+import { retryingFetch } from "../src/lib/supabase/retry-fetch";
 
 describe("rate limits and email keys (A-045, A-092, A-103, A-008)", () => {
   test("sign-in and code limits fail closed when the check errors; booking limits fail open", () => {
@@ -95,5 +96,48 @@ describe("scheduler warning on Today (A-102)", () => {
     assert.equal(schedulerWarning(ago(25), true), true);
     assert.equal(schedulerWarning(ago(25), false), true);
     assert.equal(schedulerWarning(ago(3), false), false);
+  });
+});
+
+describe("error words (A-054)", () => {
+  test("every code the database raises has its own message", async () => {
+    const fs = await import("node:fs");
+    const dir = "supabase/migrations";
+    const codes = new Set<string>();
+    for (const f of fs.readdirSync(dir)) {
+      for (const m of fs.readFileSync(`${dir}/${f}`, "utf8").matchAll(/raise exception '([a-z_]+)'/g)) codes.add(m[1]);
+    }
+    assert.ok(codes.size > 30);
+    const missing = [...codes].filter((k) => friendlyError({ message: k }) === "Something went wrong. Please try again.");
+    assert.deepEqual(missing, []);
+  });
+
+  test("must() turns a failed write into a friendly error, never the raw message", () => {
+    assert.throws(() => must({ error: { message: "duplicate key value violates unique constraint" } }), (e: Error) => e.message === "save_failed");
+    assert.throws(() => must({ error: { message: "full" } }), (e: Error) => e.message === "full");
+    assert.doesNotThrow(() => must({ error: null }));
+    assert.equal(friendlyError(new Error("save_failed")), "That didn't save. Please try again.");
+  });
+});
+
+describe("database reads retry once (A-055)", () => {
+  test("a GET that hits a dropped connection or a 503 is tried once more; a POST never is", async () => {
+    const real = globalThis.fetch;
+    let calls = 0;
+    try {
+      globalThis.fetch = (async () => { calls++; if (calls === 1) throw new TypeError("fetch failed"); return new Response("ok"); }) as typeof fetch;
+      assert.equal(await (await retryingFetch("http://x/rest/v1/a", { method: "GET" }, () => 0)).text(), "ok");
+      assert.equal(calls, 2);
+      calls = 0;
+      globalThis.fetch = (async () => { calls++; return new Response("busy", { status: calls === 1 ? 503 : 200 }); }) as typeof fetch;
+      assert.equal((await retryingFetch("http://x/rest/v1/a", undefined, () => 0)).status, 200);
+      assert.equal(calls, 2);
+      calls = 0;
+      globalThis.fetch = (async () => { calls++; throw new TypeError("fetch failed"); }) as typeof fetch;
+      await assert.rejects(retryingFetch("http://x/rest/v1/rpc/book_session", { method: "POST" }, () => 0));
+      assert.equal(calls, 1);
+    } finally {
+      globalThis.fetch = real;
+    }
   });
 });

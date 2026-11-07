@@ -85,7 +85,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
           ) : <p className="text-sm text-ink-soft">Your payment receipts will appear here.</p>}
         </Accordion>
 
-        <Accordion title="Privacy & data" sub="Consents, download or delete my data" open={del === "confirm"}>
+        <Accordion title="Privacy & data" sub="Consents, download or delete my data" open={del === "confirm" || del === "failed"}>
             <div className="space-y-4">
               <div>
             <ul className="divide-y divide-line text-sm">
@@ -103,11 +103,12 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
             <a href="/api/account/export" className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full border border-ink/15 bg-white/60 px-6 text-[0.8rem] font-medium uppercase tracking-[0.18em] text-ink hover:bg-white">
               <Download aria-hidden size={17} /> Download my data
             </a>
-            <details className="rounded-2xl border border-burgundy/20 bg-burgundy-soft/40 px-4 py-3" open={del === "confirm"}>
+            <details className="rounded-2xl border border-burgundy/20 bg-burgundy-soft/40 px-4 py-3" open={del === "confirm" || del === "failed"}>
               <summary className="min-h-11 cursor-pointer content-center text-sm font-medium text-burgundy">Delete my account</summary>
               <form action={deleteAccount} className="mt-2 space-y-3">
                 <p className="text-xs leading-relaxed text-ink">This removes your name, contact details and health information, cancels your upcoming classes and signs you out. Unused credits are lost. We keep minimal anonymised booking and payment records where tax law requires it.</p>
                 {del === "confirm" && <Notice tone="error">Type DELETE to confirm.</Notice>}
+                {del === "failed" && <Notice tone="error">Your account couldn&apos;t be deleted just now, so nothing was removed. Please try again, or message the studio and we&apos;ll do it for you.</Notice>}
                 <label htmlFor="confirm" className="block text-sm font-medium text-ink">Type DELETE to confirm</label>
                 <input id="confirm" name="confirm" autoComplete="off" className={inputClass} />
                 <Button type="submit" variant="danger" className="w-full">Delete my account</Button>

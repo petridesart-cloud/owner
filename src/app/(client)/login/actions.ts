@@ -125,7 +125,12 @@ export async function confirmEmail(_: AuthState, form: FormData): Promise<AuthSt
     await db().auth.admin.updateUserById(user.id, { password: randomBytes(32).toString("hex"), user_metadata: { signup: false, signup_key: null } });
   }
   if (profile && meta.signup && sameBrowser && !profile.onboarded_at) {
-    profile = await onboard(profile, email.data, meta as SignupDetails, (await getSettings()).policy_version);
+    try {
+      profile = await onboard(profile, email.data, meta as SignupDetails, (await getSettings()).policy_version);
+    } catch {
+      // Not saved (A-019): they're signed in, and /welcome asks for the details again.
+      redirect(landing(profile, next));
+    }
     await db().auth.admin.updateUserById(user.id, { user_metadata: { signup: false, signup_key: null } });
     if (profile) await alertStudio("signups", `New client: ${profile.full_name ?? email.data}`, [`${email.data}${profile.phone ? ` · ${profile.phone}` : ""}`, "They've created an account in the app."],
       { path: `/admin/clients/${profile.id}`, dedupeKey: `signup:${profile.id}` });
@@ -173,7 +178,12 @@ export async function resetPassword(_: AuthState, form: FormData): Promise<AuthS
   if (await tooMany(email.data)) return { ok: false, ...back, error: "Too many tries. Please wait 15 minutes, then ask for a new code." };
   const user = await signInWithCode(email.data, token);
   if (!user) return { ok: false, ...back, error: "That code didn't work or has expired. Check it, or ask for a new one." };
-  await db().auth.admin.updateUserById(user.id, { password: pw.data, user_metadata: { signup: false, signup_key: null } });
+  const { error: saveError } = await db().auth.admin.updateUserById(user.id, { password: pw.data, user_metadata: { signup: false, signup_key: null } });
+  // A-019: never say it's changed when it isn't (the code has been used, so they ask for a new one).
+  if (saveError) {
+    console.error("password update failed", saveError);
+    return { ok: false, email: email.data, error: "Your new password couldn't be saved. Please ask for a new code and try again." };
+  }
   // Changing the password ends existing sessions, so sign in again with the new one.
   await (await supabaseServer()).auth.signInWithPassword({ email: email.data, password: pw.data });
   const profile = await profileFor(user.id, email.data, { verified: true });

@@ -32,6 +32,27 @@ const MESSAGES: Record<string, string> = {
   capacity_below_booked: "More people are booked than that, so capacity can't go that low.",
   moved_outside_package: "A booked client's package doesn't cover the new date (it ends earlier, or it's frozen then). Remove them first, or adjust their package.",
   class_not_started: "This class hasn't started yet. To take someone off it, use Remove.",
+  // Package adjustments (Adjust package on the client page).
+  reason_required: "Please add a reason (it's kept in the client's history).",
+  bad_days: "Enter a number of days between 1 and 365.",
+  bad_date: "Pick a date from today on.",
+  booked_in_freeze: "They're booked into classes during those dates with this package. Cancel those first.",
+  no_end_date: "These classes have no end date, so there is nothing to extend.",
+  booked_after: "They're booked into classes after that date with this package. Cancel those first.",
+  bad_credits: "Enter between 1 and 50 classes.",
+  not_enough_credits: "They don't have that many classes left in this package.",
+  // Everything else the database can refuse (A-054: every raise code has words).
+  online_payments_off: "Online payment isn't available yet. Reserve and pay at the studio.",
+  bad_mode: "That way of booking isn't available here. Please refresh the page.",
+  bad_action: "That change isn't available. Please refresh the page.",
+  name_required: "Please add a name.",
+  health_consent_required: "Please tick the health consent to save your answers, or choose to tell your instructor in person.",
+  invalid_health_mode: "Please choose one of the options.",
+  profile_not_found: "We couldn't find that client. Please refresh and try again.",
+  // App-side failures (A-019, A-055).
+  save_failed: "That didn't save. Please try again.",
+  db_unavailable: "We can't reach the studio's system right now. Please try again in a moment.",
+  unknown_class_type: "One of the class times uses a class type that no longer exists. Please refresh and check the timetable.",
 };
 
 /** Engine error codes that have their own message. */
@@ -42,6 +63,25 @@ export function friendlyError(e: unknown): string {
   if (msg.includes("payments_one_code_per_client")) return "You've already used this code.";
   if (msg.includes("payments_one_pending_request")) return "You've already requested this package. It's waiting under My classes.";
   return MESSAGES[msg] ?? "Something went wrong. Please try again.";
+}
+
+/** The friendly words for one engine code (or null when it has none). */
+export const messageFor = (key: string): string | null => MESSAGES[key] ?? null;
+
+type DbResult = { error: { message: string; code?: string } | null };
+
+/**
+ * A-019/A-054: every write checks its result. Throws an Error whose message is the engine code when it has
+ * words, else `save_failed` (the real error is logged on the server, never shown).
+ */
+export function must<T extends DbResult>(res: T, what = "write"): T {
+  if (res.error) {
+    console.error(`${what} failed`, res.error);
+    const err = new Error(res.error.message in MESSAGES ? res.error.message : "save_failed");
+    (err as Error & { cause?: unknown }).cause = res.error;
+    throw err;
+  }
+  return res;
 }
 
 export type ActionResult<T = undefined> = { ok: true; data?: T; message?: string } | { ok: false; error: string };
