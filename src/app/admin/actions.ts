@@ -238,6 +238,8 @@ export async function saveTimetable(_: ActionResult, form: FormData): Promise<Ac
   const slots = z.array(Slot).safeParse(JSON.parse(String(form.get("slots") ?? "[]")));
   if (!/^\d{4}-\d{2}-\d{2}$/.test(from)) return { ok: false, error: "Pick the date it starts." };
   if (!slots.success || slots.data.length === 0) return { ok: false, error: "Add at least one class time." };
+  // A-095: on the Sunday the clocks go forward, 03:00-03:59 doesn't exist, so a Sunday class then would move.
+  if (slots.data.some((s) => s.weekday === 7 && s.time >= "03:00" && s.time < "04:00")) return { ok: false, error: "Sunday classes can't start between 03:00 and 03:59: that hour doesn't exist when the clocks change. Pick another time." };
   const name = String(form.get("name") ?? "").trim() || `Timetable from ${from}`;
   // It repeats every week from the start date; each tick tops it up to ~9 weeks ahead (extend_timetable).
   // Template, slots, retiring the old timetable and creating classes happen in one transaction (A-054).
