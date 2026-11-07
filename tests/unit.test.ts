@@ -7,6 +7,7 @@ import { needsHealthConsent } from "../src/lib/health";
 import { cancelledOutcome, render } from "../src/lib/notifications/templates";
 import { friendlyError } from "../src/lib/errors";
 import { cronAuthorized } from "../src/lib/cron-auth";
+import { schedulerWarning } from "../src/lib/scheduler";
 
 describe("rate limits and email keys (A-045, A-092, A-103, A-008)", () => {
   test("sign-in and code limits fail closed when the check errors; booking limits fail open", () => {
@@ -83,5 +84,16 @@ describe("cron secret (A-089)", () => {
     assert.equal(cronAuthorized(null, "s3cret"), false);
     assert.equal(cronAuthorized("Bearer ", ""), false);
     assert.equal(cronAuthorized("Bearer undefined", undefined), false);
+  });
+});
+
+describe("scheduler warning on Today (A-102)", () => {
+  test("warns when it never ran on the real app, or ran over 20 minutes ago; not for a demo without a scheduler", () => {
+    const ago = (m: number) => new Date(Date.now() - m * 60_000).toISOString();
+    assert.equal(schedulerWarning(null, false), true);
+    assert.equal(schedulerWarning(null, true), false);
+    assert.equal(schedulerWarning(ago(25), true), true);
+    assert.equal(schedulerWarning(ago(25), false), true);
+    assert.equal(schedulerWarning(ago(3), false), false);
   });
 });
