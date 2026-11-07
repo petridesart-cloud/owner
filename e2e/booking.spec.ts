@@ -41,6 +41,10 @@ test("a new client without a package can book a trial (pay by Revolut) or get a 
   await page.getByText("Revolut", { exact: true }).click();
   await page.getByRole("button", { name: /Book your trial · €/ }).click();
   await expect(page.getByText("Booking confirmed")).toBeVisible();
+  // A-029: the confirmation says what to pay, how, and the reference.
+  await expect(page.getByRole("heading", { name: "To pay before class" })).toBeVisible();
+  await expect(page.getByText(/Send €\d+ with Revolut/)).toBeVisible();
+  await expect(page.getByText(/RF-[A-Z0-9]{6}/)).toBeVisible();
   await page.goto("/bookings");
   await expect(page.getByText("Awaiting payment")).toBeVisible();
   await expect(page.getByText(/Revolut ·/).first()).toBeVisible();

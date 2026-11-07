@@ -7,7 +7,7 @@ import { PackageCard, PastPackageRow } from "@/components/PackageCard";
 import { getSettings, requireViewer } from "@/lib/auth";
 import { clientPackages } from "@/lib/packages";
 import { db } from "@/lib/supabase/admin";
-import { dayMonth, longDate, nowMs, relativeHours, time, weekdayShort } from "@/lib/time";
+import { closedAt, dayMonth, longDate, nowMs, relativeHours, time, weekdayShort } from "@/lib/time";
 import { CancelButton } from "./CancelButton";
 import { eur } from "@/lib/money";
 
@@ -130,7 +130,7 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
                         ) : <>
                         {late && (
                           <p className="mb-2 text-xs leading-relaxed text-ink-soft">
-                            Free cancellation closed {relativeHours(new Date(start - cutoffMs))} ago ({settings.cancellation_cutoff_hours}h before class).
+                            Free cancellation closed at {closedAt(new Date(start - cutoffMs))} ({settings.cancellation_cutoff_hours} hours before class).
                           </p>
                         )}
                         <CancelButton bookingId={b.id} late={late} label={label} warning={warning} />

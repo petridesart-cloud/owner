@@ -392,3 +392,16 @@ describe("class type labels in copy (A-025)", () => {
     assert.deepEqual(hits, []);
   });
 });
+
+describe("late-cancel wording (A-028)", () => {
+  test("a class 2 hours away says when free cancellation closed, as a clock time", async () => {
+    const { closedAt } = await import("../src/lib/time");
+    const now = new Date("2026-11-10T12:00:00Z"); // 14:00 in Nicosia
+    const start = new Date(now.getTime() + 2 * 3_600_000);
+    const cutoffAt = new Date(start.getTime() - 6 * 3_600_000);
+    assert.equal(closedAt(cutoffAt, now), "10:00");
+    assert.doesNotMatch(closedAt(cutoffAt, now), /ago|min/);
+    const earlier = new Date("2026-11-11T05:00:00Z"); // class tomorrow 07:00 local; cutoff was 01:00 local today? check another day shows weekday
+    assert.match(closedAt(new Date("2026-11-09T21:30:00Z"), earlier), /^[A-Z][a-z]{2} \d\d:\d\d$/);
+  });
+});

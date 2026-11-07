@@ -111,3 +111,8 @@ export function importDateKey(raw: string) {
   if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) return null;
   return dt.toISOString().slice(0, 10);
 }
+
+/** When free cancellation closed: "12:00" today, or "Fri 23:30" on another day (A-028: absolute, never "1 min ago"). */
+export function closedAt(cutoffAt: Date, now: Date = new Date()) {
+  return dayKey(cutoffAt) === dayKey(now) ? time(cutoffAt) : `${weekdayShort(cutoffAt)} ${time(cutoffAt)}`;
+}

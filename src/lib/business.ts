@@ -19,7 +19,7 @@ export async function launchReadiness(s: Settings): Promise<ReadinessItem[]> {
     { label: "Your full name", ok: !!b.owner, href: "/admin/settings", hint: "Shown at the bottom of every page (required by EU law)." },
     { label: "Studio address", ok: !!b.address, href: "/admin/settings", hint: "Footer, terms and the map." },
     { label: "Contact email and phone", ok: !!b.email && !!b.phone, href: "/admin/settings", hint: "Where clients reach you." },
-    { label: "How clients pay you", ok: !!s.revolut_link || !!s.bank_iban, href: "/admin/settings", hint: "Your Revolut link and/or IBAN." },
+    { label: s.revolut_link ? "How clients pay you" : "Add your Revolut link", ok: !!s.revolut_link, href: "/admin/settings", hint: "Clients who choose Revolut see it with their payment. Your IBAN is optional." },
     { label: "Classes on the timetable", ok: (count ?? 0) > 0, href: "/admin/timetable", hint: "Set up the next weeks in Classes → Monthly timetable." },
     { label: "Emails switched on", ok: emailLive(), href: "/admin/outbox", hint: env.demoMode ? "Off in the demo by design." : "Needs the email key from your developer (see the launch guide)." },
     { label: "Automatic reminders running", ok: schedulerHealthy(s.last_cron_tick_at), href: "/admin/outbox", hint: "Runs every 5 minutes on its own." },

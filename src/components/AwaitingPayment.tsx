@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { eur } from "@/lib/money";
 import { paymentReference } from "@/lib/pricing";
 import { dayMonth } from "@/lib/time";
@@ -9,10 +10,10 @@ type Pending = { id: string; description: string | null; amount_cents: number; c
 const METHOD: Record<string, string> = { cash: "Cash at the studio", revolut: "Revolut", bank_transfer: "Bank transfer", card_in_person: "Card at the studio" };
 
 /** Package requests and drop-ins waiting for payment, with how to pay. */
-export function AwaitingPayment({ pending, settings }: { pending: Pending[]; settings: Settings }) {
+export function AwaitingPayment({ pending, settings, title = "Awaiting payment" }: { pending: Pending[]; settings: Settings; title?: string }) {
   if (!pending.length) return null;
   return (
-    <Section title="Awaiting payment">
+    <Section title={title}>
       <ul className="card divide-y divide-line">
         {pending.map((x) => (
           <li key={x.id} className="space-y-2 px-4 py-3 text-sm">
@@ -28,7 +29,7 @@ export function AwaitingPayment({ pending, settings }: { pending: Pending[]; set
             </div>
             <div className="rounded-2xl bg-lilac-50 px-3 py-2.5 leading-relaxed text-ink">
               {x.intended_method === "revolut" ? (
-                <p>Send {eur(x.amount_cents)} with Revolut{settings.revolut_link ? "" : " (ask your instructor for her Revolut)"} and add the reference below. Your instructor confirms it{x.booking_id ? "" : " and your classes appear"}.</p>
+                <p>Send {eur(x.amount_cents)} with Revolut and add the reference below.{!settings.revolut_link && <> We&apos;ll send you the Revolut details: <Link href="/contact" className="inline-flex min-h-11 items-center font-medium underline underline-offset-4">message the studio</Link>, or choose cash.</>} Your instructor confirms it{x.booking_id ? "" : " and your classes appear"}.</p>
               ) : x.intended_method === "bank_transfer" && settings.bank_iban ? (
                 <p>Transfer {eur(x.amount_cents)} to {settings.bank_account_name || "Re·Form Pilates Studio"}, IBAN <span className="font-mono">{settings.bank_iban}</span>.</p>
               ) : (
