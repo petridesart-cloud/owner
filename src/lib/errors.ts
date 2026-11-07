@@ -18,7 +18,7 @@ const MESSAGES: Record<string, string> = {
   empty_policy: "That text is empty. Write something, or empty it to go back to the default.",
   policy_versions_append_only: "Earlier versions of the legal texts are kept as they were.",
   not_found: "We couldn't find that. Please refresh and try again.",
-  beyond_window: "This class isn't open for booking yet. Classes open 4 weeks ahead.",
+  beyond_window: "This class isn't open for booking yet. Classes open a few weeks ahead.",
   trial_used: "The trial is for your first class of this type. Choose a drop-in or a package instead.",
   trial_not_available: "There's no trial for this class.",
   unpaid_limit: "You already have a class waiting for payment. Once it's settled you can reserve another, or get a package.",
@@ -62,8 +62,12 @@ const MESSAGES: Record<string, string> = {
 /** Engine error codes that have their own message. */
 export const ERROR_KEYS: Record<string, true> = Object.fromEntries(Object.keys(MESSAGES).map((k) => [k, true]));
 
-export function friendlyError(e: unknown): string {
+/** How far ahead classes open, in words: "4 weeks" (A-024: from the setting, never a fixed number). */
+export const windowWords = (days: number) => (days % 7 === 0 ? `${days / 7} week${days === 7 ? "" : "s"}` : `${days} days`);
+
+export function friendlyError(e: unknown, ctx: { windowDays?: number } = {}): string {
   const msg = typeof e === "object" && e && "message" in e ? String((e as { message: string }).message) : String(e);
+  if (msg === "beyond_window" && ctx.windowDays) return `This class isn't open for booking yet. Classes open ${windowWords(ctx.windowDays)} ahead.`;
   if (msg.includes("payments_one_code_per_client")) return "You've already used this code.";
   if (msg.includes("payments_one_pending_request")) return "You've already requested this package. It's waiting under My classes.";
   return MESSAGES[msg] ?? "Something went wrong. Please try again.";

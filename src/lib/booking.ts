@@ -9,7 +9,12 @@ import { friendlyError, type ActionResult } from "@/lib/errors";
 import { dayWord, longDate, spokenDateTime, time, relativeHours, todayKey } from "@/lib/time";
 import { eur, vatPortion } from "@/lib/money";
 import { applyRecurring } from "@/lib/recurring";
-import { cancelledOutcome, expiringNote } from "@/lib/notifications/templates";
+import { cancelledOutcome, classesUsedNote, expiringNote } from "@/lib/notifications/templates";
+
+/** Booking errors in her words; "beyond_window" names the real booking window from Settings (A-024). */
+async function bookErr(error: { message: string }) {
+  return friendlyError(error, error.message === "beyond_window" ? { windowDays: (await getSettings()).booking_window_days } : {});
+}
 
 export type OfferRow = { entry_id: string; profile_id: string; offer_expires_at: string | null };
 
@@ -70,13 +75,13 @@ export async function bookWithCredit(profile: Profile, sessionId: string): Promi
     const until = u?.[0]?.latest_expiry;
     return { ok: false, error: `Your package is valid until ${until ? spokenDateTime(new Date(new Date(until).getTime() - 1)).split(",")[0] : "before this class"}, so this class can't be booked with it. A new package will cover it.` };
   }
-  if (error) return { ok: false, error: friendlyError(error) };
+  if (error) return { ok: false, error: await bookErr(error) };
   const bookingId = (data as { booking_id: string }).booking_id;
   // The booking is saved: the emails go out after the response (A-017).
   later("booking emails", async () => {
     const s = await sessionInfo(sessionId);
     await notify({ profileId: profile.id, email: profile.email, phone: profile.phone }, "booking_confirmed",
-      { name: profile.full_name ?? undefined, ...tmpl(s), note: "1 credit used." }, { bookingId, sessionId });
+      { name: profile.full_name ?? undefined, ...tmpl(s), note: classesUsedNote(s.type.credit_cost) }, { bookingId, sessionId });
     await alertBooking(profile, sessionId, "with a class from their package", bookingId);
   });
   return { ok: true, data: { redirect: `/bookings/${bookingId}/confirmed` } };
@@ -85,7 +90,7 @@ export async function bookWithCredit(profile: Profile, sessionId: string): Promi
 export async function bookWithPayment(profile: Profile, sessionId: string): Promise<ActionResult<{ redirect: string }>> {
   if (!(await getSettings()).online_payments_enabled) return { ok: false, error: "Online payment isn't available yet. Reserve and pay at the studio." };
   const { data, error } = await db().rpc("book_session", { p_profile: profile.id, p_session: sessionId, p_mode: "payment" });
-  if (error) return { ok: false, error: friendlyError(error) };
+  if (error) return { ok: false, error: await bookErr(error) };
   const bookingId = (data as { booking_id: string }).booking_id;
   const s = await sessionInfo(sessionId);
   const cfg = await getSettings();
@@ -126,7 +131,7 @@ export async function bookAtStudio(profile: Profile, sessionId: string): Promise
   if (error) {
     if (error.message === "unpaid_limit") return { ok: false, error: "You already have a class to pay for at the studio. Once it's settled you can reserve another, or get a package." };
     if (error.message === "pay_later_off") return { ok: false, error: "Please get a package or class credits at the studio first." };
-    return { ok: false, error: friendlyError(error) };
+    return { ok: false, error: await bookErr(error) };
   }
   const bookingId = (data as { booking_id: string }).booking_id;
   later("booking emails", async () => {
@@ -148,7 +153,7 @@ export async function bookSingle(profile: Profile, sessionId: string, mode: "tri
     if (!found.ok) return found;
   }
   const { data, error } = await db().rpc("book_session", { p_profile: profile.id, p_session: sessionId, p_mode: mode, p_method: method });
-  if (error) return { ok: false, error: friendlyError(error) };
+  if (error) return { ok: false, error: await bookErr(error) };
   const bookingId = (data as { booking_id: string }).booking_id;
   const s = await sessionInfo(sessionId);
   let { data: pay } = await db().from("payments").select("id, amount_cents").eq("booking_id", bookingId).single();
@@ -185,7 +190,7 @@ export async function bookSingle(profile: Profile, sessionId: string, mode: "tri
 /** A free event (price €0): booked straight away, no payment question. The database refuses it if the event isn't free. */
 export async function bookFree(profile: Profile, sessionId: string): Promise<ActionResult<{ redirect: string }>> {
   const { data, error } = await db().rpc("book_session", { p_profile: profile.id, p_session: sessionId, p_mode: "free" });
-  if (error) return { ok: false, error: friendlyError(error) };
+  if (error) return { ok: false, error: await bookErr(error) };
   const bookingId = (data as { booking_id: string }).booking_id;
   later("booking emails", async () => {
     const s = await sessionInfo(sessionId);
@@ -239,7 +244,7 @@ export async function buyProduct(profile: Profile, productId: string, method: "c
     let payId = existing?.id;
     if (existing) {
       const { error } = await db().from("payments").update(fields).eq("id", existing.id);
-      if (error) return { ok: false, error: friendlyError(error) };
+      if (error) return { ok: false, error: await bookErr(error) };
     } else {
       const { data: pay, error } = await db().from("payments").insert({
         ...fields, profile_id: profile.id, provider: "offline", purpose, product_id: product.id, description: product.name, status: "pending",
@@ -247,10 +252,10 @@ export async function buyProduct(profile: Profile, productId: string, method: "c
       if (error?.code === "23505" && error.message.includes("payments_one_pending_request")) {
         // The other tap got there first: that request stands.
         existing = await pendingRequest();
-        if (!existing) return { ok: false, error: friendlyError(error) };
+        if (!existing) return { ok: false, error: await bookErr(error) };
         return { ok: true, data: { redirect: "/bookings?requested=1" } };
       }
-      if (error) return { ok: false, error: friendlyError(error) };
+      if (error) return { ok: false, error: await bookErr(error) };
       payId = pay.id;
     }
     const isNew = !existing, resend = !existing || existing.amount_cents !== price.cents;
@@ -331,7 +336,7 @@ export async function buyPack(profile: Profile, productId: string, code?: string
     })
     .select("id")
     .single();
-  if (error) return { ok: false, error: friendlyError(error) };
+  if (error) return { ok: false, error: await bookErr(error) };
   const checkout = await paymentProvider().createCheckout({
     paymentId: pay.id, amountCents: price.cents, description: product.name, customerEmail: profile.email,
     successUrl: `${env.siteUrl}/bookings?purchased=${pay.id}`,
@@ -391,13 +396,13 @@ async function paidEmails(paymentId: string, res: PaidResult) {
 // ---------------------------------------------------------------------------
 export async function joinWaitlist(profile: Profile, sessionId: string): Promise<ActionResult<{ position: number }>> {
   const { data, error } = await db().rpc("join_waitlist", { p_profile: profile.id, p_session: sessionId });
-  if (error) return { ok: false, error: friendlyError(error) };
+  if (error) return { ok: false, error: await bookErr(error) };
   return { ok: true, data: { position: (data as { position: number }).position } };
 }
 
 export async function leaveWaitlist(profile: Profile, entryId: string): Promise<ActionResult> {
   const { data, error } = await db().rpc("leave_waitlist", { p_profile: profile.id, p_entry: entryId });
-  if (error) return { ok: false, error: friendlyError(error) };
+  if (error) return { ok: false, error: await bookErr(error) };
   later("waitlist offers", () => notifyOffers((data ?? []) as OfferRow[]));
   return { ok: true };
 }
@@ -419,7 +424,7 @@ export async function notifyOffers(rows: OfferRow[], cfg?: Settings) {
         const grace = b?.free_cancel_until ? ` Can't make it? Cancel in the app by ${time(b.free_cancel_until)} and the class goes back into your package.` : "";
         await alertBooking(p, s.id, "from the waitlist, with a class from their package", b?.id);
         await notify({ profileId: p.id, email: p.email, phone: p.phone }, "waitlist_booked",
-          { name: p.full_name ?? undefined, ...tmpl(s), note: `1 class from your package was used.${grace}`, ...(grace ? { policy: undefined } : {}) },
+          { name: p.full_name ?? undefined, ...tmpl(s), note: `${classesUsedNote(s.type.credit_cost)}${grace}`, ...(grace ? { policy: undefined } : {}) },
           { sms, sessionId: s.id, bookingId: b?.id, dedupeKey: `waitlist-booked:${r.entry_id}` });
         return;
       }
@@ -455,7 +460,7 @@ export async function cancelBooking(profile: Profile, bookingId: string, asAdmin
     const { data: b } = await db().from("bookings").select("status, profile_id").eq("id", bookingId).maybeSingle();
     if (b && (asAdmin || b.profile_id === profile.id) && ["cancelled", "late_cancelled"].includes(b.status)) return { ok: true, data: { status: b.status } };
   }
-  if (error) return { ok: false, error: friendlyError(error) };
+  if (error) return { ok: false, error: await bookErr(error) };
   const res = data as CancelResult;
   later("cancellation emails", () => cancelEmails(profile, bookingId, res, asAdmin));
   return { ok: true, data: { status: res.status } };
@@ -480,8 +485,10 @@ async function cancelEmails(profile: Profile, bookingId: string, res: CancelResu
   }
   if (!asAdmin) {
     const late = res.status !== "cancelled";
+    // What the in-time cancel meant for them: a class back in the package, an online payment to refund, or nothing to pay.
+    const back = b?.paid_with === "credit" || (b?.paid_with === "payment" && s.type.credit_kind) ? "credit" : b?.paid_with === "payment" ? "refund" : "none";
     await alertStudio("cancellations", `Cancellation: ${s.name}, ${spokenDateTime(s.starts_at)}`,
-      [`${profile.full_name ?? profile.email ?? "A client"} cancelled${late ? ` inside the ${s.cutoff}-hour window (the class isn't returned)` : " in time (the class went back into their package)"}.`,
+      [`${profile.full_name ?? profile.email ?? "A client"} cancelled${late ? ` inside the ${s.cutoff}-hour window (the class isn't returned)` : back === "credit" ? " in time (the class went back into their package)" : back === "refund" ? " in time (their online payment is to be refunded)" : " in time (nothing to pay)"}.`,
        "Their spot is open again; the waitlist moves up if anyone is waiting."],
       { path: `/admin/classes/${s.id}`, dedupeKey: `cancel:${bookingId}`, about: profile.id });
   }

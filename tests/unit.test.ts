@@ -347,3 +347,23 @@ describe("studio time (WP12: A-095, A-097, A-046, A-048)", () => {
     assert.equal(localToUtc(addDaysKey("2026-12-31", 1), "00:00"), "2026-12-31T22:00:00.000Z");
   });
 });
+
+describe("copy that matches the settings and the engine (WP10: A-024, A-073)", () => {
+  test("the booking window in the error is the setting, not a fixed 4 weeks", () => {
+    assert.match(friendlyError({ message: "beyond_window" }, { windowDays: 42 }), /6 weeks ahead/);
+    assert.match(friendlyError({ message: "beyond_window" }, { windowDays: 7 }), /1 week ahead/);
+    assert.doesNotMatch(friendlyError({ message: "beyond_window" }), /4 weeks/);
+  });
+  test("the booking note uses the class's credit cost", async () => {
+    const { classesUsedNote } = await import("../src/lib/notifications/templates");
+    assert.equal(classesUsedNote(1), "1 class from your package was used.");
+    assert.equal(classesUsedNote(3), "3 classes from your package were used.");
+  });
+  test("closing line follows the class", async () => {
+    const { seeYou } = await import("../src/lib/copy");
+    assert.equal(seeYou("mat"), "See you on the mat.");
+    assert.equal(seeYou("reformer"), "See you on the reformer.");
+    assert.equal(seeYou("event"), "See you there!");
+    assert.equal(seeYou("other"), "See you soon.");
+  });
+});

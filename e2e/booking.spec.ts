@@ -26,7 +26,14 @@ test("returning client books with a package class, adds to calendar, cancels and
 test("a new client without a package can book a trial (pay by Revolut) or get a package", async ({ page }) => {
   await openBookableClass(page);
   const url = new URL(page.url()).pathname;
+  // A-024/A-070: signed out, the class page says a trial exists and sends people to Create account (not Sign in).
+  await page.context().clearCookies();
+  await page.reload();
+  await expect(page.getByText(/First time at Re·Form\? Your first .* class is €\d+ \(trial\)/)).toBeVisible();
+  await expect(page.getByText("No password needed")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Sign in" }).first()).toHaveAttribute("href", /\/login\?next=/);
   await page.getByRole("link", { name: "Secure your spot" }).click();
+  await expect(page).toHaveURL(/\/signup\?next=/);
   await signUp(page, uniqueEmail("nopack"), url);
   await expect(page.getByRole("button", { name: /Pay €/ })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Secure your package" })).toBeVisible();

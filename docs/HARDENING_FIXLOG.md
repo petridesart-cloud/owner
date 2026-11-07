@@ -80,3 +80,6 @@
 | A-100 | Low | Home, Schedule, Packs, My classes, Today read in one stage | count.mjs | A-022, A-100, A-101 |
 | A-101 | Low | nextBooking ordered on the class's own start time | typecheck | A-050, A-051 / A-022, A-100, A-101 |
 | A-052 | Medium | next/image with sizes and priority, remotePatterns; 640px variant left open | manual /studio check | A-052: her photos through next/image |
+| A-024 | High | Class page: Create account first (Sign in as text link), window from the setting, "N classes from your package used" (credit_cost), waitlist promise only with a package class, studio alert wording per paid_with | unit.test.ts "copy that matches…", e2e/booking.spec.ts | A-024, A-070, A-110: class page copy |
+| A-070 | Medium | Signed-out class page shows "First time at Re·Form? Your first X class is €N (trial)" and labels the single class Drop-in | e2e/booking.spec.ts | A-024, A-070, A-110 |
+| A-110 | Low | (class page part) generateMetadata title, sr-only dt with aria-hidden icon; privacy table and demo banner below | e2e axe | A-024, A-070, A-110 |

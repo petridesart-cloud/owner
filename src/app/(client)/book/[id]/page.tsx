@@ -14,14 +14,23 @@ import { creditBalance, eventExtras, lockedEventIds, sessionById } from "@/lib/d
 import { Lock } from "lucide-react";
 import { db } from "@/lib/supabase/admin";
 import { eur, vatLine } from "@/lib/money";
-import { dayKey, dotDate, longDate, nowMs, relativeHours, time } from "@/lib/time";
+import { dayKey, dotDate, longDate, nowMs, relativeHours, time, weekdayShort, dayMonth } from "@/lib/time";
+import { seeYou } from "@/lib/copy";
 import { BookActions } from "./BookActions";
 import { EVENT_POLICY } from "@/lib/booking";
 import { getTexts } from "@/lib/content";
 import { Flower } from "@/components/Flower";
 
-export const metadata: Metadata = { title: "Book a class" };
 export const dynamic = "force-dynamic";
+
+/** A-110: each class page has its own title ("Reformer Pilates · Fri 6 Nov 17:00 · Re·Form"). */
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  if (!/^[0-9a-f-]{36}$/.test(id)) return { title: "Book a class" };
+  const c = await sessionById(id).catch(() => null);
+  if (!c || c.private) return { title: "Book a class" };
+  return { title: `${c.title} · ${weekdayShort(c.starts_at)} ${dayMonth(c.starts_at)} ${time(c.starts_at)}` };
+}
 
 export default async function BookPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ cancelled?: string }> }) {
   const { id } = await params;
@@ -116,6 +125,10 @@ export default async function BookPage({ params, searchParams }: { params: Promi
   const offered = entry?.status === "offered" && new Date(entry.offer_expires_at!) > new Date();
   const full = c.spots_left === 0 && !offered;
   const creditCount = usable?.usable ?? 0;
+  // A-024: only someone with a usable package class is booked in automatically; everyone else gets a held offer.
+  const waitlistPromise = c.kind !== "event" && creditCount > 0
+    ? `If a spot opens up to ${closeLabel} before class, we'll book you in with one of your package classes and email you.`
+    : "If a spot opens, we'll hold it for you and email you.";
   // A Reformer package can't be used for Mat (and the other way round): say so instead of just "get a package".
   const balance = creditCount === 0 ? balanceRaw : null;
   const otherKind = balance ? Object.keys(balance).find((k) => k !== c.credit_kind && typeof balance[k] === "number" && balance[k] > 0) : undefined;
@@ -152,11 +165,11 @@ export default async function BookPage({ params, searchParams }: { params: Promi
         </div>
 
         <dl className="mt-4 space-y-2 text-[0.95rem] text-ink">
-          <div className="flex items-center gap-2.5"><dt><CalendarDays aria-label="When" size={17} className="text-ink-soft" /></dt>
+          <div className="flex items-center gap-2.5"><dt><CalendarDays aria-hidden size={17} className="text-ink-soft" /><span className="sr-only">When</span></dt>
             <dd><span className="font-medium">{longDate(c.starts_at)}</span> · {time(c.starts_at)}–{time(c.ends_at)}</dd></div>
-          <div className="flex items-center gap-2.5"><dt><MapPin aria-label="Where" size={17} className="text-ink-soft" /></dt>
+          <div className="flex items-center gap-2.5"><dt><MapPin aria-hidden size={17} className="text-ink-soft" /><span className="sr-only">Where</span></dt>
             <dd>{c.location ?? "Re·Form Studio"}</dd></div>
-          <div className="flex items-center gap-2.5"><dt><Users aria-label="Spots" size={17} className="text-ink-soft" /></dt>
+          <div className="flex items-center gap-2.5"><dt><Users aria-hidden size={17} className="text-ink-soft" /><span className="sr-only">Spots</span></dt>
             <dd className={c.spots_left === 1 ? "font-medium text-plum-700" : ""}>{c.status === "cancelled" ? "Cancelled" : spotsLabel(c)}</dd></div>
         </dl>
 
@@ -191,35 +204,37 @@ export default async function BookPage({ params, searchParams }: { params: Promi
           ) : booking ? (
             <div className="space-y-3 text-center">
               <Badge tone="booked">You&apos;re booked</Badge>
-              <p className="text-sm text-ink-soft">{c.kind === "event" ? "See you there! You'll find it in My classes." : "See you on the reformer. Manage or cancel in My classes."}</p>
+              <p className="text-sm text-ink-soft">{c.kind === "event" ? `${seeYou(c.kind)} You'll find it in My classes.` : `${seeYou(c.kind)} Manage or cancel in My classes.`}</p>
               <ButtonLink href="/bookings" variant="soft" className="w-full">My classes</ButtonLink>
             </div>
           ) : !viewer ? (
             <div className="space-y-3">
-              <PriceSummary price={c.price_cents} settings={settings} event={c.kind === "event"} policy={policy} />
-              <ButtonLink href={`/login?next=${encodeURIComponent(next)}`} className="w-full">Secure your spot</ButtonLink>
-              <p className="text-center text-xs text-ink-soft">Sign in with your email to book. No password needed.</p>
+              <PriceSummary price={c.price_cents} settings={settings} event={c.kind === "event"} policy={policy}
+                trial={c.kind !== "event" ? singleProducts.find((p) => p.tag === "trial") : undefined} kindName={labelOf(labels, c.credit_kind)} />
+              <ButtonLink href={`/signup?next=${encodeURIComponent(next)}`} className="w-full">Secure your spot</ButtonLink>
+              <p className="text-center text-sm text-ink-soft">
+                New here? Create an account in a minute. Already a client?{" "}
+                <Link href={`/login?next=${encodeURIComponent(next)}`} className="inline-flex min-h-11 items-center font-medium text-ink underline underline-offset-4">Sign in</Link>
+              </p>
             </div>
           ) : !profile?.onboarded_at ? (
             <ButtonLink href={`/welcome?next=${encodeURIComponent(next)}`} className="w-full">Add your details to book</ButtonLink>
           ) : !profile.date_of_birth || !profile.parq_completed_at ? (
             <div className="space-y-3">
               <Notice>One more step before booking: {!profile.date_of_birth && !profile.parq_completed_at ? "your date of birth and a few health questions" : !profile.date_of_birth ? "your date of birth" : "a few health questions (1 minute)"}.</Notice>
-              <ButtonLink href={profile.date_of_birth ? `/health?next=${encodeURIComponent(next)}` : "/account?dob=1"} className="w-full">Complete my details</ButtonLink>
+              <ButtonLink href={profile.date_of_birth ? `/health?next=${encodeURIComponent(next)}` : `/account?dob=1&next=${encodeURIComponent(next)}`} className="w-full">Complete my details</ButtonLink>
             </div>
           ) : entry?.status === "waiting" ? (
             <div className="space-y-3">
               <Notice>
                 You&apos;re <strong>{ordinal(position)}</strong> on the waitlist.{" "}
-                {c.kind === "event"
-                  ? "If a spot opens, we'll hold it for you and email you."
-                  : `If a spot opens up to ${closeLabel} before class, we'll book you in using a credit from your package and email you.`}
+                {waitlistPromise}
               </Notice>
               <BookActions mode="leave" sessionId={id} entryId={entry.id} />
             </div>
           ) : full ? (
             <div className="space-y-3">
-              <p className="text-sm text-ink-soft">This class is full{c.waitlist_count ? ` and ${c.waitlist_count} ${c.waitlist_count === 1 ? "person is" : "people are"} waiting` : ""}. {c.kind === "event" ? "Join the waitlist: if a spot opens, we email you and hold it for you." : `Join the waitlist: if a spot opens up to ${closeLabel} before class, we'll book you in using a credit from your package and email you.`}</p>
+              <p className="text-sm text-ink-soft">This class is full{c.waitlist_count ? ` and ${c.waitlist_count} ${c.waitlist_count === 1 ? "person is" : "people are"} waiting` : ""}. Join the waitlist: {waitlistPromise.charAt(0).toLowerCase() + waitlistPromise.slice(1)}</p>
               <BookActions mode="waitlist" sessionId={id} />
             </div>
           ) : (
@@ -243,7 +258,7 @@ export default async function BookPage({ params, searchParams }: { params: Promi
               )}
               {creditCount === 0 && !singles.length && !unpaid && !requestedPack && <PriceSummary price={c.price_cents} settings={settings} event={c.kind === "event"} policy={policy} />}
               {creditCount === 0 && singles.length > 0 && c.kind === "event" && <p className="text-sm text-ink-soft">Please read the event terms above.</p>}
-              {creditCount === 0 && singles.length > 0 && c.kind !== "event" && <p className="text-sm text-ink-soft">Free cancellation up to {settings.cancellation_cutoff_hours}h before class. <Link href="/policy" className="underline underline-offset-4">Policies</Link></p>}
+              {creditCount === 0 && singles.length > 0 && c.kind !== "event" && <p className="text-sm text-ink-soft">Free cancellation up to {settings.cancellation_cutoff_hours}h before class. <Link href="/policy/payments" className="inline-flex min-h-11 items-center underline underline-offset-4">Cancellation policy</Link></p>}
               {creditCount === 0 && singles.length > 0 && c.price_cents > 0 && <NoWithdrawal />}
               {creditCount > 0 && <p className="text-sm text-ink-soft">Free cancellation up to {settings.cancellation_cutoff_hours}h before class.</p>}
               {(creditCount > 0 || singles.length > 0 || settings.online_payments_enabled || settings.allow_pay_later) && (
@@ -265,21 +280,22 @@ export default async function BookPage({ params, searchParams }: { params: Promi
   );
 }
 
-function PriceSummary({ price, settings, event = false, policy = null }: { price: number; settings: { vat_rate: number; vat_registered: boolean; cancellation_cutoff_hours: number; online_payments_enabled: boolean }; event?: boolean; policy?: string | null }) {
+function PriceSummary({ price, settings, event = false, policy = null, trial, kindName = "" }: { price: number; trial?: { price_cents: number }; kindName?: string; settings: { vat_rate: number; vat_registered: boolean; cancellation_cutoff_hours: number; online_payments_enabled: boolean }; event?: boolean; policy?: string | null }) {
   const vat = vatLine(price, Number(settings.vat_rate), settings.vat_registered);
   return (
     <div className="rounded-2xl border border-line bg-paper p-4 text-sm">
       <div className="flex items-baseline justify-between">
-        <span className="text-ink">{event ? "Event fee" : "Single class"}</span>
+        <span className="text-ink">{event ? "Event fee" : trial ? "Drop-in" : "Single class"}</span>
         <span className="font-serif text-2xl text-ink">{price === 0 ? "Free" : eur(price)}</span>
       </div>
       {vat && <p className="mt-0.5 text-right text-xs text-ink-soft">{vat}</p>}
+      {trial && <p className="mt-2 text-sm leading-relaxed text-ink">First time at Re·Form? Your first {kindName} class is {eur(trial.price_cents)} (trial).</p>}
       {event && policy ? (
         <p className="mt-3 text-sm leading-relaxed text-ink-soft">See the event terms above.</p>
       ) : (
         <p className="mt-3 text-sm leading-relaxed text-ink-soft">
           Free cancellation up to {settings.cancellation_cutoff_hours} hours before{event ? "" : " class"}. Later cancellations aren&apos;t refunded.{" "}
-          <Link href="/policy/payments" className="underline underline-offset-4">Cancellation policy</Link>
+          <Link href="/policy/payments" className="inline-flex min-h-11 items-center underline underline-offset-4">Cancellation policy</Link>
         </p>
       )}
       {price > 0 && <NoWithdrawal />}

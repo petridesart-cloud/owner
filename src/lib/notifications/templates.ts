@@ -289,3 +289,9 @@ function dayPhrase(day = "Tomorrow") {
 export function expiringNote(remaining: number, kind: string, expiresAt: string) {
   return `${remaining} ${kind} class${remaining === 1 ? "" : "es"} can be used until ${longDate(lastDay(expiresAt))}.`;
 }
+
+/** "1 class from your package was used." / "2 classes from your package were used." (the class type's credit cost). */
+export function classesUsedNote(cost: number) {
+  const n = Math.max(1, cost);
+  return n === 1 ? "1 class from your package was used." : `${n} classes from your package were used.`;
+}
