@@ -136,3 +136,4 @@ The nine mandatory tests of AUDIT §4.1. `E` = `tests/engine.test.ts`, `U` = `te
 | Account deletion | E; `e2e/account.spec.ts` | E "account deletion leaves nothing identifiable, keeps anonymised records and moves the waitlist up"; "erasing a profile clears the round-1 personal fields…"; e2e "a client exports their data, deletes their account, and their spot is freed" |
 
 A-067 backfill (private sessions, `credit_cost>1`, closures, `applyRecurring` in `N`, reminders and opt-out, health, email matching, `extend_timetable`, RLS) was already covered by WP2 to WP13; WP14 only replaced the fixed 1.2 s sleep in the pause/resume test by backdating `paused_at`.
+| V-002, V-011 | Medium/Low | Cookies Policy lists rf_signup; doc header no longer claims a Cookies/Privacy acceptance | test:unit (legal docs sync) | V-002, V-011: Cookies Policy lists rf_signup and states acceptance correctly |

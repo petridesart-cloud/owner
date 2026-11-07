@@ -1,6 +1,6 @@
 # Cookies Policy
 
-Last updated 7 November 2026. Shown in the app at /legal/cookies, where the version you accepted is recorded. Details in [brackets] are filled in from Admin → Settings.
+Last updated 7 November 2026. Shown in the app at /legal/cookies. Each version is kept. Details in [brackets] are filled in from Admin → Settings.
 
 ## Essential cookies only
 
@@ -9,6 +9,7 @@ We only use cookies that are strictly necessary to sign you in and keep your acc
 | Cookie | Set by | Purpose | Duration | Type |
 | --- | --- | --- | --- | --- |
 | sb-…-auth-token (sometimes split into .0, .1) | Re·Form (Supabase sign-in) | Keeps you signed in securely. Scripts can't read it, and it's only sent over HTTPS to this site | Up to 400 days, or until you sign out | Essential |
+| rf_signup | Re·Form | Links the details you typed at Create account to the email you confirm, in this browser only. Scripts can't read it | Up to 24 hours, deleted once your email is confirmed | Essential |
 | sb-…-auth-token-code-verifier | Re·Form (Supabase sign-in) | Completes a sign-in step, if one is used | A few minutes | Essential |
 
 ## Fonts and images

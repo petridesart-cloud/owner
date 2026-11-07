@@ -1,6 +1,6 @@
 # Terms & Conditions
 
-Last updated 7 November 2026. Shown in the app at /legal/terms (the studio can edit this text in Admin → Settings → Your texts), where the version you accepted is recorded. Details in [brackets] are filled in from Admin → Settings.
+Last updated 7 November 2026. Shown in the app at /legal/terms (the studio can edit this text in Admin → Settings → Your texts). Each version is kept, and the version you accepted at sign-up is recorded. Details in [brackets] are filled in from Admin → Settings.
 
 ## Who we are
 

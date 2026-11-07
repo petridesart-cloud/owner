@@ -1,6 +1,6 @@
 # Privacy Policy
 
-Last updated 7 November 2026. Shown in the app at /legal/privacy, where the version you accepted is recorded. Details in [brackets] are filled in from Admin → Settings.
+Last updated 7 November 2026. Shown in the app at /legal/privacy. Each version is kept. Details in [brackets] are filled in from Admin → Settings.
 
 ## Who we are
 

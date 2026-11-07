@@ -18,8 +18,9 @@ export const DOC_SETTINGS: LegalSettings = {
 export const DOCS_UPDATED = "7 November 2026";
 
 /** The app's plain format as Markdown: blank lines between blocks, lists and tables kept together. */
-export function toMarkdown(title: string, text: string, where: string) {
-  const out: string[] = [`# ${title}`, "", `Last updated ${DOCS_UPDATED}. Shown in the app at ${where}, where the version you accepted is recorded. Details in [brackets] are filled in from Admin → Settings.`];
+export function toMarkdown(title: string, text: string, where: string, accepted = false) {
+  const note = accepted ? "Each version is kept, and the version you accepted at sign-up is recorded." : "Each version is kept.";
+  const out: string[] = [`# ${title}`, "", `Last updated ${DOCS_UPDATED}. Shown in the app at ${where}. ${note} Details in [brackets] are filled in from Admin → Settings.`];
   let prev = "";
   for (const raw of text.split("\n")) {
     const line = raw.trim();
@@ -35,8 +36,8 @@ export function toMarkdown(title: string, text: string, where: string) {
 export function legalMarkdown(s: LegalSettings = DOC_SETTINGS): Record<string, string> {
   return {
     "docs/PRIVACY.md": toMarkdown(DOC_TITLE.privacy, privacyText(s), "/legal/privacy"),
-    "docs/TERMS.md": toMarkdown(DOC_TITLE.terms, defaultTerms(s), "/legal/terms (the studio can edit this text in Admin → Settings → Your texts)"),
-    "docs/WAIVER.md": toMarkdown(DOC_TITLE.waiver, waiverText(s), "/legal/health (accepted at sign-up)"),
+    "docs/TERMS.md": toMarkdown(DOC_TITLE.terms, defaultTerms(s), "/legal/terms (the studio can edit this text in Admin → Settings → Your texts)", true),
+    "docs/WAIVER.md": toMarkdown(DOC_TITLE.waiver, waiverText(s), "/legal/health", true),
     "docs/COOKIES.md": toMarkdown(DOC_TITLE.cookies, cookiesText(), "/legal/cookies"),
   };
 }

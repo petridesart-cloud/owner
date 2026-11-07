@@ -1,6 +1,6 @@
 # Health & Safety acknowledgement
 
-Last updated 7 November 2026. Shown in the app at /legal/health (accepted at sign-up), where the version you accepted is recorded. Details in [brackets] are filled in from Admin → Settings.
+Last updated 7 November 2026. Shown in the app at /legal/health. Each version is kept, and the version you accepted at sign-up is recorded. Details in [brackets] are filled in from Admin → Settings.
 
 ## The activity
 
