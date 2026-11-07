@@ -152,6 +152,8 @@ export async function bookSingle(profile: Profile, sessionId: string, mode: "tri
   const bookingId = (data as { booking_id: string }).booking_id;
   const s = await sessionInfo(sessionId);
   let { data: pay } = await db().from("payments").select("id, amount_cents").eq("booking_id", bookingId).single();
+  // The Terms in force when they booked (single classes and events have no separate tick; A-009).
+  if (pay) await db().from("payments").update({ terms_version_id: (await currentVersion("terms")).id }).eq("id", pay.id);
   if (found?.ok && pay) {
     const d = withDiscount(pay.amount_cents, pay.amount_cents, found.discount);
     if (d.applies && d.cents < pay.amount_cents) {
@@ -230,7 +232,10 @@ export async function buyProduct(profile: Profile, productId: string, method: "c
     let existing = await pendingRequest();
     const price = await packagePrice(profile, product, cfg, code, existing?.id);
     if (!price.ok) return price;
-    const fields = { intended_method: method, amount_cents: price.cents, discount_code_id: price.codeId, discount_note: price.note };
+    // The Terms they accepted with the package tick, at their exact version (A-009).
+    const terms = await currentVersion("terms");
+    const fields = { intended_method: method, amount_cents: price.cents, discount_code_id: price.codeId, discount_note: price.note,
+      terms_version_id: terms.id, accepted_terms_at: new Date().toISOString() };
     let payId = existing?.id;
     if (existing) {
       const { error } = await db().from("payments").update(fields).eq("id", existing.id);
@@ -308,6 +313,7 @@ import { withDiscount } from "@/lib/discount";
 import { findCode } from "@/lib/rewards";
 import { getKinds, getTabs, kindLabel } from "@/lib/kinds";
 import { alertBooking, alertStudio } from "@/lib/studio-alerts";
+import { currentVersion } from "@/lib/policy-versions";
 
 export async function buyPack(profile: Profile, productId: string, code?: string | null): Promise<ActionResult<{ redirect: string }>> {
   const { data: product } = await db().from("products").select("*").eq("id", productId).eq("active", true).single();

@@ -46,8 +46,9 @@ export function SignupForm({ next }: { next: string }) {
         <legend className="sr-only">Agreements</legend>
         <Checkbox id="policy" name="policy" required aria-describedby={e.policy ? "policy-error" : undefined}>
           I accept the <Link href="/policy" target="_blank" className="font-medium underline underline-offset-4">Studio Rules</Link>, the{" "}
-          <Link href="/policy/payments" target="_blank" className="font-medium underline underline-offset-4">Payments &amp; Cancellation Policy</Link> and the{" "}
-          <Link href="/legal/terms" target="_blank" className="font-medium underline underline-offset-4">Terms</Link>.
+          <Link href="/policy/payments" target="_blank" className="font-medium underline underline-offset-4">Payments &amp; Cancellation Policy</Link>, the{" "}
+          <Link href="/legal/terms" target="_blank" className="font-medium underline underline-offset-4">Terms</Link> and the{" "}
+          <Link href="/legal/health" target="_blank" className="font-medium underline underline-offset-4">Health &amp; Safety acknowledgement</Link>.
         </Checkbox>
         {e.policy && <p id="policy-error" className="pl-8 text-xs font-medium text-burgundy">{e.policy}</p>}
         <Checkbox id="marketing_email" name="marketing_email">Send me news about new schedules and events (optional).</Checkbox>

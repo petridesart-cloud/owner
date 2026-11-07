@@ -7,11 +7,3 @@ export function Prose({ children }: { children: ReactNode }) {
     </div>
   );
 }
-
-export function DraftNotice() {
-  return (
-    <p className="mx-5 mb-3 rounded-2xl border border-mauve/50 bg-mauve-soft px-4 py-2.5 text-xs leading-relaxed text-ink">
-      Draft placeholder, written for an individual trader. To be reviewed by a lawyer and accountant before online payments go live.
-    </p>
-  );
-}

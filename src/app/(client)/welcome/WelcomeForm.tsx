@@ -41,9 +41,10 @@ export function WelcomeForm({ email, first, last, phone, next }: { email: string
       <fieldset className="space-y-1">
         <legend className="sr-only">Agreements</legend>
         <Checkbox id="policy" name="policy" required aria-describedby={e.policy ? "policy-error" : undefined}>
-          I accept the <Link href="/policy" target="_blank" className="font-medium underline underline-offset-4">Studio Rules</Link> and the{" "}
-          <Link href="/policy/payments" target="_blank" className="font-medium underline underline-offset-4">Payments, Cancellation &amp; Membership Policy</Link>{" "}
-          (and the <Link href="/legal/terms" target="_blank" className="font-medium underline underline-offset-4">Terms</Link>).
+          I accept the <Link href="/policy" target="_blank" className="font-medium underline underline-offset-4">Studio Rules</Link>, the{" "}
+          <Link href="/policy/payments" target="_blank" className="font-medium underline underline-offset-4">Payments &amp; Cancellation Policy</Link>, the{" "}
+          <Link href="/legal/terms" target="_blank" className="font-medium underline underline-offset-4">Terms</Link> and the{" "}
+          <Link href="/legal/health" target="_blank" className="font-medium underline underline-offset-4">Health &amp; Safety acknowledgement</Link>.
         </Checkbox>
         {e.policy && <p id="policy-error" className="pl-8 text-xs font-medium text-burgundy">{e.policy}</p>}
       </fieldset>

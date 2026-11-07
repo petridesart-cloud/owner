@@ -9,6 +9,7 @@ import { alertStudio } from "@/lib/studio-alerts";
 import { safeNext } from "@/lib/safe-next";
 import { fullName, PHOTO_CONSENT, type PhotoConsent } from "@/lib/profile";
 import { must } from "@/lib/errors";
+import { acceptedVersions } from "@/lib/policy-versions";
 
 /** Demo only: every demo client (…@example.com) signs in with this password, shown on the sign-in page. */
 export const DEMO_CLIENT_PASSWORD = "reform-demo";
@@ -112,13 +113,15 @@ export type SignupDetails = {
   photo_consent: string; marketing_email: boolean;
 };
 
-/** A new account's details, saved once the email is confirmed (with the consents she needs). */
+/** A new account's details, saved once the email is confirmed (with the consents she needs and the documents they accepted). */
 export async function onboard(profile: Profile, email: string, d: SignupDetails, version: string) {
   const photo: PhotoConsent | null = d.photo_consent in PHOTO_CONSENT ? (d.photo_consent as PhotoConsent) : null;
   // Details and consents in one transaction (A-019): never onboarded without the consents on file.
   must(await db().rpc("onboard_profile", {
     p_profile: profile.id, p_first: d.first_name, p_last: d.last_name, p_full: fullName(d.first_name, d.last_name),
     p_phone: d.phone, p_dob: d.date_of_birth, p_email: email.toLowerCase(), p_photo: photo as string, p_marketing: d.marketing_email, p_version: version,
+    // One acceptance per document at its exact version: Terms, Studio Rules, Payments & Cancellation, Health & Safety (A-009, A-060).
+    p_docs: (await acceptedVersions()).map((v) => ({ doc: v.doc, id: v.id })),
   }), "onboard_profile");
   return { ...profile, first_name: d.first_name, last_name: d.last_name, full_name: fullName(d.first_name, d.last_name), phone: d.phone, onboarded_at: new Date().toISOString() };
 }

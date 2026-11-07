@@ -339,6 +339,7 @@ export type Database = {
       consents: {
         Row: {
           created_at: string;
+          doc_version_id: string | null;
           granted: boolean;
           id: number;
           profile_id: string;
@@ -348,6 +349,7 @@ export type Database = {
         ComputedFields: never;
         Insert: {
           created_at?: string;
+          doc_version_id?: string | null;
           granted: boolean;
           id?: never;
           profile_id: string;
@@ -356,6 +358,7 @@ export type Database = {
         };
         Update: {
           created_at?: string;
+          doc_version_id?: string | null;
           granted?: boolean;
           id?: never;
           profile_id?: string;
@@ -363,6 +366,13 @@ export type Database = {
           version?: string | null;
         };
         Relationships: [
+          {
+            foreignKeyName: "consents_doc_version_id_fkey";
+            columns: ["doc_version_id"];
+            isOneToOne: false;
+            referencedRelation: "policy_versions";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "consents_profile_id_fkey";
             columns: ["profile_id"];
@@ -1035,6 +1045,7 @@ export type Database = {
       };
       payments: {
         Row: {
+          accepted_terms_at: string | null;
           amount_cents: number;
           booking_id: string | null;
           created_at: string;
@@ -1053,10 +1064,12 @@ export type Database = {
           provider_ref: string | null;
           purpose: string;
           status: Database["public"]["Enums"]["payment_status"];
+          terms_version_id: string | null;
           vat_cents: number;
         };
         ComputedFields: never;
         Insert: {
+          accepted_terms_at?: string | null;
           amount_cents: number;
           booking_id?: string | null;
           created_at?: string;
@@ -1075,9 +1088,11 @@ export type Database = {
           provider_ref?: string | null;
           purpose: string;
           status?: Database["public"]["Enums"]["payment_status"];
+          terms_version_id?: string | null;
           vat_cents?: number;
         };
         Update: {
+          accepted_terms_at?: string | null;
           amount_cents?: number;
           booking_id?: string | null;
           created_at?: string;
@@ -1096,6 +1111,7 @@ export type Database = {
           provider_ref?: string | null;
           purpose?: string;
           status?: Database["public"]["Enums"]["payment_status"];
+          terms_version_id?: string | null;
           vat_cents?: number;
         };
         Relationships: [
@@ -1134,7 +1150,42 @@ export type Database = {
             referencedRelation: "profiles";
             referencedColumns: ["id"];
           },
+          {
+            foreignKeyName: "payments_terms_version_id_fkey";
+            columns: ["terms_version_id"];
+            isOneToOne: false;
+            referencedRelation: "policy_versions";
+            referencedColumns: ["id"];
+          },
         ];
+      };
+      policy_versions: {
+        Row: {
+          body: string;
+          created_at: string;
+          doc: string;
+          id: string;
+          sha256: string;
+          version: number;
+        };
+        ComputedFields: never;
+        Insert: {
+          body: string;
+          created_at?: string;
+          doc: string;
+          id?: string;
+          sha256: string;
+          version: number;
+        };
+        Update: {
+          body?: string;
+          created_at?: string;
+          doc?: string;
+          id?: string;
+          sha256?: string;
+          version?: number;
+        };
+        Relationships: [];
       };
       processed_webhooks: {
         Row: {
@@ -1926,6 +1977,7 @@ export type Database = {
       onboard_profile: {
         Args: {
           p_dob: string;
+          p_docs: Json;
           p_email: string;
           p_first: string;
           p_full: string;
@@ -1954,6 +2006,7 @@ export type Database = {
         Returns: boolean;
       };
       recalc_lot_expiry: { Args: { p_lot: string }; Returns: undefined };
+      record_policy_version: { Args: { p_body: string; p_doc: string }; Returns: Json };
       replace_recurring_rules: { Args: { p_profile: string; p_slots: Json }; Returns: number };
       replace_timetable_from: { Args: { p_template: string }; Returns: number };
       reset_demo_data: { Args: Record<PropertyKey, never>; Returns: undefined };

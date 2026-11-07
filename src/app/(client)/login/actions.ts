@@ -203,7 +203,7 @@ export async function signUp(_: AuthState, form: FormData): Promise<AuthState> {
   const errors: Record<string, string> = {};
   if (!parsed.success) for (const i of parsed.error.issues) errors[String(i.path[0])] ??= i.message;
   if (String(form.get("password") ?? "") !== String(form.get("confirm") ?? "")) errors.confirm ??= "The passwords don't match.";
-  if (form.get("policy") !== "on") errors.policy = "Please accept the Studio Rules and Terms.";
+  if (form.get("policy") !== "on") errors.policy = "Please accept the Studio Rules, policies, Terms and Health & Safety acknowledgement.";
   if (Object.keys(errors).length || !parsed.success) return { ok: false, errors };
   const d = parsed.data;
   if (await tooMany(d.email)) return { ok: false, error: "Too many tries. Please wait 15 minutes and try again." };

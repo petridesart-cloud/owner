@@ -142,7 +142,6 @@ export default async function SettingsPage() {
                 {n("waitlist_window_hours", "Waitlist claim window (hours)", s.waitlist_window_minutes / 60, undefined, 0.25)}
                 {t("reminder_offsets", "Class reminders (hours before)", s.reminder_offsets_minutes.map((m) => m / 60).join(", "), "e.g. 24, 2")}
                 {n("hold_minutes", "Online payment hold (minutes)", s.hold_minutes)}
-                {t("policy_version", "Policy version", s.policy_version, "Change when the policy text changes")}
               </div>
               <Checkbox id="refund_late_cancel_if_filled" name="refund_late_cancel_if_filled" defaultChecked={s.refund_late_cancel_if_filled}>
                 Return the class for a late cancellation if someone else takes the spot

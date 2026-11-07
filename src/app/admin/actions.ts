@@ -628,7 +628,6 @@ export async function saveSettings(_: ActionResult, form: FormData): Promise<Act
     revolut_link: str("revolut_link"), bank_account_name: str("bank_account_name"), bank_iban: str("bank_iban").replace(/\s+/g, " "),
     legal_name: str("legal_name"), trader_name: str("trader_name"), address: str("address"),
     contact_email: str("contact_email"), contact_phone: str("contact_phone"), instagram_handle: str("instagram_handle").replace(/^@/, ""),
-    policy_version: str("policy_version"),
     booking_window_days: Math.min(26, Math.max(1, Math.round(num("booking_window_weeks")) || 4)) * 7, // 1 week to 6 months
     updated_at: new Date().toISOString(),
   }).eq("id", 1);

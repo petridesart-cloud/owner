@@ -9,6 +9,10 @@ import { friendlyError, must } from "../src/lib/errors";
 import { cronAuthorized } from "../src/lib/cron-auth";
 import { schedulerWarning } from "../src/lib/scheduler";
 import { retryingFetch } from "../src/lib/supabase/retry-fetch";
+import fs from "node:fs";
+import { DOC_SETTINGS, legalMarkdown } from "../src/lib/legal-docs";
+import { cookiesText, privacyText, waiverText } from "../src/lib/legal";
+import { defaultTerms } from "../src/lib/terms";
 
 describe("rate limits and email keys (A-045, A-092, A-103, A-008)", () => {
   test("sign-in and code limits fail closed when the check errors; booking limits fail open", () => {
@@ -139,5 +143,54 @@ describe("database reads retry once (A-055)", () => {
     } finally {
       globalThis.fetch = real;
     }
+  });
+});
+
+describe("legal documents (A-012, A-013, A-060)", () => {
+  test("docs/*.md are exactly what the app shows with the default settings (npm run legal:docs)", () => {
+    for (const [file, body] of Object.entries(legalMarkdown())) assert.equal(fs.readFileSync(file, "utf8"), body, `${file} is out of date: run npm run legal:docs`);
+  });
+
+  test("final texts: no draft labels or lawyer notes; the identity is a visible placeholder until filled in", () => {
+    for (const body of Object.values(legalMarkdown())) {
+      assert.doesNotMatch(body, /draft|to confirm with a lawyer|online dispute resolution platform/i);
+      assert.doesNotMatch(body, /hello@example\.com|00 000000/);
+    }
+    assert.match(privacyText(DOC_SETTINGS), /\[Trader full name\]/);
+    const filled = { ...DOC_SETTINGS, trader_name: "Ana Example", address: "1 Main St, 3000 Limassol, Cyprus", contact_email: "ana@studio.cy", contact_phone: "+357 99 123456" };
+    assert.doesNotMatch(defaultTerms(filled), /\[Trader full name\]|\[Contact email\]|\[Studio address/);
+    assert.match(defaultTerms(filled), /Ana Example, an individual trader/);
+  });
+
+  test("the Terms match her policy: 6h rule, validity from the first class, no auto-renew, refunds, 14-day withdrawal", () => {
+    const t = defaultTerms(DOC_SETTINGS);
+    assert.match(t, /6 hours or more before class: .*same package, with its original expiry date/);
+    assert.match(t, /Less than 6 hours before class, or not coming: the class is used/);
+    assert.match(t, /valid for 30 or 60 days from the date of your first class/);
+    assert.match(t, /don't renew automatically/);
+    assert.match(t, /If we cancel an event, you get a full refund/);
+    assert.match(t, /even if you had already cancelled it late/);
+    assert.match(t, /within 14 days of the day we mark it paid/);
+    assert.match(t, /art\. 16\(l\)/);
+    assert.match(t, /No VAT is charged/);
+    assert.match(t, /adults aged 18 or over/);
+    assert.doesNotMatch(t, /We don't give cash refunds/);
+  });
+
+  test("the Privacy Policy states the retention settings and health access exactly", () => {
+    const p = privacyText(DOC_SETTINGS);
+    assert.match(p, /at most 12 months after your last class/);
+    assert.match(p, /24 months after your last booking/);
+    assert.match(p, /6 years from the end of the year/);
+    assert.match(p, /only the instructor \(\[Trader full name\]\) can read them/);
+    assert.match(p, /I'd rather tell my instructor in person/);
+    assert.match(privacyText({ ...DOC_SETTINGS, retention_health_months: 6, retention_payments_years: 7 }), /at most 6 months after.*\n[\s\S]*7 years from the end/);
+    assert.match(privacyText({ ...DOC_SETTINGS, retention_inactive_months: null }), /As long as needed after your last booking/);
+  });
+
+  test("Cookies: essential only, the real 400-day sign-in cookie; the waiver lists when a doctor's note is needed", () => {
+    assert.match(cookiesText(), /Up to 400 days/);
+    assert.doesNotMatch(cookiesText(), /map|analytics cookies are set|1 week/i);
+    assert.match(waiverText(DOC_SETTINGS), /currently pregnant, gave birth within the last 3 months, or had surgery in the last 12 months/);
   });
 });

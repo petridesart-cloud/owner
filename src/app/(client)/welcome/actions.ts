@@ -22,7 +22,7 @@ export async function completeWelcome(_: WelcomeState, form: FormData): Promise<
 
   const policy = form.get("policy") === "on";
   const photos = String(form.get("photo_consent") ?? "");
-  if (!policy) errors.policy = "Please accept the Studio Rules and Terms to book.";
+  if (!policy) errors.policy = "Please accept the Studio Rules, policies, Terms and Health & Safety acknowledgement to book.";
   if (Object.keys(errors).length || !parsed.success) return { ok: false, errors };
 
   // Details and consents in one transaction (A-019), shared with sign-up confirmation.

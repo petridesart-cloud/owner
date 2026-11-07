@@ -1303,7 +1303,9 @@ describe("WP6: atomic writes (A-019, A-054)", () => {
 
   test("onboard_profile saves details and consents together, or neither", async () => {
     const p = (await db.from("profiles").insert({ email: `t-onb-${Date.now()}@example.com` }).select("id").single()).data!.id;
-    const args = { p_profile: p, p_first: "Ana", p_last: "K", p_full: "Ana K", p_phone: "+357 99 111111", p_dob: "1990-02-02", p_email: "ANA@example.com", p_marketing: false, p_version: "v1" };
+    const docs = [];
+    for (const doc of ["terms", "studio_rules", "payments_policy", "waiver"]) docs.push({ doc, id: ((await db.rpc("record_policy_version", { p_doc: doc, p_body: `${doc} (WP6 test)` })).data as { id: string }).id });
+    const args = { p_profile: p, p_first: "Ana", p_last: "K", p_full: "Ana K", p_phone: "+357 99 111111", p_dob: "1990-02-02", p_email: "ANA@example.com", p_marketing: false, p_version: "v1", p_docs: docs as unknown as Json };
     // A photo choice the column refuses: the whole save rolls back (no onboarded_at, no consents).
     const bad = await db.rpc("onboard_profile", { ...args, p_photo: "sideways" });
     assert.ok(bad.error);
@@ -1313,7 +1315,8 @@ describe("WP6: atomic writes (A-019, A-054)", () => {
     const row = (await db.from("profiles").select("onboarded_at, email, full_name").eq("id", p).single()).data!;
     assert.ok(row.onboarded_at);
     assert.equal(row.email, "ana@example.com");
-    assert.equal((await db.from("consents").select("id", { count: "exact", head: true }).eq("profile_id", p)).count, 5);
+    // The four accepted documents (A-009, A-060: no fitness declaration), news and photos.
+    assert.equal((await db.from("consents").select("id", { count: "exact", head: true }).eq("profile_id", p)).count, 6);
   });
 
   test("replace_recurring_rules keeps the old rules when a new one is bad", async () => {
@@ -1525,5 +1528,37 @@ describe("her answers, 7 Nov (A-031, A-033, A-085)", () => {
     assert.equal((r3.data as { status: string }).status, "cancelled");
     assert.equal(await lotRemaining(lot), 2);
     await ledgerOk();
+  });
+});
+
+describe("WP8: versioned legal texts and acceptance (A-009, A-060)", () => {
+  const rec = async (doc: string, body: string) => {
+    const { data, error } = await db.rpc("record_policy_version", { p_doc: doc, p_body: body });
+    assert.ifError(error);
+    return data as { id: string; version: number };
+  };
+
+  test("a changed text gets a new version; the same text doesn't", async () => {
+    const tag = `${Date.now()}-${Math.random()}`;
+    const a = await rec("terms", `## Terms\nOne ${tag}`);
+    assert.deepEqual(await rec("terms", `## Terms\nOne ${tag}`), a);
+    const b = await rec("terms", `## Terms\nTwo ${tag}`);
+    assert.notEqual(b.id, a.id);
+    assert.equal(b.version, a.version + 1);
+    assert.equal((await db.from("policy_versions").select("body").eq("id", a.id).single()).data?.body, `## Terms\nOne ${tag}`);
+    assert.ok((await db.from("policy_versions").update({ body: "x" }).eq("id", a.id)).error, "versions can't be edited");
+  });
+
+  test("sign-up records one acceptance per document with its version, and no fitness declaration", async () => {
+    const p = await client("wp8-onboard");
+    const docs = [];
+    for (const doc of ["terms", "studio_rules", "payments_policy", "waiver"]) docs.push({ doc, id: (await rec(doc, `${doc} text for the engine test`)).id });
+    const args = { p_profile: p, p_first: "A", p_last: "B", p_full: "A B", p_phone: "+357 99 123456", p_dob: "1990-01-01", p_email: `wp8-${Date.now()}@example.com`, p_photo: "none", p_marketing: false, p_version: "v" };
+    assert.equal((await db.rpc("onboard_profile", { ...args, p_docs: docs.slice(0, 3) as unknown as Json })).error?.message, "documents_not_accepted");
+    assert.ifError((await db.rpc("onboard_profile", { ...args, p_docs: docs as unknown as Json })).error);
+    const { data: rows } = await db.from("consents").select("type, granted, doc_version_id").eq("profile_id", p);
+    const accepted = (rows ?? []).filter((r) => r.doc_version_id).map((r) => [r.type, r.doc_version_id]).sort();
+    assert.deepEqual(accepted, docs.map((d) => [d.doc, d.id]).sort());
+    assert.ok(!(rows ?? []).some((r) => r.type === "fitness_declaration"));
   });
 });

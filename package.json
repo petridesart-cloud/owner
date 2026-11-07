@@ -12,6 +12,7 @@
     "db:reset": "supabase db reset",
     "db:types": "npx supabase@2 gen types typescript --local > src/lib/supabase/types.ts && node scripts/widen-types.mjs && npx -y prettier@3.3.3 --log-level warn --print-width 120 --write src/lib/supabase/types.ts",
     "db:bundle": "node scripts/bundle-sql.mjs",
+    "legal:docs": "tsx scripts/legal-docs.ts",
     "test:engine": "node --test --import tsx tests/engine.test.ts",
     "test:webhook": "node --test --import tsx tests/webhook.test.ts",
     "test:notify": "node --test --test-concurrency=1 --import ./tests/server-only-hook.mjs --import tsx tests/notify.test.ts",

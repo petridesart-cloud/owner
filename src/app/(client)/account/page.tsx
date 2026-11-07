@@ -18,7 +18,8 @@ export const metadata: Metadata = { title: "Account" };
 export const dynamic = "force-dynamic";
 
 const CONSENT_LABEL: Record<string, string> = {
-  policy: "Studio Rules", terms: "Terms & Conditions", fitness_declaration: "Health declaration",
+  policy: "Studio Rules", terms: "Terms & Conditions", studio_rules: "Studio Rules", payments_policy: "Payments & Cancellation Policy",
+  waiver: "Health & Safety acknowledgement", fitness_declaration: "Fit to exercise (older sign-up)",
   health_data: "Health data", health_declaration_offline: "Health: tell my instructor in person", marketing_email: "News by email", marketing_sms: "News by SMS", photos: "Photos for social media",
 };
 
@@ -29,11 +30,13 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
   const labels = await kindLabels();
   const [{ data: h }, { data: consents }, { data: receipts }] = await Promise.all([
     db().from("health_notes").select("conditions, pregnancy, pregnancy_weeks, postpartum_months, clearance_needed, clearance_received_at").eq("profile_id", p.id).maybeSingle(),
-    db().from("consents").select("type, granted, version, created_at").eq("profile_id", p.id).order("created_at", { ascending: false }).limit(30),
+    db().from("consents").select("type, granted, version, created_at, doc_version_id").eq("profile_id", p.id).order("created_at", { ascending: false }).limit(30),
     db().from("payments").select("id, description, amount_cents, paid_at, products(tag, credit_kind)").eq("profile_id", p.id).eq("status", "paid").order("paid_at", { ascending: false }).limit(24),
   ]);
-  const latest = new Map<string, { granted: boolean; created_at: string }>();
+  const latest = new Map<string, { granted: boolean; created_at: string; version: string | null; doc_version_id?: string | null }>();
+  // Older sign-ups recorded "policy" for the Studio Rules: once the versioned row exists, show that one only.
   for (const c of consents ?? []) if (!latest.has(c.type)) latest.set(c.type, c);
+  if (latest.has("studio_rules")) latest.delete("policy");
 
   return (
     <div>
@@ -92,7 +95,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
               {[...latest.entries()].map(([type, c]) => (
                 <li key={type} className="flex justify-between gap-3 py-2.5">
                   <span className="text-ink">{CONSENT_LABEL[type] ?? type}</span>
-                  <span className="text-right text-ink-soft">{c.granted ? "Given" : "Withdrawn"} · {longDate(c.created_at)}</span>
+                  <span className="text-right text-ink-soft">{c.doc_version_id ? "Accepted" : c.granted ? "Given" : "Withdrawn"} · {longDate(c.created_at)}{c.doc_version_id && c.version ? ` (version ${c.version.split(" v").pop()})` : ""}</span>
                 </li>
               ))}
               {latest.size === 0 && <li className="py-2 text-ink-soft">No consents recorded yet.</li>}

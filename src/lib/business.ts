@@ -4,20 +4,8 @@ import { emailLive, env } from "@/lib/env";
 import { schedulerHealthy } from "@/lib/scheduler";
 import { db } from "@/lib/supabase/admin";
 
-/** Placeholder text from the defaults ("[Owner full name]", hello@example.com, +357 00 000000). */
-export const isPlaceholder = (v: string | null | undefined) => !v?.trim() || /\[.*\]|example\.(com|org)|00 000000/i.test(v);
-const real = (v: string | null | undefined) => (isPlaceholder(v) ? null : v!.trim());
-
-/** Business details for clients: placeholders become null, so they're never shown. */
-export function business(s: Settings) {
-  return {
-    name: real(s.legal_name) ?? "Re·Form Pilates Studio",
-    owner: real(s.trader_name),
-    address: real(s.address),
-    email: real(s.contact_email),
-    phone: real(s.contact_phone),
-  };
-}
+export { business, identity, identityComplete, isPlaceholder } from "@/lib/identity";
+import { business } from "@/lib/identity";
 
 export type ReadinessItem = { label: string; ok: boolean; href: string; hint: string };
 

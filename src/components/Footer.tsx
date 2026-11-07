@@ -7,6 +7,9 @@ const legal = [
   { href: "/policy/payments", label: "Payments & Cancellation" },
   { href: "/legal/terms", label: "Terms" },
   { href: "/legal/privacy", label: "Privacy" },
+  { href: "/legal/cookies", label: "Cookies" },
+  { href: "/legal/health", label: "Health & Safety" },
+  { href: "/legal/accessibility", label: "Accessibility" },
 ];
 
 export async function Footer() {
