@@ -37,9 +37,14 @@ export type SessionInfo = Awaited<ReturnType<typeof sessionInfo>>;
 
 export const EVENT_POLICY = "Events can't be cancelled or refunded in the app. If you can't make it, message the studio.";
 
-/** The cancellation policy, stated in every booking email. */
-export const policyLine = (cancelBy: Date, cutoff: number) =>
-  `Free cancellation until ${spokenDateTime(cancelBy)} (${cutoff}h before class). Later cancellations and no-shows aren't refunded.`;
+/**
+ * The cancellation policy, stated in every booking email. A class booked inside the cutoff (from the waitlist, or
+ * added by the studio) never gets a free-cancel time that has already passed (A-032).
+ */
+export const policyLine = (cancelBy: Date, cutoff: number, now = new Date()) =>
+  cancelBy.getTime() <= now.getTime()
+    ? `This class is inside the ${cutoff}-hour window, so it can't be cancelled for a refund.`
+    : `Free cancellation until ${spokenDateTime(cancelBy)} (${cutoff}h before class). Later cancellations and no-shows aren't refunded.`;
 
 const tmpl = (s: SessionInfo) => ({
   className: s.name, when: spokenDateTime(s.starts_at), location: s.where,

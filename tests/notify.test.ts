@@ -227,3 +227,53 @@ describe("A-049: the page-view tick is only a fallback", () => {
     assert.equal(pageTickDue(new Date(now - 10 * 60_000).toISOString(), now), true);
   });
 });
+
+describe("A-032: nothing promises a free-cancel time that has passed (her answer, 7 Nov)", () => {
+  const H = 3_600_000, D = 86_400_000;
+  const reformer = async () => (await db.from("class_types").select("id").eq("slug", "reformer").single()).data!.id;
+  /** A start time (up to 1.5h later than asked) on an odd minute, so no timetable or earlier test class shares its slot. */
+  const oddStart = (ms: number) => { const d = new Date(Date.now() + ms + Math.floor(Math.random() * 90) * 60_000); d.setUTCSeconds(0, 0); if (d.getUTCMinutes() % 5 === 0) d.setUTCMinutes(d.getUTCMinutes() + 2); return d; };
+  const klass = async (type: string, at: Date, capacity = 3) => {
+    const { data, error } = await db.from("class_sessions").insert({ class_type_id: type, starts_at: at.toISOString(), ends_at: new Date(at.getTime() + 50 * 60_000).toISOString(), capacity, title: "Notify test" }).select("id").single();
+    assert.ifError(error);
+    return data!.id;
+  };
+  const person = async (tag: string, credits: number) => {
+    const { data } = await db.from("profiles").insert({ full_name: `Notify ${tag}`, email: mail(tag), onboarded_at: new Date().toISOString() }).select("id").single();
+    if (credits) await db.rpc("grant_lot", { p_profile: data!.id, p_kind: "reformer", p_credits: credits, p_expires: new Date(Date.now() + 30 * D).toISOString(), p_note: "test" });
+    return data!.id;
+  };
+
+  test("a waitlist auto-booking inside 6h says it can't be cancelled for a refund", async () => {
+    const { notifyOffers } = await import("../src/lib/booking");
+    const sid = await klass(await reformer(), oddStart(3 * H), 1);
+    const a = await person("wl-a", 1), b = await person("wl-b", 1);
+    const ra = await db.rpc("book_session", { p_profile: a, p_session: sid, p_mode: "credit" });
+    assert.ifError(ra.error);
+    assert.ifError((await db.rpc("join_waitlist", { p_profile: b, p_session: sid })).error);
+    const { data } = await db.rpc("cancel_booking", { p_booking: (ra.data as { booking_id: string }).booking_id, p_profile: a });
+    const offers = (data as { offers: { entry_id: string; profile_id: string; offer_expires_at: string | null }[] }).offers;
+    assert.equal(offers.length, 1);
+    await notifyOffers(offers);
+    const r = await row(`waitlist-booked:${offers[0].entry_id}`);
+    assert.doesNotMatch(r.body ?? "", /Free cancellation until/);
+    assert.match(r.body ?? "", /inside the 6-hour window, so it can(&#39;|')t be cancelled for a refund/);
+  });
+
+  test("weekly repeat bookings skip a class already inside the cutoff and start from the next one", async () => {
+    const { applyRecurring, slotOf } = await import("../src/lib/recurring");
+    const type = await reformer();
+    const soon = oddStart(3 * H);
+    const next = new Date(soon.getTime() + 7 * D);
+    const [s1, s2] = [await klass(type, soon), await klass(type, next)];
+    const p = await person("weekly", 4);
+    const { weekday, hhmm } = slotOf(soon.toISOString());
+    if (slotOf(next.toISOString()).hhmm !== hhmm) return; // a clock change in between moves the slot: nothing to check
+    await db.from("recurring_rules").insert({ profile_id: p, class_type_id: type, weekday, start_time: hhmm });
+    await applyRecurring(p);
+    const { data: bs } = await db.from("bookings").select("session_id").eq("profile_id", p).eq("status", "confirmed");
+    const ids = (bs ?? []).map((b) => b.session_id);
+    assert.ok(!ids.includes(s1), "the class inside 6h wasn't booked");
+    assert.ok(ids.includes(s2), "the next week's class was");
+  });
+});

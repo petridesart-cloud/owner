@@ -51,8 +51,8 @@ export async function weeklySlots() {
 }
 
 /**
- * Book every upcoming class matching the client's weekly rules, inside the booking window
- * and while their package lasts. Classes they've already booked, cancelled or waitlisted
+ * Book every upcoming class matching the client's weekly rules, beyond the cancellation cutoff, inside the
+ * booking window and while their package lasts. Classes they've already booked, cancelled or waitlisted
  * are left alone; full classes are skipped and the client gets a one-tap waitlist link.
  * Runs when rules are saved, when a package is marked paid, and on the background tick.
  * `defer`: inside a tap, the emails go out after the response (A-017); the tick awaits them.
@@ -68,7 +68,9 @@ export async function applyRecurring(profileId?: string, opts: { defer?: boolean
   const typeIds = [...new Set(rules.map((r) => r.class_type_id))];
   const { data: sessions } = await db().from("class_sessions").select("id, starts_at, class_type_id, title, class_types(name, credit_kind)")
     .in("class_type_id", typeIds).eq("status", "scheduled")
-    .gt("starts_at", new Date(Date.now() + 60 * 60_000).toISOString()).lt("starts_at", until).order("starts_at");
+    // A-032 (her answer): never a class already inside the cancellation cutoff; start from the next one beyond it.
+    // Clients can still book that class themselves.
+    .gt("starts_at", new Date(Date.now() + cfg.cancellation_cutoff_hours * 3_600_000).toISOString()).lt("starts_at", until).order("starts_at");
 
   // What everyone already booked or waitlisted among these classes: two queries in all, not two per client (A-049).
   const pids = [...new Set(rules.map((r) => r.profile_id))];
