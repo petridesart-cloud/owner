@@ -12,7 +12,7 @@ import { PHOTO_CONSENT, type PhotoConsent } from "@/lib/photo-consent";
 import { ageOn } from "@/lib/profile";
 import { eur } from "@/lib/money";
 import { STATUS_LABEL, clientHistory, tally, type Group } from "@/lib/client-history";
-import { adjustLot, changeMembershipProduct, clearanceReceived, giveClasses, giveReward, sendBirthday, setCodeActive, setStudent, updateClient } from "../../actions";
+import { adjustLot, changeMembershipProduct, clearanceReceived, eraseClient, giveClasses, giveReward, sendBirthday, setCodeActive, setStudent, updateClient } from "../../actions";
 import { DiscountForm } from "../DiscountForm";
 import { discountLabel, targetsLabel, type DiscountKind } from "@/lib/discount";
 import { MarkPaid, MembershipControls, RenewButtons } from "../../PaymentButtons";
@@ -312,6 +312,20 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
           ))}
           {(ledger ?? []).length === 0 && <li className="px-5 py-3 text-ink-soft">No entries.</li>}
         </ul>
+      </Drop>
+
+      <Drop title="Privacy & data" sub="Download or erase what we hold about them">
+        <div className="space-y-4 px-5 py-4 text-sm">
+          <p className="text-ink-soft">For a request by message or email, or a client without a login.</p>
+          <a href={`/admin/clients/${id}/export`} className="inline-flex min-h-11 items-center text-ink underline underline-offset-4">Export data (JSON)</a>
+          {c.deleted_at ? <p className="text-ink-soft">Their personal data has been erased.</p> : (
+            <ActionForm action={eraseClient.bind(null, id)} submit="Erase this client" variant="danger"
+              confirm="Erase this client's personal data? This can't be undone.">
+              <p className="text-ink-soft">Removes their name, contact details, health answers and notes, and cancels their upcoming classes. Bookings and payments stay only as anonymous records for the accounts.</p>
+              <Field id="erase-confirm" label="Type ERASE to confirm"><input id="erase-confirm" name="confirm" autoComplete="off" className={inputClass} /></Field>
+            </ActionForm>
+          )}
+        </div>
       </Drop>
     </div>
   );

@@ -9,6 +9,7 @@ import { EVENT_POLICY, cancelBooking, cancelSession, cancelSessions, notifyCance
 import { later, notify, pool, retryFailed } from "@/lib/notifications";
 import { applyRecurring } from "@/lib/recurring";
 import { rewardCode } from "@/lib/rewards";
+import { eraseProfile } from "@/lib/erase";
 import { defaultTerms } from "@/lib/terms";
 import { getKinds, kindLabel } from "@/lib/kinds";
 import { discountLabel, normaliseCode, targetsLabel } from "@/lib/discount";
@@ -505,6 +506,21 @@ export async function cancelToday(_: ActionResult, form: FormData): Promise<Acti
   }
   revalidatePath("/admin", "layout");
   return { ok: true, message: `Cancelled ${list?.length ?? 0} classes. ${people} client${people === 1 ? "" : "s"} notified and credited.` };
+}
+
+// ── Privacy: erase a client (A-059) ────────────────────────────────────
+/** Right to erasure for anyone she holds (also people without a login). Type ERASE to confirm. */
+export async function eraseClient(profileId: string, _: ActionResult, form: FormData): Promise<ActionResult> {
+  if (String(form.get("confirm") ?? "").trim().toUpperCase() !== "ERASE") return { ok: false, error: "Type ERASE to confirm." };
+  const viewer = await admin("erase_client", { profileId }); // ids only, no personal data
+  if (profileId === viewer.profile.id) return { ok: false, error: "You can't erase your own studio account here." };
+  const { data: p } = await db().from("profiles").select("id, email, deleted_at").eq("id", profileId).maybeSingle();
+  if (!p || p.deleted_at) return { ok: false, error: "This client's data has already been erased." };
+  const { count } = await db().from("payments").select("id", { count: "exact", head: true }).eq("profile_id", profileId).in("status", ["pending", "needs_refund"]);
+  if (count) return { ok: false, error: "They have a payment still to settle (awaiting payment or a refund). Settle or remove it first." };
+  if (!(await eraseProfile(profileId, p.email))) return { ok: false, error: "Their data couldn't be erased. Nothing was removed. Please try again." };
+  revalidatePath("/admin", "layout");
+  return { ok: true, message: "Erased. Their bookings and payments stay only as anonymous records for the accounts." };
 }
 
 // ── Students & holidays ────────────────────────────────────────────────
