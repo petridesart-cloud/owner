@@ -30,7 +30,7 @@ export function DayStrip({ keys, counts, selected, today, href, className = "" }
                   on ? "border-ink bg-ink text-paper shadow-[var(--shadow-lift)]" : count ? "border-line bg-white/80 text-ink hover:border-lilac-300" : "border-transparent text-ink-soft"
                 }`}
               >
-                <span className="text-[0.66rem] font-medium uppercase tracking-[0.12em]">{k === today ? "Today" : weekdayShort(dt)}</span>
+                <span className="text-[0.66rem] font-medium uppercase tracking-[0.12em]">{k === today ? "Today" : weekdayShort(dt)}</span>{" "}
                 <span className="mt-0.5 font-serif text-[1.45rem] leading-none">{Number(k.slice(8))}</span>
                 <span aria-hidden className={`mt-1 size-1 rounded-full ${count ? (on ? "bg-lilac-200" : "bg-lilac-300") : "bg-transparent"}`} />
               </Link>

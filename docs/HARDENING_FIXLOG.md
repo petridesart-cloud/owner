@@ -100,3 +100,4 @@
 | A-077 | Medium | Manual add defaults to package class when the class has a credit kind; "Already paid (outside the app)" | e2e admin | A-075, A-076, A-077 |
 | A-109 | Low | My classes subtitle, "No classes booked", 44px links, pending label per button, "Rules" pill, items-baseline, longDate; packs titles and enabled Request button (see A-026). Not changed: PackageCard keeps its dotDate range (design freeze) | e2e axe | A-109, A-110: copy and layout polish |
 | A-110 | Low | Demo banner inside header (role=note), legal table scroll region (focusable), class page title + sr-only dt (see A-024) | e2e axe | A-109, A-110 |
+| A-071 | Medium | (follow-up) ClassRow named from content + sr-only date/action; DayStrip text spaced; axe-core e2e on Sign-up, Home, Schedule, Packs, My classes, Account, Health | e2e/a11y.spec.ts | A-071: axe e2e |

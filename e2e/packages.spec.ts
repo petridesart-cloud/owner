@@ -42,7 +42,7 @@ test("client requests a pack, studio marks it paid, client books with a class cr
   await expect(client.locator('a[href^="/bookings/package/"] [data-left]').first()).toHaveText("4");
   await client.goto("/schedule");
   const days = client.getByRole("navigation", { name: "Choose a day" }).getByRole("link");
-  const bookable = client.getByRole("link", { name: /reformers? left\. Book this class$/ });
+  const bookable = client.getByRole("link", { name: /reformers? left.*Book this class$/ });
   for (let i = 2; i < (await days.count()); i++) {
     await client.goto((await days.nth(i).getAttribute("href"))!);
     if (await bookable.count()) break;

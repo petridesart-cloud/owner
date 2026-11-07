@@ -16,9 +16,8 @@ export function ClassRow({ c, state, showDate = false, locked = false }: { c: Av
   const cancelled = c.status === "cancelled";
   const past = new Date(c.starts_at) <= new Date();
   const mins = Math.round((new Date(c.ends_at).getTime() - new Date(c.starts_at).getTime()) / 60000);
-  // A-071: the name starts with the words you can see (time, then title), then the date, the spots and what a tap does.
+  // A-071: no aria-label: the link's name is the words you can see, then a hidden full date and what a tap does.
   const action = cancelled ? "View class" : state === "booked" ? "View your booking" : full ? "Join the waitlist" : "Book this class";
-  const label = `${time(c.starts_at)} ${c.title}, ${longDate(c.starts_at)}. ${cancelled ? "Cancelled" : spotsLabel(c)}. ${action}`;
 
   const body = (
     <>
@@ -49,6 +48,7 @@ export function ClassRow({ c, state, showDate = false, locked = false }: { c: Av
           {c.kind === "event" && !locked && <Badge tone="plain">Event</Badge>}
         </div>
       </div>
+      {!locked && <span className="sr-only">. {longDate(c.starts_at)}. {action}</span>}
       {!locked && <ChevronRight aria-hidden size={18} className="shrink-0 text-ink-soft transition group-hover:translate-x-0.5" />}
     </>
   );
@@ -57,7 +57,6 @@ export function ClassRow({ c, state, showDate = false, locked = false }: { c: Av
     <Link
       href={`/book/${c.id}`}
       prefetch={false}
-      aria-label={label}
       className={`card pressable group relative flex min-h-[76px] items-center gap-4 overflow-hidden px-4 py-3.5 hover:-translate-y-0.5 hover:shadow-[var(--shadow-lift)] ${cancelled || past ? "opacity-60" : ""}`}
     >
       {body}
