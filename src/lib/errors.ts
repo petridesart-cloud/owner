@@ -34,6 +34,9 @@ const MESSAGES: Record<string, string> = {
   class_not_started: "This class hasn't started yet. To take someone off it, use Remove.",
 };
 
+/** Engine error codes that have their own message. */
+export const ERROR_KEYS: Record<string, true> = Object.fromEntries(Object.keys(MESSAGES).map((k) => [k, true]));
+
 export function friendlyError(e: unknown): string {
   const msg = typeof e === "object" && e && "message" in e ? String((e as { message: string }).message) : String(e);
   if (msg.includes("payments_one_code_per_client")) return "You've already used this code.";

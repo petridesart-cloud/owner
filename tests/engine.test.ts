@@ -4,7 +4,7 @@ import { after, before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { createClient } from "@supabase/supabase-js";
-import type { Database } from "../src/lib/supabase/types";
+import type { Database, Json } from "../src/lib/supabase/types";
 import postgres from "postgres";
 import { addDaysKey, localToUtc, todayKey } from "../src/lib/time";
 import { productPrice } from "../src/lib/pricing";
@@ -1182,6 +1182,25 @@ describe("WP3: engine hardening", () => {
     } finally {
       await db.from("closures").delete().eq("id", c!.id);
     }
+  });
+
+  test("A-039: editing a booked class checks capacity, type and the client's package", async () => {
+    const s = await session(5 * D + 12_000, 3);
+    const p = await client("wp3-edit"), q = await client("wp3-edit-q");
+    await grant(q, 1, 30 * D);
+    const lot = await db.rpc("grant_lot", { p_profile: p, p_kind: "reformer", p_credits: 4, p_expires: null as unknown as string, p_note: "pack", p_validity_days: 30 });
+    assert.ifError((await book(p, s)).error); assert.ifError((await book(q, s)).error);
+    const upd = (patch: Record<string, unknown>) => db.rpc("update_session", { p_session: s, p_patch: patch as unknown as Json });
+    assert.equal(status(await upd({ capacity: 1 })), "capacity_below_booked");
+    const mat = (await db.from("class_types").select("id").eq("slug", "mat").single()).data!.id;
+    assert.equal(status(await upd({ class_type_id: mat })), "type_locked");
+    const before = (await db.from("credit_lots").select("expires_at").eq("id", lot.data as string).single()).data!.expires_at!;
+    const moved = iso(6 * D + 12_000);
+    const r = await upd({ starts_at: moved, ends_at: iso(6 * D + 12_000 + 50 * 60_000), capacity: 2 });
+    assert.ifError(r.error);
+    assert.deepEqual([(r.data as { booked: number }).booked, (r.data as { moved: boolean }).moved], [2, true]);
+    const later = (await db.from("credit_lots").select("expires_at").eq("id", lot.data as string).single()).data!.expires_at!;
+    assert.ok(Date.parse(later) > Date.parse(before), "the provisional expiry follows the moved first class");
   });
 
   test("A-064: events can't be cancelled by clients in the engine; the studio can remove someone", async () => {

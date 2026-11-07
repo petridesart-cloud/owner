@@ -12,7 +12,7 @@ import { rewardCode } from "@/lib/rewards";
 import { defaultTerms } from "@/lib/terms";
 import { getKinds, kindLabel } from "@/lib/kinds";
 import { discountLabel, normaliseCode, targetsLabel } from "@/lib/discount";
-import { friendlyError, type ActionResult } from "@/lib/errors";
+import { ERROR_KEYS, friendlyError, type ActionResult } from "@/lib/errors";
 import { addDaysKey, localToUtc, spokenDateTime, todayKey } from "@/lib/time";
 import type { Json } from "@/lib/supabase/types";
 
@@ -160,15 +160,21 @@ export async function updateSession(sessionId: string, _: ActionResult, form: Fo
   const row = sessionRow(form);
   if (!row) return { ok: false, error: "Please check the fields." };
   if (await eventNeedsFee(row)) return { ok: false, error: "Set the event fee (0 for a free event)." };
-  const { count } = await db().from("bookings").select("id", { count: "exact", head: true }).eq("session_id", sessionId).eq("status", "confirmed");
-  if ((count ?? 0) > row.capacity) return { ok: false, error: `${count} people are booked, so capacity can't go below that.` };
-  const { error } = await db().from("class_sessions").update(row).eq("id", sessionId);
-  if (error) return { ok: false, error: "Couldn't save changes." };
-  // More capacity may free spots for the waitlist.
-  const { data: offers } = await db().rpc("process_waitlist", { p_session: sessionId });
-  await notifyOffers((offers ?? []) as { entry_id: string; profile_id: string; offer_expires_at: string }[]);
+  // Capacity, class type, closures and booked clients' packages are checked in one locked step (A-039);
+  // more capacity moves the waitlist up in the same step.
+  const { data, error } = await db().rpc("update_session", { p_session: sessionId, p_patch: row as unknown as Json });
+  if (error) {
+    if (error.code === "23505") return { ok: false, error: "A class of that type already exists at that time." };
+    if (error.message === "capacity_below_booked") {
+      const { data: taken } = await db().rpc("spots_taken", { p_session: sessionId });
+      return { ok: false, error: `${taken} spot${taken === 1 ? " is" : "s are"} taken (booked or held), so capacity can't go below that.` };
+    }
+    return { ok: false, error: error.message in ERROR_KEYS ? friendlyError(error) : "Couldn't save changes." };
+  }
+  const res = data as { booked: number; moved: boolean; offers: { entry_id: string; profile_id: string; offer_expires_at: string | null }[] };
+  await notifyOffers(res.offers ?? []);
   revalidatePath(`/admin/classes/${sessionId}`);
-  return { ok: true, message: "Saved." };
+  return { ok: true, message: res.moved && res.booked ? `Saved. ${res.booked} client${res.booked === 1 ? " is" : "s are"} booked: let them know about the new time.` : "Saved." };
 }
 
 export async function cancelSessionAction(sessionId: string, _: ActionResult, form: FormData): Promise<ActionResult> {
