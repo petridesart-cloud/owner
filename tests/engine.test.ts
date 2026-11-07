@@ -1504,4 +1504,26 @@ describe("her answers, 7 Nov (A-031, A-033, A-085)", () => {
     assert.equal(await lotRemaining(lot), 2);
     await ledgerOk();
   });
+
+  test("A-085: the studio removes someone inside 6h: a late cancel by default, or the class back if she chooses", async () => {
+    const p = await client("ans-remove");
+    const lot = await grant(p, 3, 30 * D);
+    const late1 = bid(await book(p, await session(2 * 3_600_000 + 1000)));
+    const r1 = await db.rpc("cancel_booking", { p_booking: late1, p_profile: p, p_admin: true });
+    assert.ifError(r1.error);
+    assert.equal((r1.data as { status: string }).status, "late_cancelled");
+    assert.equal(await lotRemaining(lot), 2);
+
+    const late2 = bid(await book(p, await session(2 * 3_600_000 + 2000)));
+    const r2 = await db.rpc("cancel_booking", { p_booking: late2, p_profile: p, p_admin: true, p_return_credit: true });
+    assert.equal((r2.data as { status: string }).status, "cancelled");
+    assert.equal(await lotRemaining(lot), 2);
+
+    // More than 6h before class nothing changes: the class goes back.
+    const early = bid(await book(p, await session(2 * D)));
+    const r3 = await db.rpc("cancel_booking", { p_booking: early, p_profile: p, p_admin: true });
+    assert.equal((r3.data as { status: string }).status, "cancelled");
+    assert.equal(await lotRemaining(lot), 2);
+    await ledgerOk();
+  });
 });

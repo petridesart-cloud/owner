@@ -4,7 +4,7 @@ import { HealthInfo } from "../../HealthInfo";
 import { ActionForm } from "@/components/ActionForm";
 import { Badge, Checkbox, Field, inputClass } from "@/components/ui";
 import { db } from "@/lib/supabase/admin";
-import { canViewHealth } from "@/lib/auth";
+import { canViewHealth, getSettings } from "@/lib/auth";
 import { dayKey, longDate, time } from "@/lib/time";
 import { allowEventAccess, cancelSessionAction, manualBook, updateSession } from "../../actions";
 import { AccessRemove } from "./AccessRemove";
@@ -25,7 +25,7 @@ export default async function SessionAdmin({ params }: { params: Promise<{ id: s
     .select("*, class_types(*), bookings!bookings_session_id_fkey(id, status, paid_with, source, checked_in_at, answer, note, created_at, payment_id, profiles(id, full_name, email, phone, photo_consent, parq_completed_at, health_mode, health_notes(note, injuries, medication, parq_yes, conditions, details, pregnancy, pregnancy_weeks, postpartum_months, bp_meds, clearance_needed, clearance_received_at))), waitlist_entries(id, status, created_at, offer_expires_at, profiles(id, full_name))")
     .eq("id", id).maybeSingle();
   if (!s) notFound();
-  const seeHealth = await canViewHealth();
+  const [seeHealth, cfg] = await Promise.all([canViewHealth(), getSettings()]);
   const [{ data: types }, { data: clients }] = await Promise.all([
     db().from("class_types").select("*").order("sort_order"),
     db().from("profiles").select("id, full_name, email").is("deleted_at", null).eq("role", "client").order("full_name").limit(1000),
@@ -38,6 +38,8 @@ export default async function SessionAdmin({ params }: { params: Promise<{ id: s
   const other = s.bookings.filter((b) => ["cancelled", "late_cancelled", "studio_cancelled"].includes(b.status));
   const waitlist = s.waitlist_entries.filter((w) => ["waiting", "offered"].includes(w.status)).sort((a, b) => a.created_at.localeCompare(b.created_at));
   const past = new Date(s.starts_at) < new Date();
+  // A-085: inside the cancellation cutoff, "Remove" is a late cancel unless she chooses to return the class.
+  const insideCutoff = new Date(s.starts_at).getTime() - cfg.cancellation_cutoff_hours * 3_600_000 < new Date().getTime();
   const name = s.title ?? s.class_types?.name;
   const mins = Math.round((new Date(s.ends_at).getTime() - new Date(s.starts_at).getTime()) / 60000);
 
@@ -69,7 +71,7 @@ export default async function SessionAdmin({ params }: { params: Promise<{ id: s
                   <Attendance bookingId={b.id} name={b.profiles?.full_name ?? "client"} state={b.status === "no_show" ? "no_show" : b.checked_in_at ? "attended" : "unmarked"} />
                 )}
               </div>
-              {!past && b.status === "confirmed" && s.status === "scheduled" && <RosterActions bookingId={b.id} sessionId={s.id} name={b.profiles?.full_name ?? "client"} past={past} />}
+              {!past && b.status === "confirmed" && s.status === "scheduled" && <RosterActions bookingId={b.id} sessionId={s.id} name={b.profiles?.full_name ?? "client"} past={past} insideCutoff={insideCutoff} cutoffHours={cfg.cancellation_cutoff_hours} />}
             </li>
           ))}
           {roster.length === 0 && <li className="px-4 py-4 text-sm text-ink-soft">Nobody booked yet.</li>}

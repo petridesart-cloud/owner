@@ -428,15 +428,17 @@ type CancelResult = { status: string; session_id: string; offers: OfferRow[] };
 
 /** Release a held / unpaid spot without the client-facing messages (checkout failed or abandoned), and tell the waitlist. */
 export async function releaseBooking(bookingId: string, profileId: string, asAdmin = false) {
-  const { data, error } = await db().rpc("cancel_booking", { p_booking: bookingId, p_profile: profileId, p_admin: asAdmin });
+  // A spot that was never really taken: the class always goes back (A-085's late-cancel default doesn't apply).
+  const { data, error } = await db().rpc("cancel_booking", { p_booking: bookingId, p_profile: profileId, p_admin: asAdmin, p_return_credit: true });
   if (error) { console.error("release booking", error); return; }
   later("waitlist offers", () => notifyOffers((data as CancelResult).offers ?? []));
 }
 
-export async function cancelBooking(profile: Profile, bookingId: string, asAdmin = false): Promise<ActionResult<{ status: string }>> {
+/** `returnCredit` (studio only, A-085): inside the cutoff, return the class instead of the default late cancel. */
+export async function cancelBooking(profile: Profile, bookingId: string, asAdmin = false, returnCredit = false): Promise<ActionResult<{ status: string }>> {
   // The engine refuses client cancellations of events (event_no_cancel) and moves the waitlist up
   // in the same transaction; `offers` are the people to tell (A-005, A-064).
-  const { data, error } = await db().rpc("cancel_booking", { p_booking: bookingId, p_profile: profile.id, p_admin: asAdmin });
+  const { data, error } = await db().rpc("cancel_booking", { p_booking: bookingId, p_profile: profile.id, p_admin: asAdmin, p_return_credit: asAdmin && returnCredit });
   if (error?.message === "not_cancellable") {
     // A-020: a retry after a lost response: already cancelled by this person is a success.
     const { data: b } = await db().from("bookings").select("status, profile_id").eq("id", bookingId).maybeSingle();
@@ -459,7 +461,9 @@ async function cancelEmails(profile: Profile, bookingId: string, res: CancelResu
         : b.paid_with === "payment" ? "We'll refund your payment." : ""
       : b.late_refund_pending
         ? "This was inside the cancellation window. If your spot is re-booked, we'll return your credit."
-        : "This was inside the cancellation window, so no credit is returned. Thank you for freeing the spot.";
+        : asAdmin
+          ? "The studio removed you from this class inside the cancellation window, so the class isn't returned."
+          : "This was inside the cancellation window, so no credit is returned. Thank you for freeing the spot.";
     if (owner) await notify({ profileId: owner.id, email: owner.email, phone: owner.phone }, "cancellation_confirmed",
       { name: owner.full_name ?? undefined, ...tmpl(s), note }, { bookingId, sessionId: s.id, dedupeKey: `cancel:${bookingId}` });
   }

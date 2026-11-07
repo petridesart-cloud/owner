@@ -1779,7 +1779,10 @@ export type Database = {
       };
       can_access_event: { Args: { p_profile: string; p_session: string }; Returns: boolean };
       can_view_health: { Args: Record<PropertyKey, never>; Returns: boolean };
-      cancel_booking: { Args: { p_admin?: boolean; p_booking: string; p_profile: string }; Returns: Json };
+      cancel_booking: {
+        Args: { p_admin?: boolean; p_booking: string; p_profile: string; p_return_credit?: boolean };
+        Returns: Json;
+      };
       cancel_session: {
         Args: { p_reason: string; p_session: string };
         Returns: {
@@ -2286,6 +2289,10 @@ export const Constants = {
         "private_reformer",
         "private_prenatal_mat",
         "private_prenatal_reformer",
+        "pre_natal_ybng",
+        "pre_natal_mw5oz5pb",
+        "pre_natal_mw5ozkfx",
+        "pre_natal_mw5ozsul",
       ],
       ledger_entry: [
         "grant",

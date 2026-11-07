@@ -67,9 +67,10 @@ export async function markNoShow(bookingId: string): Promise<ActionResult> {
   return { ok: true };
 }
 
-export async function adminCancelBooking(bookingId: string, sessionId: string): Promise<ActionResult> {
-  const viewer = await admin("cancel_booking", { bookingId });
-  const res = await cancelBooking(viewer.profile, bookingId, true);
+/** Remove someone from a class. Inside the cutoff it's a late cancel unless she chooses to return the class (A-085). */
+export async function adminCancelBooking(bookingId: string, sessionId: string, returnClass = false): Promise<ActionResult> {
+  const viewer = await admin("cancel_booking", { bookingId, returnClass });
+  const res = await cancelBooking(viewer.profile, bookingId, true, returnClass === true);
   revalidatePath(`/admin/classes/${sessionId}`);
   return res.ok ? { ok: true } : res;
 }
