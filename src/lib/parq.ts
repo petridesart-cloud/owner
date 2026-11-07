@@ -12,14 +12,3 @@ export const PARQ = [
 export type ParqKey = (typeof PARQ)[number]["key"];
 export const parqText = (k: string) => PARQ.find((q) => q.key === k)?.text ?? k;
 
-/** Read answers from a form: every question must be "yes" or "no". */
-export function readParq(form: FormData): { ok: true; yes: ParqKey[] } | { ok: false; missing: number } {
-  const yes: ParqKey[] = [];
-  let missing = 0;
-  for (const q of PARQ) {
-    const v = form.get(`parq_${q.key}`);
-    if (v === "yes") yes.push(q.key);
-    else if (v !== "no") missing++;
-  }
-  return missing ? { ok: false, missing } : { ok: true, yes };
-}

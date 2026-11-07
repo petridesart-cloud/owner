@@ -235,7 +235,3 @@ export async function signUp(_: AuthState, form: FormData): Promise<AuthState> {
   return sent.ok ? { ok: true, step: "code", email: d.email, demoCode: sent.demoCode } : { ok: false, error: sent.error };
 }
 
-export async function signOut() {
-  const supabase = await supabaseServer();
-  await supabase.auth.signOut();
-}

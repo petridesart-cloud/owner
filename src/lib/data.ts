@@ -79,25 +79,3 @@ export async function nextBooking(profileId: string) {
   return { id: bookings[0].id, class_sessions: session };
 }
 
-/**
- * "Your usual": the weekday + time + class type the client has booked most often
- * (at least twice), and the next bookable class in that slot.
- */
-export async function usualSlot(profileId: string, upcoming: Availability[], booked: Set<string>) {
-  const { data } = await db().from("bookings")
-    .select("class_sessions!inner(starts_at, class_type_id)")
-    .eq("profile_id", profileId).in("status", ["confirmed", "no_show"])
-    .gte("class_sessions.starts_at", new Date(Date.now() - 90 * 86_400_000).toISOString())
-    .lt("class_sessions.starts_at", new Date().toISOString());
-  const fmt = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Nicosia", weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
-  const counts = new Map<string, number>();
-  for (const r of data ?? []) {
-    const key = `${r.class_sessions.class_type_id}|${fmt.format(new Date(r.class_sessions.starts_at))}`;
-    counts.set(key, (counts.get(key) ?? 0) + 1);
-  }
-  const [best] = [...counts.entries()].filter(([, n]) => n >= 2).sort((a, b) => b[1] - a[1]);
-  if (!best) return null;
-  const [typeId, slot] = best[0].split("|");
-  const next = upcoming.find((c) => c.class_type_id === typeId && c.status === "scheduled" && fmt.format(new Date(c.starts_at)) === slot && !booked.has(c.id));
-  return next ? { session: next, times: best[1] } : null;
-}

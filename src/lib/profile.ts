@@ -1,4 +1,5 @@
 import "server-only";
+import type { Json } from "@/lib/supabase/types";
 import { z } from "zod";
 import { db } from "@/lib/supabase/admin";
 import { HEALTH_CONSENT_VERSION, needsClearance, needsHealthConsent } from "@/lib/health";
@@ -40,7 +41,7 @@ export async function saveHealthAnswers(profileId: string, a: HealthAnswers | "i
     postpartum_months: a.postpartumMonths, bp_meds: a.bpMeds, medication: a.medication, clearance_needed: clearance,
   };
   const { error } = await db().rpc("save_health_answers", {
-    p_profile: profileId, p_mode: mode, p_answers: answers as never, p_consent: consent, p_version: HEALTH_CONSENT_VERSION,
+    p_profile: profileId, p_mode: mode, p_answers: answers as Json | null, p_consent: consent, p_version: HEALTH_CONSENT_VERSION,
   });
   if (error?.message === "health_consent_required") return { ok: false as const, error: "To keep this information for your instructor we need your consent (tick the box)." };
   if (error) return { ok: false as const, error: "We couldn't save your answers. Please try again." };

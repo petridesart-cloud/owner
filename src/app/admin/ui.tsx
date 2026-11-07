@@ -27,4 +27,3 @@ export function Stat({ label, value, hint }: { label: string; value: ReactNode; 
   );
 }
 
-export const smallInput = "min-h-11 rounded-xl border border-line bg-white px-3 text-[0.95rem] text-ink focus:border-plum-700 focus:outline-none focus:ring-2 focus:ring-lilac-300";

@@ -5,9 +5,6 @@ export function seeYou(kind: string | null | undefined) {
   return kind === "event" ? "See you there!" : kind === "mat" ? "See you on the mat." : kind === "reformer" ? "See you on the reformer." : "See you soon.";
 }
 
-/** "1 class" / "3 classes". */
-export const classesWord = (n: number) => `${n} class${n === 1 ? "" : "es"}`;
-
 /** "24 hours and 2 hours": when reminders go out, from the Settings list of minutes (A-073). */
 export function reminderWhen(offsets: number[]) {
   const word = (m: number) => (m >= 60 && m % 60 === 0 ? `${m / 60} hour${m === 60 ? "" : "s"}` : `${m} minute${m === 1 ? "" : "s"}`);

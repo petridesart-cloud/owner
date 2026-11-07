@@ -8,7 +8,7 @@ export const DEFAULT_LOGO = "/logo-instagram.png";
 /** New studio photos go here; the Studio page shows every 'studio:*' slot (older uploads had one per section). */
 export const STUDIO_SLOT = "studio:space";
 
-export function publicUrl(path: string) {
+function publicUrl(path: string) {
   return db().storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
 }
 

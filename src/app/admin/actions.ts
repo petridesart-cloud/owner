@@ -331,7 +331,7 @@ export async function adjustLot(profileId: string, _: ActionResult, form: FormDa
   const { data: owned } = await db().from("credit_lots").select("id").eq("id", lot).eq("profile_id", profileId).maybeSingle();
   if (!owned) return { ok: false, error: "Choose one of this client's packages." };
   const { error } = await db().rpc("admin_adjust_lot", {
-    p_lot: lot, p_action: action, p_days: action === "extend" || action === "freeze" ? n : 0, p_date: /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : (null as unknown as string),
+    p_lot: lot, p_action: action, p_days: action === "extend" || action === "freeze" ? n : 0, p_date: /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null,
     p_credits: action === "add" || action === "remove" ? n : 0, p_reason: reason, p_actor: viewer.profile.id,
   });
   if (error) return { ok: false, error: error.message in ERROR_KEYS ? friendlyError(error) : "Couldn't change the package." };
@@ -706,7 +706,7 @@ async function newOwnClassType(input: z.infer<typeof ClassTypeInput>, active = t
   if (error || !key) return { error: "Couldn't create the class type." } as const;
   const { error: e2 } = await db().from("class_types").insert({
     ...input, default_location: input.default_location || null, description: input.description || null,
-    kind: "other" as never, credit_kind: key as string, slug: slugOf(input.name), price_cents: 0, active,
+    kind: "other", credit_kind: key as string, slug: slugOf(input.name), price_cents: 0, active,
     sort_order: 100,
   });
   if (e2) return { error: "Couldn't save the class type." } as const;
@@ -756,12 +756,13 @@ export async function saveClassType(id: string | null, _: ActionResult, form: Fo
   }
   const kinds = await getKinds();
   if (!kinds.some((k) => k.key === paidWith)) return { ok: false, error: "Choose which packages pay for it." };
+  const classKind: "reformer" | "mat" | "other" = paidWith === "reformer" ? "reformer" : paidWith === "mat" ? "mat" : "other";
   const row = {
     ...p.data, default_location: p.data.default_location || null, description: p.data.description || null, active,
     private: form.get("private") === "on",
     credit_kind: paidWith,
     // Reformer and Mat keep their own wording ("2 reformers left"); anything else reads "spots".
-    kind: (paidWith === "reformer" || paidWith === "mat" ? paidWith : "other") as never,
+    kind: classKind,
   };
   const { error } = id
     ? await db().from("class_types").update(row).eq("id", id)

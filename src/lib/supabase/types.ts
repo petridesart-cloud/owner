@@ -1847,9 +1847,9 @@ export type Database = {
       admin_adjust_lot: {
         Args: {
           p_action: string;
-          p_actor: string;
+          p_actor: string | null;
           p_credits: number;
-          p_date: string;
+          p_date: string | null;
           p_days: number;
           p_lot: string;
           p_reason: string;

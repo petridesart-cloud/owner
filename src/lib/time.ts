@@ -15,7 +15,7 @@ const d = (v: string | Date) => (typeof v === "string" ? new Date(v) : v);
 
 export const time = (v: string | Date) => fTime.format(d(v));
 export const weekdayShort = (v: string | Date) => fWeekdayShort.format(d(v));
-export const weekdayLong = (v: string | Date) => fWeekdayLong.format(d(v));
+const weekdayLong = (v: string | Date) => fWeekdayLong.format(d(v));
 export const dayMonth = (v: string | Date) => fDayMonth.format(d(v));
 export const longDate = (v: string | Date) => fLong.format(d(v));
 export const monthYear = (v: string | Date) => fMonth.format(d(v));
@@ -47,10 +47,6 @@ export function isBirthday(dob: string | null | undefined, key: string) {
 
 /** Accessible label, e.g. "Monday 13 October, 08:00". */
 export const spokenDateTime = (v: string | Date) => `${longDate(v)}, ${time(v)}`;
-
-export function hoursUntil(v: string | Date) {
-  return (d(v).getTime() - Date.now()) / 3_600_000;
-}
 
 export function relativeHours(v: string | Date) {
   const mins = Math.round((d(v).getTime() - Date.now()) / 60_000);

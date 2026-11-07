@@ -312,7 +312,6 @@ async function startSubscription(profile: Profile, product: { id: string; name: 
   return { ok: true, data: { redirect: checkout.url } };
 }
 
-export { paymentReference, productPrice, paymentInstructions } from "@/lib/pricing";
 import { paymentInstructions, paymentReference, productPrice } from "@/lib/pricing";
 import { withDiscount } from "@/lib/discount";
 import { findCode } from "@/lib/rewards";
@@ -321,7 +320,7 @@ import { labelOf } from "@/lib/kind-label";
 import { alertBooking, alertStudio } from "@/lib/studio-alerts";
 import { currentVersion } from "@/lib/policy-versions";
 
-export async function buyPack(profile: Profile, productId: string, code?: string | null): Promise<ActionResult<{ redirect: string }>> {
+async function buyPack(profile: Profile, productId: string, code?: string | null): Promise<ActionResult<{ redirect: string }>> {
   const { data: product } = await db().from("products").select("*").eq("id", productId).eq("active", true).single();
   if (!product) return { ok: false, error: "That pack isn't available." };
   const cfg = await getSettings();

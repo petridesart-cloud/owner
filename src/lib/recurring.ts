@@ -29,10 +29,6 @@ export async function recurringRules(profileId: string) {
   return data ?? [];
 }
 
-export async function recurringSummary(profileId: string) {
-  return (await recurringRules(profileId)).map((r) => slotLabel(r.weekday, r.start_time));
-}
-
 /** The weekly slots on the timetable (class type + weekday + time) inside the booking window. */
 export async function weeklySlots() {
   const cfg = await getSettings();

@@ -19,7 +19,8 @@
     "test:migrate": "node --test --import tsx tests/migrate.test.ts",
     "test:unit": "node --test --import tsx tests/unit.test.ts",
     "vercel-build": "node scripts/migrate.mjs && next build",
-    "db:migrate": "node scripts/migrate.mjs"
+    "db:migrate": "node scripts/migrate.mjs",
+    "check:dead": "npx -y knip@5 --no-progress --include exports,files"
   },
   "dependencies": {
     "@supabase/ssr": "0.12.7",
