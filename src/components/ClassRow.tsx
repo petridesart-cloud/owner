@@ -16,8 +16,9 @@ export function ClassRow({ c, state, showDate = false, locked = false }: { c: Av
   const cancelled = c.status === "cancelled";
   const past = new Date(c.starts_at) <= new Date();
   const mins = Math.round((new Date(c.ends_at).getTime() - new Date(c.starts_at).getTime()) / 60000);
-  const action = cancelled ? "View" : state === "booked" ? "View booking for" : full ? "Join waitlist for" : "Book";
-  const label = `${action} ${time(c.starts_at)} ${c.title}, ${longDate(c.starts_at)}. ${cancelled ? "Cancelled." : spotsLabel(c) + "."}`;
+  // A-071: the name starts with the words you can see (time, then title), then the date, the spots and what a tap does.
+  const action = cancelled ? "View class" : state === "booked" ? "View your booking" : full ? "Join the waitlist" : "Book this class";
+  const label = `${time(c.starts_at)} ${c.title}, ${longDate(c.starts_at)}. ${cancelled ? "Cancelled" : spotsLabel(c)}. ${action}`;
 
   const body = (
     <>

@@ -1,11 +1,12 @@
 "use client";
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { ChevronLeft } from "lucide-react";
 import { Button, Checkbox, Field, Notice, inputClass } from "@/components/ui";
 import Link from "next/link";
 import { CONDITIONS, POSTPARTUM, needsClearance, needsHealthConsent } from "@/lib/health";
 import { dotDate } from "@/lib/time";
 import { keepValues } from "@/lib/keep-form";
+import { useFocusOnError } from "@/lib/focus-error";
 import { saveHealth, type HealthState } from "./actions";
 
 export type HealthInitial = {
@@ -28,6 +29,12 @@ export function HealthWizard({ initial, next, studio, instructor, consentedAt }:
   const [pregnancy, setPregnancy] = useState(initial.pregnancy);
   const [postpartum, setPostpartum] = useState(initial.postpartumMonths);
   const [bp, setBp] = useState(initial.bpMeds);
+  // A-071: moving between steps tells a screen reader and moves focus to "Step n of 2".
+  const stepRef = useRef<HTMLParagraphElement>(null);
+  const form = useRef<HTMLFormElement>(null);
+  useFocusOnError(form, state, !!state.error);
+  const first = useRef(true);
+  useEffect(() => { if (first.current) { first.current = false; return; } stepRef.current?.focus(); }, [step]);
   const toggle = (k: string) => { setNone(false); setInPerson(false); setPicked((p) => (p.includes(k) ? p.filter((x) => x !== k) : [...p, k])); };
   const pregnant = picked.includes("pregnancy");
   // Same rule as the server (A-105): the consent box shows whenever something would be stored.
@@ -35,15 +42,19 @@ export function HealthWizard({ initial, next, studio, instructor, consentedAt }:
   const clearance = needsClearance({ conditions: picked, pregnancy, postpartum_months: postpartum === "" ? null : Number(postpartum) });
 
   return (
-    <form onSubmit={keepValues(action)} className="space-y-5">
+    <form ref={form} onSubmit={keepValues(action)} className="space-y-5">
       <input type="hidden" name="next" value={next} />
-      <p className="text-xs font-medium uppercase tracking-[0.14em] text-ink-soft">Step {step} of 2</p>
+      <p ref={stepRef} tabIndex={-1} role="status" aria-live="polite" className="text-xs font-medium uppercase tracking-[0.14em] text-ink-soft outline-none">Step {step} of 2</p>
 
       <div className={step === 1 ? "space-y-4" : "hidden"}>
         <fieldset>
           <legend className="text-[1.05rem] font-medium text-ink">Does any of this apply to you, now or in the past?</legend>
           <p className="mb-3 mt-1 text-sm text-ink-soft">Tick everything that applies, even small things. It helps your instructor adapt each exercise for you.</p>
           <div className="space-y-2">
+            <label className={chip}>
+              <input type="checkbox" name="none" checked={none} onChange={(e) => { setNone(e.target.checked); if (e.target.checked) { setPicked([]); setInPerson(false); } }} className="size-5 shrink-0 accent-ink" />
+              <span className="font-medium">No injuries or medical conditions</span>
+            </label>
             {CONDITIONS.map((c) => (
               <label key={c.key} className={chip}>
                 <input type="checkbox" name="condition" value={c.key} checked={picked.includes(c.key)} onChange={() => toggle(c.key)} className="size-5 shrink-0 accent-ink" />
@@ -51,10 +62,6 @@ export function HealthWizard({ initial, next, studio, instructor, consentedAt }:
               </label>
             ))}
             <label className={`${chip} mt-3`}>
-              <input type="checkbox" name="none" checked={none} onChange={(e) => { setNone(e.target.checked); if (e.target.checked) { setPicked([]); setInPerson(false); } }} className="size-5 shrink-0 accent-ink" />
-              <span className="font-medium">No injuries or medical conditions</span>
-            </label>
-            <label className={chip}>
               <input type="checkbox" name="in_person" checked={inPerson} onChange={(e) => { setInPerson(e.target.checked); if (e.target.checked) { setPicked([]); setNone(false); } }} className="size-5 shrink-0 accent-ink" />
               <span className="font-medium">I&apos;d rather tell my instructor in person</span>
             </label>
@@ -115,7 +122,7 @@ export function HealthWizard({ initial, next, studio, instructor, consentedAt }:
         )}
 
         <fieldset className={inPerson ? "hidden" : undefined} disabled={inPerson}>
-          <legend className="mb-2 text-sm font-medium text-ink">Are you currently taking any medication that can affect your blood pressure or heart?</legend>
+          <legend className="mb-2 text-sm font-medium text-ink">Are you currently taking any medication that can affect your blood pressure or heart? <span className="font-normal text-ink-soft">(required)</span></legend>
           <div className="grid grid-cols-2 gap-2">
             {[["no", "No"], ["yes", "Yes"]].map(([v, l]) => (
               <label key={v} className={`${chip} justify-center`}>

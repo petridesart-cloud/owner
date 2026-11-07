@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useRef } from "react";
-import { keyToDate, longDate, weekdayShort } from "@/lib/time";
+import { dayMonth, keyToDate, weekdayShort } from "@/lib/time";
 
 /** Horizontal, swipeable row of days (client Schedule and studio Classes). The chosen day scrolls into view. */
 export function DayStrip({ keys, counts, selected, today, href, className = "" }: {
@@ -24,7 +24,8 @@ export function DayStrip({ keys, counts, selected, today, href, className = "" }
                 href={`${href}${href.includes("?") ? "&" : "?"}day=${k}`}
                 scroll={false}
                 aria-current={on ? "date" : undefined}
-                aria-label={`${longDate(dt)}${count ? `, ${count} classes` : ", no classes"}`}
+                // A-071: the name starts with the words on the button ("Tue 10"), then the full date and the count.
+                aria-label={`${k === today ? "Today" : weekdayShort(dt)} ${dayMonth(dt)}, ${count ? `${count} ${count === 1 ? "class" : "classes"}` : "no classes"}`}
                 className={`flex h-[68px] w-[52px] flex-col items-center justify-center rounded-2xl border transition ${
                   on ? "border-ink bg-ink text-paper shadow-[var(--shadow-lift)]" : count ? "border-line bg-white/80 text-ink hover:border-lilac-300" : "border-transparent text-ink-soft"
                 }`}

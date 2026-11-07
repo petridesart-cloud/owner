@@ -7,3 +7,10 @@ export function seeYou(kind: string | null | undefined) {
 
 /** "1 class" / "3 classes". */
 export const classesWord = (n: number) => `${n} class${n === 1 ? "" : "es"}`;
+
+/** "24 hours and 2 hours": when reminders go out, from the Settings list of minutes (A-073). */
+export function reminderWhen(offsets: number[]) {
+  const word = (m: number) => (m >= 60 && m % 60 === 0 ? `${m / 60} hour${m === 60 ? "" : "s"}` : `${m} minute${m === 1 ? "" : "s"}`);
+  const list = [...offsets].sort((a, b) => b - a).map(word);
+  return list.length > 1 ? `${list.slice(0, -1).join(", ")} and ${list.at(-1)}` : list[0] ?? "";
+}

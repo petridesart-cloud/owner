@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
-import { useActionState } from "react";
+import { useActionState, useRef } from "react";
+import { useFocusOnError } from "@/lib/focus-error";
 import { Button, Checkbox, Field, Notice, inputClass } from "@/components/ui";
 import { PhotoConsentField } from "@/components/ProfileFields";
 import { keepValues } from "@/lib/keep-form";
@@ -9,12 +10,14 @@ import { CodeStep } from "../login/LoginForm";
 
 export function SignupForm({ next }: { next: string }) {
   const [state, action, pending] = useActionState<AuthState, FormData>(signUp, { ok: false });
+  const form = useRef<HTMLFormElement>(null);
+  useFocusOnError(form, state, !!state.error || Object.keys(state.errors ?? {}).length > 0);
   if (state.ok && state.step === "code" && state.email) return <CodeStep email={state.email} demoCode={state.demoCode} next={next} />;
   const e = state.errors ?? {};
   const err = (k: string) => ({ "aria-invalid": !!e[k], "aria-describedby": e[k] ? `${k}-error` : undefined });
 
   return (
-    <form onSubmit={keepValues(action)} className="space-y-5" noValidate>
+    <form ref={form} onSubmit={keepValues(action)} className="space-y-5" noValidate>
       {(state.error || Object.keys(e).length > 0) && <Notice tone="error">{state.error ?? "Please check the highlighted fields below."}</Notice>}
       <div className="grid grid-cols-2 gap-3">
         <Field id="first_name" label="Name" error={e.first_name}>
@@ -44,7 +47,7 @@ export function SignupForm({ next }: { next: string }) {
 
       <fieldset className="space-y-1">
         <legend className="sr-only">Agreements</legend>
-        <Checkbox id="policy" name="policy" required aria-describedby={e.policy ? "policy-error" : undefined}>
+        <Checkbox id="policy" name="policy" required aria-invalid={!!e.policy} aria-describedby={e.policy ? "policy-error" : undefined}>
           I accept the <Link href="/policy" target="_blank" className="font-medium underline underline-offset-4">Studio Rules</Link>, the{" "}
           <Link href="/policy/payments" target="_blank" className="font-medium underline underline-offset-4">Payments &amp; Cancellation Policy</Link>, the{" "}
           <Link href="/legal/terms" target="_blank" className="font-medium underline underline-offset-4">Terms</Link> and the{" "}

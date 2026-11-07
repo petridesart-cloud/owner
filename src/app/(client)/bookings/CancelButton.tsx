@@ -12,7 +12,7 @@ export function CancelButton({ bookingId, late, label, warning }: { bookingId: s
 
   if (!confirming) {
     return (
-      <Button variant={late ? "ghost" : "danger"} className="min-h-11 w-full text-[0.72rem]" onClick={() => setConfirming(true)} aria-label={label}>
+      <Button variant={late ? "ghost" : "danger"} className="min-h-11 w-full text-[0.72rem]" onClick={() => setConfirming(true)} aria-label={`${late ? "Release my spot" : "Cancel booking"}, ${label}`}>
         {late ? "Release my spot" : "Cancel booking"}
       </Button>
     );

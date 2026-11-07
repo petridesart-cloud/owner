@@ -8,9 +8,9 @@ test("full class offers the waitlist", async ({ page }) => {
   for (let i = 0; i < n; i++) {
     const href = await days.nth(i).getAttribute("href");
     await page.goto(href!);
-    if (await page.getByRole("link", { name: /^Join waitlist for/ }).count()) break;
+    if (await page.getByRole("link", { name: /Join the waitlist$/ }).count()) break;
   }
-  const full = page.getByRole("link", { name: /^Join waitlist for/ }).first();
+  const full = page.getByRole("link", { name: /Join the waitlist$/ }).first();
   await full.click();
   await page.waitForURL(/\/book\//);
   const url = new URL(page.url()).pathname;

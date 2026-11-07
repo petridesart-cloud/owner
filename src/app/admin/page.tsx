@@ -14,7 +14,7 @@ import { dayMonth, nowMs } from "@/lib/time";
 import { AdminTitle, Stat } from "./ui";
 import { canViewHealth, getSettings } from "@/lib/auth";
 import { launchReadiness } from "@/lib/business";
-import { env } from "@/lib/env";
+import { env, smsLive } from "@/lib/env";
 import { Readiness } from "./Readiness";
 import { ago, schedulerWarning } from "@/lib/scheduler";
 import { HealthInfo } from "./HealthInfo";
@@ -159,7 +159,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
                       {b.profiles?.photo_consent === "none" && <span className={`${flag} bg-ink text-paper`}>No photos</span>}
                       {b.profiles?.photo_consent === "no_face" && <span className={`${flag} bg-ink/80 text-paper`}>No face</span>}
                       {b.paid_with === "pay_at_studio" && b.payment?.status !== "paid" && <span className={`${flag} bg-burgundy-soft text-burgundy`}>Unpaid{b.payment?.intended_method ? ` · ${METHOD[b.payment.intended_method]}` : ""}</span>}
-                      {b.status === "no_show" ? "No-show" : b.paid_with === "credit" ? "Class credit" : b.paid_with === "payment" ? "Paid" : b.paid_with === "pay_at_studio" ? "Pay at studio" : "Manual / DM"}{b.profiles?.phone ? ` · ${b.profiles.phone}` : ""}
+                      {b.status === "no_show" ? "No-show" : b.paid_with === "credit" ? "Package class" : b.paid_with === "payment" ? "Paid" : b.paid_with === "pay_at_studio" ? "Pay at studio" : "Manual / DM"}{b.profiles?.phone ? ` · ${b.profiles.phone}` : ""}
                     </p>
                     {seeHealth && <HealthInfo h={b.profiles?.health_notes} canView />}
                   </div>
@@ -177,7 +177,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
       {isToday && live.some((x) => new Date(x.starts_at) > new Date()) && (
         <details className="card mt-6 px-5 py-3">
           <summary className="min-h-11 cursor-pointer content-center text-sm font-medium text-burgundy">Cancel the rest of today</summary>
-          <p className="mt-1 text-sm text-ink-soft">Unwell or need a break? Cancels every remaining class today, tells everyone booked (email + SMS) and returns their classes. The waitlist isn&apos;t offered anything.</p>
+          <p className="mt-1 text-sm text-ink-soft">Unwell or need a break? Cancels every remaining class today, tells everyone booked by email{smsLive() ? " and SMS" : ""} and returns their package classes. The waitlist isn&apos;t offered anything.</p>
           <div className="mt-3 pb-2">
             <ActionForm action={cancelToday} submit="Cancel today's remaining classes" variant="danger" confirm="Cancel all remaining classes today and notify everyone?">
               <Field id="reason" label="Message to clients"><input id="reason" name="reason" placeholder="So sorry, I'm unwell today. Your class is back in your account." className={inputClass} /></Field>

@@ -12,7 +12,7 @@ import { clientIp, rateLimited } from "@/lib/rate-limit";
 import { dobSchema, nameSchema, phoneSchema } from "@/lib/profile";
 import { DEMO_CLIENT_PASSWORD, authUser, isStudioAdmin, landing, onboard, profileFor, sendCode, type SignupDetails } from "@/lib/auth-flow";
 
-const Email = z.string().trim().toLowerCase().email();
+const Email = z.string().trim().toLowerCase().email("Please check your email address.");
 const Password = z.string().min(8, "Use at least 8 characters.").max(72, "That's too long (72 characters at most).");
 
 /** Ties a sign-up's details to the browser that typed them (httpOnly cookie; only its hash is on the login). */

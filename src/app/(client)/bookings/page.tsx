@@ -98,7 +98,7 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
               {upcoming.map((b) => {
                 const start = new Date(b.s.starts_at).getTime();
                 const late = start - now < cutoffMs;
-                const label = `Cancel ${time(b.s.starts_at)} ${b.name}, ${longDate(b.s.starts_at)}`;
+                const label = `${time(b.s.starts_at)} ${b.name}, ${longDate(b.s.starts_at)}`;
                 const warning = late
                   ? b.late_refund_pending || settings.refund_late_cancel_if_filled
                     ? `You're inside the ${settings.cancellation_cutoff_hours}-hour window. Your spot goes to the waitlist; if it's re-booked, we'll return your class.`

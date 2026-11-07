@@ -1,19 +1,24 @@
 "use client";
-import { useActionState } from "react";
+import Link from "next/link";
+import { useActionState, useRef } from "react";
+import { useFocusOnError } from "@/lib/focus-error";
 import { Button, Checkbox, Field, Notice, inputClass } from "@/components/ui";
 import { PhotoConsentField } from "@/components/ProfileFields";
-import { saveProfile, type SaveState } from "./actions";
+import { saveNotifications, saveProfile, type SaveState } from "./actions";
 import { keepValues } from "@/lib/keep-form";
 
 type P = {
   first: string; last: string; phone: string; email: string; dob: string; goal: string;
-  ecName: string; ecPhone: string; ecRelation: string; photos: string | null; me: boolean; reminders: boolean;
+  ecName: string; ecPhone: string; ecRelation: string; photos: string | null;
 };
 
-export function ProfileForm({ p }: { p: P }) {
+export function ProfileForm({ p, next }: { p: P; next?: string }) {
   const [state, action, pending] = useActionState<SaveState, FormData>(saveProfile, { ok: false });
+  const form = useRef<HTMLFormElement>(null);
+  useFocusOnError(form, state, !!state.error);
   return (
-    <form onSubmit={keepValues(action)} className="space-y-4">
+    <form ref={form} onSubmit={keepValues(action)} className="space-y-4">
+      {next && <input type="hidden" name="next" value={next} />}
       <div className="grid grid-cols-2 gap-3">
         <Field id="first_name" label="First name"><input id="first_name" name="first_name" autoComplete="given-name" defaultValue={p.first} className={inputClass} /></Field>
         <Field id="last_name" label="Surname"><input id="last_name" name="last_name" autoComplete="family-name" defaultValue={p.last} className={inputClass} /></Field>
@@ -36,15 +41,29 @@ export function ProfileForm({ p }: { p: P }) {
 
       <div className="border-t border-line pt-4"><PhotoConsentField value={p.photos} /></div>
 
-      <fieldset id="notifications" className="scroll-mt-24 border-t border-line pt-4">
-        <legend className="pt-4 text-sm font-medium text-ink">Notifications</legend>
-        <Checkbox id="reminder_emails" name="reminder_emails" defaultChecked={p.reminders}>Remind me the day before each class</Checkbox>
-        <Checkbox id="marketing_email" name="marketing_email" defaultChecked={p.me}>Email me about new schedules and events</Checkbox>
-        <p className="mt-1 text-xs leading-relaxed text-ink-soft">Booking confirmations, cancellations and waitlist news are always sent.</p>
-      </fieldset>
+      {state.error && <Notice tone="error">{state.error}</Notice>}
+      {state.message && (
+        <Notice tone="success">
+          {state.message}
+          {state.back && <> <Link href={state.back} className="inline-flex min-h-11 items-center font-medium underline underline-offset-4">Back to your class →</Link></>}
+        </Notice>
+      )}
+      <Button type="submit" variant="soft" disabled={pending} className="w-full">{pending ? "Saving…" : "Save changes"}</Button>
+    </form>
+  );
+}
+
+/** Reminders and news: their own section, saved on their own (A-078). `when` is how reminders are timed (A-073). */
+export function NotificationsForm({ me, reminders, when }: { me: boolean; reminders: boolean; when: string }) {
+  const [state, action, pending] = useActionState<SaveState, FormData>(saveNotifications, { ok: false });
+  return (
+    <form onSubmit={keepValues(action)} className="space-y-3">
+      <Checkbox id="reminder_emails" name="reminder_emails" defaultChecked={reminders}>Remind me before each class{when ? ` (${when} ahead)` : ""}</Checkbox>
+      <Checkbox id="marketing_email" name="marketing_email" defaultChecked={me}>Email me about new schedules and events</Checkbox>
+      <p className="text-xs leading-relaxed text-ink-soft">Booking confirmations, cancellations and waitlist news are always sent.</p>
       {state.error && <Notice tone="error">{state.error}</Notice>}
       {state.message && <Notice tone="success">{state.message}</Notice>}
-      <Button type="submit" variant="soft" disabled={pending} className="w-full">{pending ? "Saving…" : "Save changes"}</Button>
+      <Button type="submit" variant="soft" disabled={pending} className="w-full">{pending ? "Saving…" : "Save"}</Button>
     </form>
   );
 }

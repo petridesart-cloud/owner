@@ -9,7 +9,11 @@ import { eur } from "@/lib/money";
 import { receiptLabel } from "@/lib/receipts";
 import { kindLabels } from "@/lib/kinds";
 import { deleteAccount, signOutAction } from "./actions";
-import { ProfileForm } from "./Forms";
+import { NotificationsForm, ProfileForm } from "./Forms";
+import { OpenOnHash } from "@/components/OpenOnHash";
+import { reminderWhen } from "@/lib/copy";
+import { getSettings } from "@/lib/auth";
+import { safeNext } from "@/lib/safe-next";
 import { Accordion } from "@/components/Accordion";
 import { POSTPARTUM, conditionLabel } from "@/lib/health";
 import { deleteHealthInfo } from "../health/actions";
@@ -23,11 +27,12 @@ const CONSENT_LABEL: Record<string, string> = {
   health_data: "Health data", health_declaration_offline: "Health: tell my instructor in person", marketing_email: "News by email", marketing_sms: "News by SMS", photos: "Photos for social media",
 };
 
-export default async function AccountPage({ searchParams }: { searchParams: Promise<{ delete?: string; dob?: string; health?: string }> }) {
-  const { delete: del, dob, health } = await searchParams;
+export default async function AccountPage({ searchParams }: { searchParams: Promise<{ delete?: string; dob?: string; health?: string; next?: string; open?: string }> }) {
+  const { delete: del, dob, health, next, open } = await searchParams;
   const viewer = await requireViewer("/account");
   const p = viewer.profile;
-  const labels = await kindLabels();
+  const [labels, settings] = await Promise.all([kindLabels(), getSettings()]);
+  const back = safeNext(next, "") || undefined; // a class they were booking when we asked for their date of birth (A-072)
   const [{ data: h }, { data: consents }, { data: receipts }] = await Promise.all([
     db().from("health_notes").select("conditions, pregnancy, pregnancy_weeks, postpartum_months, clearance_needed, clearance_received_at").eq("profile_id", p.id).maybeSingle(),
     db().from("consents").select("type, granted, version, created_at, doc_version_id").eq("profile_id", p.id).order("created_at", { ascending: false }).limit(30),
@@ -45,13 +50,18 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
         {health === "saved" && <Notice tone="success">Thank you, your health answers are saved.</Notice>}
         {health === "deleted" && <Notice tone="success">Your health information is deleted. Please tell your instructor in person about anything she should know.</Notice>}
         {health === "failed" && <Notice tone="error">We couldn&apos;t delete your health information. Please try again.</Notice>}
-        <Accordion title="Your details" sub="Name, contact, emergency contact, photos, notifications" open={!p.date_of_birth || !!dob} id="details">
+        <OpenOnHash />
+        <Accordion title="Your details" sub="Name, contact, emergency contact, photos" open={!p.date_of_birth || !!dob} id="details">
           {!p.date_of_birth && <div className="mb-3"><Notice>Please add your date of birth to keep booking classes.</Notice></div>}
           <ProfileForm p={{
             first: p.first_name ?? p.full_name?.split(" ")[0] ?? "", last: p.last_name ?? "", phone: p.phone ?? "", email: viewer.email,
             dob: p.date_of_birth ?? "", goal: p.goal ?? "", ecName: p.emergency_contact_name ?? "", ecPhone: p.emergency_contact_phone ?? "", ecRelation: p.emergency_contact_relation ?? "",
-            photos: p.photo_consent, me: p.marketing_email, reminders: p.reminder_emails,
-          }} />
+            photos: p.photo_consent,
+          }} next={back} />
+        </Accordion>
+
+        <Accordion title="Notifications" sub="Reminders and news" open={open === "notifications"} id="notifications">
+          <NotificationsForm me={p.marketing_email} reminders={p.reminder_emails} when={reminderWhen(settings.reminder_offsets_minutes)} />
         </Accordion>
 
         <Accordion title="Health" sub={p.parq_completed_at ? `Answered ${dotDate(p.parq_completed_at)}` : "Please answer before your next booking"} open={!p.parq_completed_at || health === "deleted" || health === "failed"} id="health">

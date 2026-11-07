@@ -15,21 +15,21 @@ export function RosterActions({ bookingId, sessionId, name, past, insideCutoff =
   return (
     <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
       {past ? (
-        <button disabled={pending} onClick={() => start(async () => { const r = await markNoShow(bookingId); if (!r.ok) setErr(r.error); })} className="min-h-10 rounded-full border border-line bg-white px-3 text-xs text-ink hover:bg-lilac-50" aria-label={`Mark ${name} as no-show`}>No-show</button>
+        <button disabled={pending} onClick={() => start(async () => { const r = await markNoShow(bookingId); if (!r.ok) setErr(r.error); })} className="min-h-10 rounded-full border border-line bg-white px-3 text-xs text-ink hover:bg-lilac-50" aria-label={`No-show, ${name}`}>No-show</button>
       ) : insideCutoff ? (
         // A-085 (her answer): inside the cutoff the default is a late cancel; returning the class is a separate choice.
         <>
-          <button disabled={pending} className={remove} aria-label={`Remove ${name} as a late cancel, no class back`}
+          <button disabled={pending} className={remove} aria-label={`Remove (late cancel), ${name}, no class back`}
             onClick={() => go(false, `Remove ${name}? It's inside the ${cutoffHours}-hour window, so this is a late cancel: the class isn't returned. They're notified.`)}>
             {pending ? "…" : "Remove (late cancel)"}
           </button>
-          <button disabled={pending} className={remove} aria-label={`Remove ${name} and return their class`}
+          <button disabled={pending} className={remove} aria-label={`Remove + return class, ${name}`}
             onClick={() => go(true, `Remove ${name} and return their class? They're notified.`)}>
             {pending ? "…" : "Remove + return class"}
           </button>
         </>
       ) : (
-        <button disabled={pending} className={remove} aria-label={`Cancel ${name}'s booking and return their credit`}
+        <button disabled={pending} className={remove} aria-label={`Remove, ${name}, and return their class`}
           onClick={() => go(true, `Cancel ${name}'s booking? Their credit is returned and they're notified.`)}>
           {pending ? "…" : "Remove"}
         </button>

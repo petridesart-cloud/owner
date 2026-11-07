@@ -276,7 +276,7 @@ export function emailHtml(r: Rendered) {
 <p style="margin:0 0 22px;font-family:Georgia,serif;font-size:30px;font-weight:300;color:#5B4470">Re·Form</p>
 <h1 style="margin:0 0 18px;font-family:Georgia,serif;font-weight:400;font-size:22px;letter-spacing:3px;text-transform:uppercase;color:#2E2238">${r.heading}</h1>
 ${body}${cta}
-<p style="margin:28px 0 0;font-size:12px;line-height:1.5;color:#5E5566">Re·Form Pilates Studio · Limassol, Cyprus<br>This is a service message about your booking. <a href="${env.siteUrl}/account#notifications" style="color:#5E5566">Notification settings</a> (turn class reminders off).</p>
+<p style="margin:28px 0 0;font-size:12px;line-height:1.5;color:#5E5566">Re·Form Pilates Studio · Limassol, Cyprus<br>This is a service message about your booking. <a href="${env.siteUrl}/account?open=notifications#notifications" style="color:#5E5566">Notification settings</a> (turn class reminders off).</p>
 </td></tr></table></td></tr></table></body></html>`;
 }
 

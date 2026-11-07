@@ -405,3 +405,12 @@ describe("late-cancel wording (A-028)", () => {
     assert.match(closedAt(new Date("2026-11-09T21:30:00Z"), earlier), /^[A-Z][a-z]{2} \d\d:\d\d$/);
   });
 });
+
+describe("reminder wording follows Settings (A-073)", () => {
+  test("hours before class, from the minutes list", async () => {
+    const { reminderWhen } = await import("../src/lib/copy");
+    assert.equal(reminderWhen([1440, 120]), "24 hours and 2 hours");
+    assert.equal(reminderWhen([120, 1440, 60]), "24 hours, 2 hours and 1 hour");
+    assert.equal(reminderWhen([90]), "90 minutes");
+  });
+});
