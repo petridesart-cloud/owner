@@ -4,6 +4,7 @@ import { Cake, ChevronRight, Search } from "lucide-react";
 import { db } from "@/lib/supabase/admin";
 import { isBirthday, todayKey } from "@/lib/time";
 import { AdminTitle } from "../ui";
+import { searchTerm } from "@/lib/search";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
   let query = db().from("profiles")
     .select("id, full_name, first_name, last_name, email, phone, date_of_birth, credit_lots(remaining, expires_at), bookings(status, paid_with, class_sessions(starts_at), payment:payments!bookings_payment_id_fkey(status))")
     .is("deleted_at", null).eq("role", "client").limit(2000);
-  const term = q.trim().replace(/[%,()]/g, "");
+  const term = searchTerm(q);
   if (term) query = query.or(`full_name.ilike.%${term}%,email.ilike.%${term}%,phone.ilike.%${term}%`);
   const { data } = await query;
   const now = new Date().toISOString();

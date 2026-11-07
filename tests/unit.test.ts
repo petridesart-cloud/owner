@@ -243,3 +243,15 @@ describe("calendar file (A-090)", () => {
     assert.ok(c.includes("STATUS:CANCELLED") && !c.includes("BEGIN:VALARM"), "a cancelled class has no reminder");
   });
 });
+
+describe("admin client search (A-091)", () => {
+  test("the search term can't break or extend the PostgREST or() filter", async () => {
+    const { searchTerm } = await import("../src/lib/search");
+    assert.equal(searchTerm("  Elena  "), "Elena");
+    assert.equal(searchTerm("a,role.eq.admin"), "a role.eq.admin");
+    for (const bad of ["x)", "(y", "*", "%", "\\", '"q"', "a,b"]) assert.ok(!/[,()*%\\"]/.test(searchTerm(bad)), bad);
+    assert.equal(searchTerm("+357 99"), "+357 99");
+    assert.equal(searchTerm("elena@example.com"), "elena@example.com");
+    assert.ok(searchTerm("x".repeat(500)).length <= 100);
+  });
+});
