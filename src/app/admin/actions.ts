@@ -5,7 +5,7 @@ import { z } from "zod";
 import { parse, payMethod, uuid } from "@/lib/validate";
 import { monthsLabel } from "@/lib/copy";
 import { parseSettingsNumbers } from "@/lib/settings-form";
-import { getSettings, requireAdmin } from "@/lib/auth";
+import { canViewHealth, getSettings, requireAdmin } from "@/lib/auth";
 import { emailLive, env, paymentsLive } from "@/lib/env";
 import { db } from "@/lib/supabase/admin";
 import { EVENT_POLICY, cancelBooking, cancelSession, cancelSessions, notifyCancelled, notifyOffers, onPaymentPaid, policyLine, runTick, sessionInfo } from "@/lib/booking";
@@ -564,8 +564,10 @@ export async function eraseClient(profileId: string, _: ActionResult, form: Form
   if (String(form.get("confirm") ?? "").trim().toUpperCase() !== "ERASE") return { ok: false, error: "Type ERASE to confirm." };
   const viewer = await admin("erase_client", { profileId }); // ids only, no personal data
   if (profileId === viewer.profile.id) return { ok: false, error: "You can't erase your own studio account here." };
-  const { data: p } = await db().from("profiles").select("id, email, deleted_at").eq("id", profileId).maybeSingle();
+  const { data: p } = await db().from("profiles").select("id, email, role, deleted_at").eq("id", profileId).maybeSingle();
   if (!p || p.deleted_at) return { ok: false, error: "This client's data has already been erased." };
+  // V-008 (owner's answer, 7 Nov): only the instructor, who owns the studio (can_view_health), may erase another admin.
+  if (p.role === "admin" && !(await canViewHealth())) return { ok: false, error: "Only the studio owner can erase a studio admin's account." };
   const { count } = await db().from("payments").select("id", { count: "exact", head: true }).eq("profile_id", profileId).in("status", ["pending", "needs_refund"]);
   if (count) return { ok: false, error: "They have a payment still to settle (awaiting payment or a refund). Settle or remove it first." };
   if (!(await eraseProfile(profileId, p.email))) return { ok: false, error: "Their data couldn't be erased. Nothing was removed. Please try again." };

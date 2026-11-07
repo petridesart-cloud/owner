@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { openBookableClass, serviceDb, signIn, signUp, uniqueEmail } from "./helpers";
+import { adminSignIn, openBookableClass, serviceDb, signIn, signUp, uniqueEmail } from "./helpers";
 
 // 4.1 Account deletion (A-010, A-063): sign up, book, export own data, delete, and nothing is left to sign in to.
 test("a client exports their data, deletes their account, and their spot is freed", async ({ page }) => {
@@ -73,4 +73,28 @@ test("the studio exports and erases a client without a login", async ({ page }) 
   await signIn(page, "elena@example.com", "/");
   await page.waitForURL((u) => !u.pathname.startsWith("/login"));
   expect((await page.request.get(`/admin/clients/${p!.id}/export`)).status()).toBe(404);
+});
+
+// V-008 (owner's answer, 7 Nov): only the instructor (the studio owner) can erase another admin's account.
+test("only the instructor can erase another studio admin (V-008)", async ({ page }) => {
+  const db = serviceDb();
+  const target = uniqueEmail("adm");
+  const { data: t } = await db.from("profiles").insert({ full_name: "Alex Admin", email: target, role: "admin" }).select("id").single();
+  const staff = uniqueEmail("staff");
+  await db.from("profiles").insert({ full_name: "Sam Staff", email: staff, role: "admin", can_view_health: false });
+  const erase = async () => {
+    await page.goto(`/admin/clients/${t!.id}`);
+    await page.getByText("Privacy & data").click();
+    await page.getByLabel("Type ERASE to confirm").fill("ERASE");
+    page.once("dialog", (d) => d.accept());
+    await page.getByRole("button", { name: "Erase this client" }).click();
+  };
+  await adminSignIn(page, staff, process.env.E2E_ADMIN_CODE ?? "24681357");
+  await erase();
+  await expect(page.getByText(/Only the studio owner can erase a studio admin/)).toBeVisible();
+  expect((await db.from("profiles").select("deleted_at").eq("id", t!.id).single()).data?.deleted_at).toBeNull();
+  await page.context().clearCookies();
+  await adminSignIn(page, process.env.E2E_ADMIN_EMAIL ?? "studio@example.com", process.env.E2E_ADMIN_CODE ?? "24681357");
+  await erase();
+  await expect(page.getByText("Their personal data has been erased.")).toBeVisible();
 });

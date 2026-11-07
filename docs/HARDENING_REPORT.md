@@ -152,12 +152,12 @@ Total Blocking Time dropped on every page (for example /packs 202 → 61 ms), an
 12. Choose who receives developer alerts, and whether to use Sentry (A-056). `/api/health` is ready for an uptime monitor.
 13. Upgrade `reform-studio` to Vercel Pro before the bio link, as already planned.
 
-### Questions still open
-- **A-061 (owner):** should birthday and reward emails go only to clients who ticked "news", with an unsubscribe link? EU email rules suggest yes. Until you decide, they're sent as before.
-- **V-008 (owner):** may one studio admin erase another admin's account? The safer option is to refuse it until that person is removed from the Studio team.
-- **A-012 (Elysia):** if a studio-cancelled class can't be used before the package ends, does she extend the package or refund it? Nothing is promised yet.
-- **A-065 (Elysia):** should a timetable import be able to end on a date? Today every timetable repeats weekly.
-- **Design freeze (A-075/A-109):** the bottom-bar labels are all ink now, and the Home pill reads "Rules". Say if she wants either back.
+### Questions answered (7 Nov)
+- **A-061:** birthday emails go to every client (no change).
+- **V-008:** only the studio owner (Elysia) can erase another admin's account. Built and tested.
+- **A-012:** a class the studio cancels always comes back. If it's near the end of the package, she can extend it with Adjust package → Extend. The Terms now say so.
+- **Still open, Elysia (A-065):** should a timetable import be able to end on a date? Today every timetable repeats weekly.
+- **Design freeze (A-075/A-109):** the bottom-bar labels are all ink, and the Home pill reads "Rules". Say if she wants either back.
 
 ## 6. Known remaining items (Medium/Low, not blocking)
 From `docs/VERIFICATION.md`:

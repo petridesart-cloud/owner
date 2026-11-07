@@ -49,7 +49,7 @@ export function defaultTerms(s: LegalSettings) {
     `- The waitlist: if a spot opens more than ${s.waitlist_close_minutes >= 60 ? plural(Math.round(s.waitlist_close_minutes / 60), "hour") : plural(s.waitlist_close_minutes, "minute")} before class, the first person waiting who has a package class is booked in automatically and emailed, and these cancellation rules apply to that booking.`,
     "- Events can't be cancelled in the app. If you can't come, message the studio.",
     "## Changes and cancellations by the studio",
-    "We may need to cancel or move a class (for example because of illness). If we cancel a class, the class always comes back into your package so you can book another time, even if you had already cancelled it late. If we cancel an event, you get a full refund. Apart from these cases and your right to withdraw, unused or expired classes aren't refunded.",
+    "We may need to cancel or move a class (for example because of illness). If we cancel a class, the class always comes back into your package so you can book another time, even if you had already cancelled it late. If that leaves you too little time to use it before your package ends, we may extend your package. If we cancel an event, you get a full refund. Apart from these cases and your right to withdraw, unused or expired classes aren't refunded.",
     "## Health & safety",
     "Before your first booking you accept the [Health & Safety acknowledgement](/legal/health). A doctor's note is needed in the cases it lists.",
     "## Arriving late",

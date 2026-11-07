@@ -49,7 +49,7 @@ Our classes are for adults aged 18 or over. Each account is for one person: plea
 
 ## Changes and cancellations by the studio
 
-We may need to cancel or move a class (for example because of illness). If we cancel a class, the class always comes back into your package so you can book another time, even if you had already cancelled it late. If we cancel an event, you get a full refund. Apart from these cases and your right to withdraw, unused or expired classes aren't refunded.
+We may need to cancel or move a class (for example because of illness). If we cancel a class, the class always comes back into your package so you can book another time, even if you had already cancelled it late. If that leaves you too little time to use it before your package ends, we may extend your package. If we cancel an event, you get a full refund. Apart from these cases and your right to withdraw, unused or expired classes aren't refunded.
 
 ## Health & safety
 
