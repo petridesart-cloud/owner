@@ -3,10 +3,10 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getSettings, requireAdmin } from "@/lib/auth";
-import { env, paymentsLive } from "@/lib/env";
+import { emailLive, env, paymentsLive } from "@/lib/env";
 import { db } from "@/lib/supabase/admin";
 import { EVENT_POLICY, cancelBooking, cancelSession, cancelSessions, notifyCancelled, notifyOffers, onPaymentPaid, policyLine, runTick, sessionInfo } from "@/lib/booking";
-import { notify } from "@/lib/notifications";
+import { notify, retryFailed } from "@/lib/notifications";
 import { applyRecurring } from "@/lib/recurring";
 import { rewardCode } from "@/lib/rewards";
 import { defaultTerms } from "@/lib/terms";
@@ -838,6 +838,16 @@ export async function sendTestEmail(): Promise<ActionResult> {
   if (r.email === "sent") return { ok: true, message: `Sent to ${viewer.email}. Check your inbox (and spam, just in case).` };
   if (r.email === "logged") return { ok: true, message: "Email isn't live here (demo mode or no email key), so it was only logged below." };
   return { ok: false, error: "Sending failed. The details are in the message below; usually the domain isn't verified in Resend yet." };
+}
+
+/** Outbox "Send again": resend one failed email or text now (A-015). */
+export async function resendNotification(id: string): Promise<ActionResult> {
+  await admin("resend_notification", { id });
+  if (!/^[0-9a-f-]{36}$/.test(id)) return { ok: false, error: "That message can't be found." };
+  const r = await retryFailed({ id });
+  revalidatePath("/admin/outbox");
+  if (r.sent) return { ok: true, message: "Sent." };
+  return { ok: false, error: env.demoMode || !emailLive() ? "Email isn't live here, so it can't be sent." : "It failed again. The details are on the message; it'll be tried again automatically." };
 }
 
 export async function runTickNow(): Promise<ActionResult> {

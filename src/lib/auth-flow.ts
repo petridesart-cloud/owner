@@ -1,7 +1,7 @@
 import "server-only";
 import { db } from "@/lib/supabase/admin";
 import { emailLive, env } from "@/lib/env";
-import { notify } from "@/lib/notifications";
+import { delivered, notify } from "@/lib/notifications";
 import { ensureProfile, type Profile } from "@/lib/auth";
 import { clientIp, rateLimited } from "@/lib/rate-limit";
 import { normEmail } from "@/lib/request-keys";
@@ -71,7 +71,8 @@ export async function sendCode(raw: string, template: "verify_email" | "reset_co
   }
   const { data: profile } = await db().from("profiles").select("id").eq("email", email).is("deleted_at", null).maybeSingle();
   const sent = await notify({ profileId: profile?.id, email }, template, { code });
-  if (sent.email === "failed") return { ok: false, error: "We couldn't send the email just now. Please try again in a minute." };
+  // Only a send that really happened (or the demo Outbox) counts: never claim a code was sent (A-016).
+  if (!delivered(sent.email)) return { ok: false, error: "We couldn't send the email just now. Please try again in a minute." };
   return { ok: true, demoCode: env.demoMode && !(await isStudioAdmin(email)) ? code : undefined };
 }
 

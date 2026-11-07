@@ -5,7 +5,7 @@ import { db } from "@/lib/supabase/admin";
 import { emailFromOk, notificationsMode } from "@/lib/notifications";
 import { emailLive, env } from "@/lib/env";
 import { dayMonth, time } from "@/lib/time";
-import { runTickNow, sendTestEmail } from "../actions";
+import { resendNotification, runTickNow, sendTestEmail } from "../actions";
 import { AdminTitle } from "../ui";
 import { getSettings } from "@/lib/auth";
 import { ago, schedulerHealthy } from "@/lib/scheduler";
@@ -60,6 +60,12 @@ export default async function OutboxPage() {
                   <p className="m-4 max-w-xs rounded-2xl rounded-bl-sm bg-lilac-100 px-4 py-3 text-sm text-ink">{n.body}</p>
                 )}
                 {n.error && <p className="px-4 pb-3 text-xs text-burgundy">{n.error}</p>}
+                {n.status === "failed" && !["login_code", "verify_email", "reset_code"].includes(n.template) && (
+                  <div className="px-4 pb-4">
+                    {n.next_attempt_at && <p className="mb-2 text-xs text-ink-soft">Tried {n.attempts}×. Next try {dayMonth(n.next_attempt_at)} {time(n.next_attempt_at)}.</p>}
+                    <ActionForm action={resendNotification.bind(null, n.id)} submit="Send again" variant="soft" />
+                  </div>
+                )}
               </div>
             </details>
           </li>

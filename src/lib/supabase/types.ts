@@ -894,6 +894,7 @@ export type Database = {
       };
       notifications: {
         Row: {
+          attempts: number;
           body: string;
           booking_id: string | null;
           channel: Database["public"]["Enums"]["notification_channel"];
@@ -901,6 +902,7 @@ export type Database = {
           dedupe_key: string | null;
           error: string | null;
           id: string;
+          next_attempt_at: string | null;
           profile_id: string | null;
           provider_ref: string | null;
           recipient: string;
@@ -908,9 +910,11 @@ export type Database = {
           status: Database["public"]["Enums"]["notification_status"];
           subject: string | null;
           template: string;
+          notification_stale: boolean | null;
         };
-        ComputedFields: never;
+        ComputedFields: "notification_stale";
         Insert: {
+          attempts?: number;
           body: string;
           booking_id?: string | null;
           channel: Database["public"]["Enums"]["notification_channel"];
@@ -918,6 +922,7 @@ export type Database = {
           dedupe_key?: string | null;
           error?: string | null;
           id?: string;
+          next_attempt_at?: string | null;
           profile_id?: string | null;
           provider_ref?: string | null;
           recipient: string;
@@ -927,6 +932,7 @@ export type Database = {
           template: string;
         };
         Update: {
+          attempts?: number;
           body?: string;
           booking_id?: string | null;
           channel?: Database["public"]["Enums"]["notification_channel"];
@@ -934,6 +940,7 @@ export type Database = {
           dedupe_key?: string | null;
           error?: string | null;
           id?: string;
+          next_attempt_at?: string | null;
           profile_id?: string | null;
           provider_ref?: string | null;
           recipient?: string;
@@ -1796,6 +1803,49 @@ export type Database = {
         Returns: boolean;
       };
       my_profile_id: { Args: Record<PropertyKey, never>; Returns: string };
+      notification_reclaim: {
+        Args: { p_body: string; p_key: string; p_subject: string };
+        Returns: {
+          attempts: number;
+          id: string;
+        }[];
+      };
+      notification_retry_claim: {
+        Args: { p_id?: string; p_limit?: number };
+        Returns: {
+          attempts: number;
+          body: string;
+          booking_id: string | null;
+          channel: Database["public"]["Enums"]["notification_channel"];
+          created_at: string;
+          dedupe_key: string | null;
+          error: string | null;
+          id: string;
+          next_attempt_at: string | null;
+          profile_id: string | null;
+          provider_ref: string | null;
+          recipient: string;
+          session_id: string | null;
+          status: Database["public"]["Enums"]["notification_status"];
+          subject: string | null;
+          template: string;
+        }[];
+        SetofOptions: {
+          from: "*";
+          to: "notifications";
+          isOneToOne: false;
+          isSetofReturn: true;
+        };
+      };
+      notification_stale: {
+        Args: {
+          n: Omit<
+            Database["public"]["Tables"]["notifications"]["Row"],
+            Database["public"]["Tables"]["notifications"]["ComputedFields"]
+          >;
+        };
+        Returns: boolean;
+      };
       pause_membership: { Args: { p_membership: string }; Returns: undefined };
       period_end: { Args: { p_days: number; p_start: string }; Returns: string };
       phone_key: { Args: { p: string }; Returns: string };
@@ -2132,7 +2182,7 @@ export const Constants = {
         "private_reformer",
         "private_prenatal_mat",
         "private_prenatal_reformer",
-        "pre_natal_mw5dofp8",
+        "pre_natal_9f1b",
       ],
       ledger_entry: [
         "grant",
