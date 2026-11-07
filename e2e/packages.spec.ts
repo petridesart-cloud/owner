@@ -9,7 +9,7 @@ test("client requests a pack, studio marks it paid, client books with a class cr
   const name = `Pack Tester ${Date.now() % 10000}`;
   const client = await (await browser.newContext()).newPage();
   await signUp(client, email, "/packs?type=reformer", name);
-  await client.getByRole("group", { name: "Reformer packages, valid 30 days" }).getByText("4 classes", { exact: true }).click();
+  await client.getByRole("group", { name: "Reformer packages, 1 month" }).getByText("4 classes", { exact: true }).click();
   await client.getByText("Cash", { exact: true }).click();
   // A-012: before the request, the total, "no VAT charged", who sells it and the 14-day withdrawal summary.
   await expect(client.getByText(/^Total €[\d.,]+ \(no VAT charged\)\. Sold by .*Re·Form Pilates Studio/)).toBeVisible();
@@ -50,4 +50,21 @@ test("client requests a pack, studio marks it paid, client books with a class cr
   await client.goto(`/receipts/${paid!.id}`);
   await expect(client.getByText(/^Reformer · 4 classes/)).toBeVisible();
   await expect(client.getByText(/Not a tax invoice\. No VAT charged/)).toBeVisible();
+});
+
+test("signed out: the chosen package is announced and kept through Create account (A-026, A-027)", async ({ page }) => {
+  await page.goto("/packs?type=reformer");
+  await page.getByRole("group", { name: "Reformer packages, 1 month" }).getByText("4 classes", { exact: true }).click();
+  // A-027: an always-present live region says what was chosen, and the summary heading has focus.
+  await expect(page.getByRole("status").filter({ hasText: /selected$/ })).toContainText(/4 Reformer classes, €\d+ selected/);
+  await expect(page.getByRole("heading", { name: /^Reformer · 4 classes/ })).toBeFocused();
+  // A-026: no terms or Request while signed out; one clear way in that remembers the choice.
+  await expect(page.getByRole("button", { name: "Request package" })).toHaveCount(0);
+  await page.getByRole("link", { name: "Create a free account to request this package" }).click();
+  await expect(page).toHaveURL(/\/signup\?next=.*pick%3D.*why=package/);
+  await expect(page.getByText("Sign in or create an account to request your package.")).toBeVisible();
+  const next = new URL(page.url()).searchParams.get("next")!;
+  await signUp(page, uniqueEmail("pick"), next);
+  await expect(page).toHaveURL(/\/packs\?type=reformer&pick=/);
+  await expect(page.getByRole("radio", { name: /4 classes/ })).toBeChecked();
 });

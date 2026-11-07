@@ -15,8 +15,8 @@ import { identity } from "@/lib/identity";
 export const metadata: Metadata = { title: "Packages" };
 export const dynamic = "force-dynamic";
 
-export default async function PacksPage({ searchParams }: { searchParams: Promise<{ cancelled?: string; type?: string }> }) {
-  const { cancelled, type } = await searchParams;
+export default async function PacksPage({ searchParams }: { searchParams: Promise<{ cancelled?: string; type?: string; pick?: string }> }) {
+  const { cancelled, type, pick } = await searchParams;
   const viewerP = getViewer();
   const [s, viewer, { data: products }, kinds, tabsAll, rewardRows] = await Promise.all([
     getSettings(),
@@ -43,7 +43,7 @@ export default async function PacksPage({ searchParams }: { searchParams: Promis
     return [...new Set(packs.map(monthsOf))].sort().map((months, i) => ({
       key: `${k.key}-${months}`, months,
       // In a tab with several class types the heading names the type, so the card just says how long.
-      title: many ? `${months} month${months === 1 ? "" : "s"}` : `${k.label} packages`,
+      title: `${months} month${months === 1 ? "" : "s"}`,
       heading: many && i === 0 ? k.sub_label || k.label : undefined,
       description: many && i === 0 ? k.description : undefined,
       options: packs.filter((p) => monthsOf(p) === months).map((p) => {
@@ -80,7 +80,7 @@ export default async function PacksPage({ searchParams }: { searchParams: Promis
         <div className="px-5">
           {tab && !tab.visible && <div className="mb-4"><Notice>Only you can see this tab. Show it to clients in Settings → Packages page.</Notice></div>}
           {tab?.note && <p className="mb-4 rounded-2xl bg-mauve-soft px-4 py-3 text-sm leading-relaxed text-ink">{tab.note}</p>}
-          {groups.length ? <PackagePicker key={tab?.key} groups={groups} methods={methods} online={s.online_payments_enabled} cutoff={s.cancellation_cutoff_hours} rewards={rewards} signedIn={!!viewer}
+          {groups.length ? <PackagePicker key={tab?.key} tab={tab?.key} pick={pick ?? null} groups={groups} methods={methods} online={s.online_payments_enabled} cutoff={s.cancellation_cutoff_hours} rewards={rewards} signedIn={!!viewer}
             seller={`${identity(s).owner}, ${identity(s).name}, ${identity(s).address}`} vatNote={s.vat_registered ? `incl. VAT ${Number(s.vat_rate)}%` : "no VAT charged"} />
             : singles.length ? null : <Card className="px-5 py-6 text-sm text-ink-soft">{label} packages are coming soon.</Card>}
           {s.student_discount_pct > 0 && <p className="mt-3 text-xs leading-relaxed text-ink-soft">Students get {s.student_discount_pct}% off group packages: show your student card at the studio once and it&apos;s applied automatically.</p>}

@@ -8,8 +8,8 @@ import { LoginForm } from "./LoginForm";
 
 export const metadata: Metadata = { title: "Sign in" };
 
-export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
-  const { next = "/" } = await searchParams;
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string; why?: string }> }) {
+  const { next = "/", why } = await searchParams;
   const viewer = await getViewer();
   if (viewer) redirect(landing(viewer.profile, next));
   return (
@@ -17,7 +17,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
       <div className="card animate-rise mx-auto max-w-md px-6 pb-8 pt-7">
         <div className="flex justify-center"><Logo size={72} decorative /></div>
         <h1 className="display mt-4 text-center text-[1.5rem] text-ink">Welcome</h1>
-        <p className="mx-auto mt-2 max-w-xs text-center text-sm leading-relaxed text-ink-soft">Sign in to book your classes.</p>
+        <p className="mx-auto mt-2 max-w-xs text-center text-sm leading-relaxed text-ink-soft">{why === "package" ? "Sign in or create an account to request your package." : "Sign in to book your classes."}</p>
         <div className="mt-6"><LoginForm next={next} demo={env.demoMode} /></div>
       </div>
     </div>

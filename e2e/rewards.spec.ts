@@ -18,7 +18,7 @@ test("a discount code and a personal reward: right price, noted on the request, 
   const name = `Reward Tester ${Date.now() % 10000}`;
   const client = await (await browser.newContext()).newPage();
   await signUp(client, uniqueEmail("reward"), "/packs?type=reformer", name);
-  const fourClasses = client.getByRole("group", { name: "Reformer packages, valid 30 days" }).getByText("4 classes", { exact: true });
+  const fourClasses = client.getByRole("group", { name: "Reformer packages, 1 month" }).getByText("4 classes", { exact: true });
   await fourClasses.click();
   await client.getByRole("button", { name: "Have a code?" }).click();
   await client.getByLabel("Discount code").fill(code.toLowerCase());
