@@ -9,13 +9,21 @@ import { clientPackages } from "@/lib/packages";
 import { db } from "@/lib/supabase/admin";
 import { closedAt, dayMonth, longDate, nowMs, relativeHours, time, weekdayShort } from "@/lib/time";
 import { CancelButton } from "./CancelButton";
+import { FocusNotice } from "@/components/FocusNotice";
 import { eur } from "@/lib/money";
 
 export const metadata: Metadata = { title: "My classes" };
 export const dynamic = "force-dynamic";
 
-export default async function BookingsPage({ searchParams }: { searchParams: Promise<{ purchased?: string; requested?: string; all?: string }> }) {
-  const { purchased, requested, all } = await searchParams;
+/** What they are told after cancelling (A-074). */
+const CANCELLED: Record<string, string> = {
+  credit: "Cancelled. Your class is back in your package.",
+  free: "Cancelled. Nothing to pay.",
+  late: "Released to the waitlist. Thank you for freeing the spot.",
+};
+
+export default async function BookingsPage({ searchParams }: { searchParams: Promise<{ purchased?: string; requested?: string; all?: string; cancelled?: string }> }) {
+  const { purchased, requested, all, cancelled } = await searchParams;
   const viewer = await requireViewer("/bookings");
   const p = viewer.profile;
   const [settings, packages, { data: bookings }, { data: waits }, { data: pending }] = await Promise.all([
@@ -42,6 +50,7 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
 
       <div className="space-y-6">
         {purchased && <div className="px-5"><Notice tone="success">Thank you! Your classes are ready to book.</Notice></div>}
+        {cancelled && CANCELLED[cancelled] && <div className="px-5"><FocusNotice>{CANCELLED[cancelled]}</FocusNotice></div>}
         {requested && <div className="px-5"><Notice tone="success">Request sent. As soon as your payment is confirmed, your classes appear here.</Notice></div>}
 
         <AwaitingPayment pending={pending ?? []} settings={settings} />
@@ -103,7 +112,10 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
                   ? b.late_refund_pending || settings.refund_late_cancel_if_filled
                     ? `You're inside the ${settings.cancellation_cutoff_hours}-hour window. Your spot goes to the waitlist; if it's re-booked, we'll return your class.`
                     : `You're inside the ${settings.cancellation_cutoff_hours}-hour window, so this class won't be returned. Releasing it lets someone on the waitlist take your spot.`
-                  : b.paid_with === "credit" ? "Your class goes back to your package straight away." : "Your spot will be released.";
+                  : b.paid_with === "credit" ? "Your class goes back to your package straight away."
+                  : b.paid_with === "pay_at_studio" ? "Your spot will be released and you won't need to pay."
+                  : b.paid_with === "payment" ? "Your spot will be released and we'll refund your payment." : "Your spot will be released.";
+                const outcome = late ? "late" : b.paid_with === "credit" ? "credit" : "free";
                 return (
                   <li key={b.id}>
                     <Card className="overflow-hidden">
@@ -133,7 +145,7 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
                             Free cancellation closed at {closedAt(new Date(start - cutoffMs))} ({settings.cancellation_cutoff_hours} hours before class).
                           </p>
                         )}
-                        <CancelButton bookingId={b.id} late={late} label={label} warning={warning} />
+                        <CancelButton bookingId={b.id} late={late} label={label} warning={warning} outcome={outcome} />
                         </>}
                       </div>
                     </Card>

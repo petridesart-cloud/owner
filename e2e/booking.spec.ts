@@ -18,6 +18,8 @@ test("returning client books with a package class, adds to calendar, cancels and
   const cancel = page.getByRole("button", { name: /^Cancel .*Pilates/ }).last();
   await cancel.click();
   await page.getByRole("button", { name: "Yes, cancel" }).click();
+  // A-074: cancelling says what happened to the class.
+  await expect(page.getByRole("status").filter({ hasText: "Cancelled. Your class is back in your package." })).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole("group", { name: "Confirm cancellation" })).toHaveCount(0, { timeout: 15_000 });
   await page.goto("/bookings");
   await expect(left).toHaveText(String(before));
