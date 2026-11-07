@@ -5,8 +5,7 @@ import { requireAdmin, getSettings } from "@/lib/auth";
 import { db } from "@/lib/supabase/admin";
 import type { ActionResult } from "@/lib/errors";
 import { STUDIO_SLOT } from "@/lib/media";
-
-const TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
+import { sniffImage } from "@/lib/image-type";
 
 async function validSlot(slot: string) {
   if (slot === "logo" || slot === "instructor") return true;
@@ -27,13 +26,16 @@ export async function uploadPhoto(slot: string, form: FormData): Promise<ActionR
   const viewer = await requireAdmin();
   const file = form.get("file");
   if (!(file instanceof File) || !file.size) return { ok: false, error: "Choose a photo first." };
-  const ext = TYPES[file.type];
-  if (!ext) return { ok: false, error: "Please use a JPG, PNG or WebP photo." };
   if (file.size > 5 * 1024 * 1024) return { ok: false, error: "That photo is too large (max 5 MB)." };
+  // The browser's type label can say anything; trust the file's own first bytes.
+  const bytes = Buffer.from(await file.arrayBuffer());
+  const kind = sniffImage(bytes);
+  if (!kind) return { ok: false, error: "Please use a JPG, PNG or WebP photo." };
+  const ext = kind.ext;
   if (!(await validSlot(slot))) return { ok: false, error: "Unknown place for this photo." };
 
   const path = `${slot.replace(/[^a-z0-9-]+/gi, "-").toLowerCase()}/${randomUUID()}.${ext}`;
-  const { error } = await db().storage.from("media").upload(path, Buffer.from(await file.arrayBuffer()), { contentType: file.type, cacheControl: "3600" });
+  const { error } = await db().storage.from("media").upload(path, bytes, { contentType: kind.type, cacheControl: "3600" });
   if (error) return { ok: false, error: "Upload failed. Please try again." };
 
   const single = slot === "logo" || slot.startsWith("event-cover:"); // one picture: replace the old one

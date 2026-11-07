@@ -255,3 +255,19 @@ describe("admin client search (A-091)", () => {
     assert.ok(searchTerm("x".repeat(500)).length <= 100);
   });
 });
+
+describe("photo uploads (A-093)", () => {
+  test("the type comes from the file's first bytes, not the browser's label", async () => {
+    const { sniffImage } = await import("../src/lib/image-type");
+    const b = (...n: number[]) => new Uint8Array([...n, ...new Array(16).fill(0)]);
+    assert.deepEqual(sniffImage(b(0xff, 0xd8, 0xff, 0xe0)), { ext: "jpg", type: "image/jpeg" });
+    assert.deepEqual(sniffImage(b(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)), { ext: "png", type: "image/png" });
+    const webp = new Uint8Array(16); webp.set([0x52, 0x49, 0x46, 0x46], 0); webp.set([0x57, 0x45, 0x42, 0x50], 8);
+    assert.deepEqual(sniffImage(webp), { ext: "webp", type: "image/webp" });
+    const wav = new Uint8Array(16); wav.set([0x52, 0x49, 0x46, 0x46], 0); wav.set([0x57, 0x41, 0x56, 0x45], 8);
+    assert.equal(sniffImage(wav), null, "RIFF that isn't WebP");
+    assert.equal(sniffImage(new TextEncoder().encode("<svg onload=alert(1)>")), null);
+    assert.equal(sniffImage(new TextEncoder().encode("<html><script>")), null);
+    assert.equal(sniffImage(new Uint8Array(2)), null);
+  });
+});
