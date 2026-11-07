@@ -50,7 +50,7 @@ export function Importer({ kind, defaults }: { kind: "clients" | "timetable"; de
         </div>
       )}
       {kind === "clients" && rows.length > 0 && (
-        <label className="flex min-h-10 items-center gap-2 text-sm text-ink">
+        <label className="flex min-h-11 items-center gap-2 text-sm text-ink">
           <input type="checkbox" checked={adults} onChange={(e) => setAdults(e.target.checked)} className="size-4 accent-ink" /> Everyone in this file is 18 or over
         </label>
       )}

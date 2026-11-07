@@ -218,7 +218,7 @@ export default async function StatsPage({ searchParams }: { searchParams: Promis
         <div className="card mt-3 overflow-x-auto px-4 py-4">
           <div className="mb-3 flex items-center justify-between gap-3">
             <h3 className="display text-[0.95rem]">Payments by method · {year}</h3>
-            <a href={`/admin/export/payments?year=${year}`} className="inline-flex min-h-10 items-center rounded-full border border-line bg-white px-3 text-sm text-ink">Export CSV</a>
+            <a href={`/admin/export/payments?year=${year}`} className="inline-flex min-h-11 items-center rounded-full border border-line bg-white px-3 text-sm text-ink">Export CSV</a>
           </div>
           <table className="w-full text-left text-sm">
             <thead><tr><th scope="col" className="py-1.5 font-medium">Month</th>{methods.map((mm) => <th key={mm} scope="col" className="py-1.5 text-right font-medium">{mm}</th>)}</tr></thead>

@@ -21,7 +21,7 @@ export function AdminNav() {
           return (
             <li key={href}>
               <Link href={href} aria-current={active ? "page" : undefined}
-                className={`flex min-h-10 items-center justify-center rounded-full text-sm transition ${active ? "bg-ink text-paper" : "text-ink hover:bg-lilac-100"}`}>
+                className={`flex min-h-11 items-center justify-center rounded-full text-sm transition ${active ? "bg-ink text-paper" : "text-ink hover:bg-lilac-100"}`}>
                 {label}
               </Link>
             </li>

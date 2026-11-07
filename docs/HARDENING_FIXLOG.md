@@ -95,3 +95,6 @@
 | A-073 | Medium | `seeYou()` (mat / reformer / event), "by email (and SMS when live)" and "package classes" on Today, `reminderWhen()` from reminder_offsets_minutes in Account | unit.test.ts "reminder wording" | A-071, A-072, A-073, A-078 |
 | A-078 | Medium | Notifications is its own Account accordion (`saveNotifications`), opened by ?open=notifications or #notifications (`OpenOnHash`); emails link to /account?open=notifications#notifications | typecheck, e2e account | A-071, A-072, A-073, A-078 |
 | A-074 | Medium | Cancel redirects to /bookings?cancelled=credit/free/late with a focused FocusNotice; unpaid warning "released and you won't need to pay" | e2e/booking.spec.ts | A-074: cancelling says what happened to the class |
+| A-075 | Medium | BottomNav bg-paper/95, labels text-xs text-ink | axe run (e2e) | A-075, A-076, A-077 |
+| A-076 | Medium | min-h-11/size-11 across admin; Attendance native radios + Saved/error status | e2e admin | A-075, A-076, A-077 |
+| A-077 | Medium | Manual add defaults to package class when the class has a credit kind; "Already paid (outside the app)" | e2e admin | A-075, A-076, A-077 |

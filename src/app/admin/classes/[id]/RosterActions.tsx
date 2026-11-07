@@ -2,7 +2,7 @@
 import { useState, useTransition } from "react";
 import { adminCancelBooking, markNoShow } from "../../actions";
 
-const remove = "min-h-10 rounded-full border border-burgundy/30 bg-white px-3 text-xs text-burgundy hover:bg-burgundy-soft";
+const remove = "min-h-11 rounded-full border border-burgundy/30 bg-white px-3 text-xs text-burgundy hover:bg-burgundy-soft";
 
 export function RosterActions({ bookingId, sessionId, name, past, insideCutoff = false, cutoffHours = 6 }: {
   bookingId: string; sessionId: string; name: string; past: boolean; insideCutoff?: boolean; cutoffHours?: number;
@@ -15,7 +15,7 @@ export function RosterActions({ bookingId, sessionId, name, past, insideCutoff =
   return (
     <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
       {past ? (
-        <button disabled={pending} onClick={() => start(async () => { const r = await markNoShow(bookingId); if (!r.ok) setErr(r.error); })} className="min-h-10 rounded-full border border-line bg-white px-3 text-xs text-ink hover:bg-lilac-50" aria-label={`No-show, ${name}`}>No-show</button>
+        <button disabled={pending} onClick={() => start(async () => { const r = await markNoShow(bookingId); if (!r.ok) setErr(r.error); })} className="min-h-11 rounded-full border border-line bg-white px-3 text-xs text-ink hover:bg-lilac-50" aria-label={`No-show, ${name}`}>No-show</button>
       ) : insideCutoff ? (
         // A-085 (her answer): inside the cutoff the default is a late cancel; returning the class is a separate choice.
         <>

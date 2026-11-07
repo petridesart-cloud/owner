@@ -99,7 +99,7 @@ export default async function SessionAdmin({ params }: { params: Promise<{ id: s
               </select>
             </Field>
             <details className="rounded-2xl border border-line px-4 py-2">
-              <summary className="min-h-10 cursor-pointer content-center text-sm font-medium">…or someone new</summary>
+              <summary className="min-h-11 cursor-pointer content-center text-sm font-medium">…or someone new</summary>
               <div className="mt-2 space-y-3 pb-2">
                 <div className="grid grid-cols-2 gap-3">
                   <Field id="first_name" label="Name"><input id="first_name" name="first_name" autoComplete="off" className={inputClass} /></Field>
@@ -107,7 +107,7 @@ export default async function SessionAdmin({ params }: { params: Promise<{ id: s
                 </div>
                 <Field id="phone" label="Phone"><input id="phone" name="phone" type="tel" className={inputClass} /></Field>
                 <Field id="email" label="Email" hint="So they get the confirmation and can sign in later with this email."><input id="email" name="email" type="email" className={inputClass} /></Field>
-                <label className="flex min-h-10 items-center gap-2 text-sm"><input type="checkbox" name="adult" className="size-4 accent-ink" /> This person is 18 or over</label>
+                <label className="flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" name="adult" className="size-4 accent-ink" /> This person is 18 or over</label>
               </div>
             </details>
             <Field id="note" label="Note (optional)" hint={s.signup_question ? `e.g. their answer to: ${s.signup_question}` : "Anything you need to remember for this booking."}>
@@ -115,10 +115,10 @@ export default async function SessionAdmin({ params }: { params: Promise<{ id: s
             </Field>
             <fieldset className="space-y-1">
               <legend className="mb-1 text-sm font-medium">Payment</legend>
-              <label className="flex min-h-10 items-center gap-2 text-sm"><input type="radio" name="mode" value="manual" defaultChecked className="size-4 accent-ink" /> Paid / settled outside the app</label>
-              {s.class_types?.credit_kind && <label className="flex min-h-10 items-center gap-2 text-sm"><input type="radio" name="mode" value="credit" className="size-4 accent-ink" /> Use one of their package classes</label>}
-              <label className="flex min-h-10 items-center gap-2 text-sm"><input type="radio" name="mode" value="unpaid" className="size-4 accent-ink" /> Not paid yet (shows under Awaiting payment)</label>
-              <label className="flex min-h-10 items-center gap-2 text-sm"><input type="radio" name="mode" value="free" className="size-4 accent-ink" /> Free</label>
+              <label className="flex min-h-11 items-center gap-2 text-sm"><input type="radio" name="mode" value="manual" defaultChecked={!s.class_types?.credit_kind} className="size-4 accent-ink" /> Already paid (outside the app)</label>
+              {s.class_types?.credit_kind && <label className="flex min-h-11 items-center gap-2 text-sm"><input type="radio" name="mode" value="credit" defaultChecked className="size-4 accent-ink" /> Use one of their package classes</label>}
+              <label className="flex min-h-11 items-center gap-2 text-sm"><input type="radio" name="mode" value="unpaid" className="size-4 accent-ink" /> Not paid yet (shows under Awaiting payment)</label>
+              <label className="flex min-h-11 items-center gap-2 text-sm"><input type="radio" name="mode" value="free" className="size-4 accent-ink" /> Free</label>
             </fieldset>
             <Checkbox id="notify" name="notify">Email them a booking confirmation</Checkbox>
           </ActionForm>

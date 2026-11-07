@@ -8,6 +8,6 @@ export function RemoveMember({ id, invite, name }: { id?: string; invite?: strin
   return (
     <button disabled={pending} aria-label={`Remove ${name} from the team`}
       onClick={() => { if (confirm(`Remove admin access for ${name}?`)) start(async () => { if (invite) await removeTeamInvite(invite); else if (id) await removeTeamMember(id); }); }}
-      className="min-h-10 rounded-full border border-burgundy/30 bg-white px-3 text-xs text-burgundy">Remove</button>
+      className="min-h-11 rounded-full border border-burgundy/30 bg-white px-3 text-xs text-burgundy">Remove</button>
   );
 }
