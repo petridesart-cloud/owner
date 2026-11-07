@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { env } from "@/lib/env";
 import { stripe } from "@/lib/payments/stripe";
-import { onPaymentPaid } from "@/lib/booking";
+import { onPaymentPaid, releaseBooking } from "@/lib/booking";
 import { notify } from "@/lib/notifications";
 import { db } from "@/lib/supabase/admin";
 
@@ -55,7 +55,7 @@ async function handle(event: Stripe.Event) {
       const paymentId = session.metadata?.payment_id;
       if (!paymentId) return;
       const { data: pay } = await db().from("payments").update({ status: "failed" }).eq("id", paymentId).eq("status", "pending").select("booking_id, profile_id").maybeSingle();
-      if (pay?.booking_id && pay.profile_id) await db().rpc("cancel_booking", { p_booking: pay.booking_id, p_profile: pay.profile_id });
+      if (pay?.booking_id && pay.profile_id) await releaseBooking(pay.booking_id, pay.profile_id); // tells the waitlist too
       return;
     }
     case "invoice.paid": {

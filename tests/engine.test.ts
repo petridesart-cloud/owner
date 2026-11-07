@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "../src/lib/supabase/types";
+import postgres from "postgres";
 import { addDaysKey, localToUtc, todayKey } from "../src/lib/time";
 import { productPrice } from "../src/lib/pricing";
 
@@ -477,11 +478,10 @@ describe("waitlist", () => {
     const b = await client("wl-b");
     if (waiterCredits) await grant(b, waiterCredits, null);
     assert.ifError((await db.rpc("join_waitlist", { p_profile: b, p_session: sid })).error);
-    // A frees the spot, then the waitlist is processed (the app does both on cancel).
-    await db.rpc("cancel_booking", { p_booking: (ra.data as { booking_id: string }).booking_id, p_profile: a, p_admin: true });
-    const { data: rows, error } = await db.rpc("process_waitlist", { p_session: sid });
+    // A frees the spot; the same call moves the waitlist up and returns who to tell (A-005).
+    const { data, error } = await db.rpc("cancel_booking", { p_booking: (ra.data as { booking_id: string }).booking_id, p_profile: a, p_admin: true });
     assert.ifError(error);
-    return { sid, b, rows: (rows ?? []) as { profile_id: string; offer_expires_at: string | null }[] };
+    return { sid, b, rows: (data as { offers: { profile_id: string; offer_expires_at: string | null }[] }).offers };
   };
 
   test("a spot that opens more than 1h before class books the first in line who has a class", async () => {
@@ -928,5 +928,144 @@ describe("health data (A-001, A-105)", () => {
     await db.from("profiles").update({ can_view_health: true }).eq("user_id", u.user!.id);
     assert.equal((await c.from("health_notes").select("profile_id").eq("profile_id", p)).data!.length, 1);
     assert.equal((await c.from("health_history").select("id").eq("profile_id", p)).data?.length ?? 0, 0, "history is server-only");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// WP3: booking engine and payments (A-004 … A-083). Races fire from separate connections.
+// ---------------------------------------------------------------------------
+describe("WP3: engine hardening", () => {
+  const D = 86_400_000;
+  const pg = postgres(env.DATABASE_URL || "postgresql://postgres:postgres@127.0.0.1:54322/postgres", { max: 1, onnotice: () => {} });
+  after(() => pg.end());
+  const bid = (r: { data: unknown }) => (r.data as { booking_id: string }).booking_id;
+  const status = (r: { error: { message: string } | null }) => r.error?.message ?? "ok";
+  /** Every lot: the cached remaining equals the sum of its ledger entries. */
+  async function assertLedgerInvariant() {
+    const bad = await pg`select l.id from credit_lots l left join credit_ledger g on g.lot_id = l.id
+      group by l.id, l.remaining having l.remaining <> coalesce(sum(g.delta), 0)`;
+    assert.equal(bad.length, 0, `${bad.length} lots out of step with the ledger`);
+  }
+  /** n calls fired together, each on its own database connection. */
+  async function parallel<T>(n: number, fn: (c: postgres.Sql, i: number) => Promise<T>) {
+    const cs = Array.from({ length: n }, () => postgres(env.DATABASE_URL || "postgresql://postgres:postgres@127.0.0.1:54322/postgres", { max: 1, onnotice: () => {} }));
+    await Promise.all(cs.map((c) => c`select 1`));
+    try { return await Promise.all(cs.map((c, i) => fn(c, i))); } finally { await Promise.all(cs.map((c) => c.end())); }
+  }
+  const pgBook = (c: postgres.Sql, p: string, s: string, mode: string, method: string | null = null) =>
+    c`select book_session(${p}, ${s}, ${mode}, 'online', ${method}) as r`.then(() => "ok", (e: Error) => e.message);
+  const phone = () => `+357 99 ${String(Math.floor(Math.random() * 1e6)).padStart(6, "0")}`;
+  const withPhone = async (tag: string, ph: string) => { const p = await client(tag); await db.from("profiles").update({ phone: ph }).eq("id", p); return p; };
+  const payOf = async (booking: string) => (await db.from("payments").select("id, status").eq("booking_id", booking).single()).data!;
+  const confirm = (pay: string) => db.rpc("confirm_payment", { p_payment: pay, p_provider_ref: undefined as unknown as string, p_method: "cash" });
+  const cancel = (b: string, p: string, admin = false) => db.rpc("cancel_booking", { p_booking: b, p_profile: p, p_admin: admin });
+
+  test("A-004: parallel trials, parallel drop-ins and two accounts with one phone each get exactly one", async () => {
+    const p = await withPhone("wp3-trial", phone());
+    const [s1, s2] = [await session(2 * D + 1000), await session(3 * D + 1000)];
+    const trials = await parallel(2, (c, i) => pgBook(c, p, i ? s2 : s1, "trial", "cash"));
+    assert.equal(trials.filter((r) => r === "ok").length, 1, JSON.stringify(trials));
+
+    const q = await client("wp3-dropin");
+    const [s3, s4] = [await session(2 * D + 2000), await session(3 * D + 2000)];
+    const drops = await parallel(2, (c, i) => pgBook(c, q, i ? s4 : s3, "drop_in", "cash"));
+    assert.deepEqual(drops.sort(), ["ok", "unpaid_limit"]);
+
+    const ph = phone();
+    const a = await withPhone("wp3-ph-a", ph), b = await withPhone("wp3-ph-b", ph.replace(/\s/g, ""));
+    const [s5, s6] = [await session(2 * D + 3000), await session(3 * D + 3000)];
+    const two = await parallel(2, (c, i) => pgBook(c, i ? b : a, i ? s6 : s5, "trial", "cash"));
+    assert.deepEqual(two.sort(), ["ok", "trial_used"]);
+  });
+
+  test("concurrent last spot: two parallel bookings for one remaining spot, exactly one gets it", async () => {
+    const s = await session(2 * D + 4000, 3);
+    for (const t of ["ls1", "ls2"]) { const p = await client(t); await grant(p, 1, 30 * D); assert.ifError((await book(p, s)).error); }
+    const [x, y] = [await client("ls-x"), await client("ls-y")];
+    await grant(x, 1, 30 * D); await grant(y, 1, 30 * D);
+    const res = await parallel(2, (c, i) => pgBook(c, i ? y : x, s, "credit"));
+    assert.deepEqual(res.sort(), ["full", "ok"]);
+    assert.equal((await db.from("bookings").select("id", { count: "exact", head: true }).eq("session_id", s).eq("status", "confirmed")).count, 3);
+    await assertLedgerInvariant();
+  });
+
+  test("double tap: same client, same class, twice at once: one booking, one class used", async () => {
+    const p = await client("wp3-dbl");
+    const lot = await grant(p, 2, 30 * D);
+    const s = await session(2 * D + 5000);
+    const res = await parallel(2, (c) => pgBook(c, p, s, "credit"));
+    assert.deepEqual(res.sort(), ["already_booked", "ok"]);
+    assert.equal(await lotRemaining(lot), 1);
+    await assertLedgerInvariant();
+  });
+
+  test("cancellation exactly at the 6h cutoff: 1 ms inside is late, exactly 6h is in time", async () => {
+    const RB = new Error("rollback");
+    const at = async (offset: string) => {
+      let out: { r: string; rem: number } | undefined;
+      await pg.begin(async (t) => {
+        const p = (await t`insert into profiles (full_name, email, onboarded_at) values ('Cutoff', ${`cut-${Date.now()}-${Math.random()}@example.com`}, now()) returning id`)[0].id;
+        await t`select grant_lot(${p}, 'reformer', 1, now() + interval '30 days', 'cutoff')`;
+        const s = (await t`insert into class_sessions (class_type_id, starts_at, ends_at, capacity, title)
+          values (${reformer}, now() + ${offset}::interval, now() + ${offset}::interval + interval '50 min', 3, 'Cutoff') returning id`)[0].id;
+        const b = (await t`select book_session(${p}, ${s}, 'credit') as r`)[0].r.booking_id;
+        const r = (await t`select cancel_booking(${b}, ${p}, false) as r`)[0].r.status;
+        out = { r, rem: (await t`select sum(remaining)::int n from credit_lots where profile_id = ${p}`)[0].n };
+        throw RB;
+      }).catch((e) => { if (e !== RB) throw e; });
+      return out!;
+    };
+    assert.deepEqual(await at("5 hours 59 minutes 59.999 seconds"), { r: "late_cancelled", rem: 0 });
+    assert.deepEqual(await at("6 hours"), { r: "cancelled", rem: 1 });
+  });
+
+  test("A-005: a cancel books the first in line in the same call; nobody can take the spot in between", async () => {
+    const s = await session(3 * D + 6000, 1);
+    const a = await client("wp3-wl-a"); await grant(a, 1, 30 * D);
+    const ab = bid(await book(a, s));
+    const w = await client("wp3-wl-w"); await grant(w, 1, 30 * D);
+    assert.ifError((await db.rpc("join_waitlist", { p_profile: w, p_session: s })).error);
+    const { data, error } = await cancel(ab, a);
+    assert.ifError(error);
+    const offers = (data as { offers: { profile_id: string; offer_expires_at: string | null }[] }).offers;
+    assert.deepEqual(offers.map((o) => [o.profile_id, o.offer_expires_at]), [[w, null]]);
+    assert.equal((await db.from("waitlist_entries").select("status").eq("session_id", s).eq("profile_id", w).single()).data?.status, "claimed");
+    const d = await client("wp3-wl-d"); await grant(d, 1, 30 * D);
+    assert.equal(status(await book(d, s)), "full");
+    await assertLedgerInvariant();
+  });
+
+  test("A-005: a free spot with people waiting is refused online (waitlist_first); the first in line and the studio can book", async () => {
+    const s = await session(3 * D + 7000, 1);
+    const a = await client("wp3-wf-a"); await grant(a, 1, 30 * D);
+    assert.ifError((await book(a, s)).error);
+    const w1 = await client("wp3-wf-w1"), w2 = await client("wp3-wf-w2");
+    await grant(w1, 1, 30 * D); await grant(w2, 1, 30 * D);
+    assert.ifError((await db.rpc("join_waitlist", { p_profile: w1, p_session: s })).error);
+    assert.ifError((await db.rpc("join_waitlist", { p_profile: w2, p_session: s })).error);
+    await db.from("class_sessions").update({ capacity: 2 }).eq("id", s); // a spot opens without the waitlist moving
+    const d = await client("wp3-wf-d"); await grant(d, 1, 30 * D);
+    assert.equal(status(await book(d, s)), "waitlist_first");
+    assert.ifError((await db.rpc("join_waitlist", { p_profile: d, p_session: s })).error); // they can queue behind them
+    assert.equal(status(await book(w2, s)), "waitlist_first", "second in line waits for the first");
+    assert.ifError((await book(w1, s)).error);
+    await db.from("class_sessions").update({ capacity: 3 }).eq("id", s);
+    assert.ifError((await bookFar(d, s)).error); // the studio can add anyone
+  });
+
+  test("A-082: joining the waitlist beyond the booking window is refused", async () => {
+    const s = await session(60 * D + 8000, 1);
+    const q = await client("wp3-far-q"); assert.ifError((await book(q, s, "manual", "manual")).error);
+    const p = await client("wp3-far-p");
+    assert.equal(status(await db.rpc("join_waitlist", { p_profile: p, p_session: s })), "beyond_window");
+  });
+
+  test("A-064: events can't be cancelled by clients in the engine; the studio can remove someone", async () => {
+    const event = (await db.from("class_types").select("id").eq("kind", "event").limit(1).single()).data!.id;
+    const { data: s } = await db.from("class_sessions").insert({ class_type_id: event, starts_at: iso(9 * D + 13_000), ends_at: iso(9 * D + 13_000 + 90 * 60_000), capacity: 5, title: "WP3 event", price_cents: 0 }).select("id").single();
+    const p = await client("wp3-ev");
+    const b = bid(await book(p, s!.id, "free"));
+    assert.equal(status(await cancel(b, p)), "event_no_cancel");
+    assert.equal(((await cancel(b, p, true)).data as { status: string }).status, "cancelled");
   });
 });

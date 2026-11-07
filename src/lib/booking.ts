@@ -97,7 +97,7 @@ export async function bookWithPayment(profile: Profile, sessionId: string): Prom
     return { ok: true, data: { redirect: checkout.url } };
   } catch (e) {
     console.error("checkout failed", e);
-    await db().rpc("cancel_booking", { p_booking: bookingId, p_profile: profile.id });
+    await releaseBooking(bookingId, profile.id);
     await db().from("payments").update({ status: "failed" }).eq("id", pay!.id);
     return { ok: false, error: "We couldn't open the payment page. Please try again." };
   }
@@ -374,15 +374,21 @@ export async function notifyOffers(rows: OfferRow[]) {
 // ---------------------------------------------------------------------------
 // Cancellation
 // ---------------------------------------------------------------------------
+type CancelResult = { status: string; session_id: string; offers: OfferRow[] };
+
+/** Release a held / unpaid spot without the client-facing messages (checkout failed or abandoned), and tell the waitlist. */
+export async function releaseBooking(bookingId: string, profileId: string, asAdmin = false) {
+  const { data, error } = await db().rpc("cancel_booking", { p_booking: bookingId, p_profile: profileId, p_admin: asAdmin });
+  if (error) { console.error("release booking", error); return; }
+  await notifyOffers((data as CancelResult).offers ?? []);
+}
+
 export async function cancelBooking(profile: Profile, bookingId: string, asAdmin = false): Promise<ActionResult<{ status: string }>> {
-  // Events: no cancellations or refunds for clients; the studio can still remove someone.
-  if (!asAdmin) {
-    const { data: ev } = await db().from("bookings").select("class_sessions!inner(class_types!inner(kind))").eq("id", bookingId).maybeSingle();
-    if (ev?.class_sessions?.class_types?.kind === "event") return { ok: false, error: friendlyError({ message: "event_no_cancel" }) };
-  }
+  // The engine refuses client cancellations of events (event_no_cancel) and moves the waitlist up
+  // in the same transaction; `offers` are the people to tell (A-005, A-064).
   const { data, error } = await db().rpc("cancel_booking", { p_booking: bookingId, p_profile: profile.id, p_admin: asAdmin });
   if (error) return { ok: false, error: friendlyError(error) };
-  const res = data as { status: string; session_id: string };
+  const res = data as CancelResult;
   const { data: b } = await db().from("bookings").select("profile_id, paid_with, late_refund_pending").eq("id", bookingId).single();
   const s = await sessionInfo(res.session_id);
   if (res.status !== "released" && b) {
@@ -404,8 +410,7 @@ export async function cancelBooking(profile: Profile, bookingId: string, asAdmin
        "Their spot is open again; the waitlist moves up if anyone is waiting."],
       { path: `/admin/classes/${s.id}`, dedupeKey: `cancel:${bookingId}` });
   }
-  const { data: offers } = await db().rpc("process_waitlist", { p_session: res.session_id });
-  await notifyOffers((offers ?? []) as OfferRow[]);
+  await notifyOffers(res.offers ?? []);
   return { ok: true, data: { status: res.status } };
 }
 

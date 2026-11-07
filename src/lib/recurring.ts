@@ -89,7 +89,7 @@ export async function applyRecurring(profileId?: string) {
       const { error } = await db().rpc("book_session", { p_profile: pid, p_session: s.id, p_mode: "credit" });
       const name = s.title ?? s.class_types?.name ?? "Class";
       if (!error) { booked.push(`${spokenDateTime(s.starts_at).split(",")[0].split(" ").slice(0, 3).join(" ")} ${time(s.starts_at)}`); continue; }
-      if (error.message === "full") {
+      if (error.message === "full" || error.message === "waitlist_first") {
         await notify({ profileId: pid, email: profile.email }, "weekly_full",
           { name: profile.full_name ?? undefined, className: name, when: spokenDateTime(s.starts_at), link: `${env.siteUrl}/book/${s.id}` },
           { dedupeKey: `weekly-full:${pid}:${s.id}`, sessionId: s.id });

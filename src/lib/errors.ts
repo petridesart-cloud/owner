@@ -24,6 +24,14 @@ const MESSAGES: Record<string, string> = {
   event_no_cancel: "Events can't be cancelled or refunded in the app. Please message the studio.",
   private_class: "Private sessions are booked with the studio. Message us and we'll find a time that suits you.",
   clients_only: "This event is for Re·Form clients. Come to a class or get a package to join the next one.",
+  waitlist_first: "This spot is going to someone on the waitlist first. Join the waitlist and we'll let you know if it opens up.",
+  code_used_up: "That code has been used up.",
+  code_invalid: "That code isn't valid.",
+  not_a_package: "That's a single class, not a package, so it can't be marked paid as one. Remove the request instead.",
+  type_locked: "Clients are booked into this class, so its class type can't change. Cancel it and create a new class instead.",
+  capacity_below_booked: "More people are booked than that, so capacity can't go that low.",
+  moved_outside_package: "A booked client's package doesn't cover the new date (it ends earlier, or it's frozen then). Remove them first, or adjust their package.",
+  class_not_started: "This class hasn't started yet. To take someone off it, use Remove.",
 };
 
 export function friendlyError(e: unknown): string {
