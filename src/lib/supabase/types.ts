@@ -1842,6 +1842,7 @@ export type Database = {
     };
     Functions: {
       add_credit_kind: { Args: { p_label: string }; Returns: string };
+      add_local_days: { Args: { p_days: number; p_ts: string }; Returns: string };
       admin_adjust_credits: {
         Args: {
           p_actor: string;
@@ -2400,7 +2401,7 @@ export const Constants = {
         "private_reformer",
         "private_prenatal_mat",
         "private_prenatal_reformer",
-        "pre_natal_9lxl",
+        "pre_natal_mw5zhhdy",
       ],
       ledger_entry: [
         "grant",

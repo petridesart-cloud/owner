@@ -38,7 +38,7 @@ const MESSAGES: Record<string, string> = {
   class_not_started: "This class hasn't started yet. To take someone off it, use Remove.",
   // Package adjustments (Adjust package on the client page).
   reason_required: "Please add a reason (it's kept in the client's history).",
-  bad_days: "Enter a number of days between 1 and 365.",
+  bad_days: "Enter a number of days between 1 and 365 (a package can be valid for at most 366 days in all).",
   bad_date: "Pick a date from today on.",
   booked_in_freeze: "They're booked into classes during those dates with this package. Cancel those first.",
   no_end_date: "These classes have no end date, so there is nothing to extend.",

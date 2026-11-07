@@ -61,3 +61,13 @@
 | A-093 | Low | `sniffImage()` (`src/lib/image-type.ts`) decides JPEG/PNG/WebP from the first bytes; the upload uses that type and extension and refuses anything else (SVG, HTML, renamed files) | `unit.test.ts` "photo uploads (A-093)" | A-093: photo type checked from the file's bytes |
 | A-043 | Medium | CSP Report-Only from `src/proxy.ts` with a per-request nonce (`src/lib/csp.ts`: `default-src 'self'`, nonce + `strict-dynamic` scripts, `style-src 'self' 'unsafe-inline'`, Supabase images, Google map frame, `object-src 'none'`, `base-uri`/`form-action 'self'` + Stripe Checkout, `report-uri /api/csp-report`); not-found renders per request so its scripts carry the nonce | `unit.test.ts` "Content-Security-Policy (A-043)"; `e2e/authz.spec.ts` "pages load without Content-Security-Policy violations…" (plus the §4.1 authorization tests: A vs B, client vs admin) | A-043: Content-Security-Policy (Report-Only) with a nonce |
 | A-094 | Low | Kept the 6 MB Server Actions limit; why is documented in `next.config.ts` and CLAUDE.md (photo upload, admin-only, 5 MB bucket cap, auth rate limits); moving the upload to a route handler left for later | n/a (documentation) | A-094: document the 6 MB Server Actions limit |
+| A-095 | Low | localToUtc iterates the offset (overlap = first, gap = next valid); timetable refuses Sunday 03:00-03:59 | unit.test.ts "studio time" | A-095, A-097, A-046, A-048, A-036: DST-safe localToUtc… |
+| A-097 | Low | 24h reminder says Today/Tomorrow/weekday from the class day | unit.test.ts | A-095, A-097, A-046, A-048, A-036 |
+| A-046 | Medium | expiry email names the last valid day ("can be used until") | unit.test.ts | A-095, A-097, A-046, A-048, A-036 |
+| A-048 | Medium | import accepts ISO/DD.MM.YYYY/DD/MM/YYYY, local end of day, skips unreadable | unit.test.ts | A-095, A-097, A-046, A-048, A-036 |
+| A-036 | Medium | product forms cap validity at 366; admin_adjust_lot refuses >366 as bad_days | engine.test.ts WP12 | A-095, A-097, A-046, A-048, A-036 |
+| A-098 | Low | footer year and CSV year in studio time (CSV also paged) | typecheck | A-098, A-099: studio-year footer and CSV… |
+| A-099 | Low | class page unpaid check by ends_at | typecheck | A-098, A-099 |
+| A-047 | Medium | calendar-day extend/freeze, add_local_days | engine.test.ts WP12 | A-047, A-080, A-096: package ends move by calendar days |
+| A-080 | Low | freeze minus closure days (counted once) | engine.test.ts WP12 | A-047, A-080, A-096 |
+| A-096 | Low | apply_closure note counts calendar days | engine.test.ts WP12 | A-047, A-080, A-096 |

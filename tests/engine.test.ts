@@ -1712,3 +1712,56 @@ describe("RLS: anon key and client JWTs (A-041, A-086)", () => {
     assert.equal(Number((await pg`select count(*)::int n from credit_ledger`)[0].n), before);
   });
 });
+
+describe("WP12: package ends in calendar days (A-036, A-047, A-080, A-096)", () => {
+  const D = 86_400_000;
+  const adjust = (lot: string, action: string, o: { days?: number; date?: string } = {}) =>
+    db.rpc("admin_adjust_lot", { p_lot: lot, p_action: action, p_days: o.days ?? 0, p_date: (o.date ?? null) as string, p_credits: 0, p_reason: "test", p_actor: null as unknown as string });
+  const fixedLot = async (p: string, end: string) =>
+    (await db.rpc("grant_lot", { p_profile: p, p_kind: "reformer", p_credits: 2, p_expires: end, p_note: "fixed" })).data as string;
+  const expiry = async (id: string) => (await db.from("credit_lots").select("expires_at").eq("id", id).single()).data!.expires_at!;
+  const day = (isoStr: string) => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Nicosia" }).format(new Date(isoStr));
+
+  test("A-047: extending a fixed end across the 2027 clock changes lands on local midnight", async () => {
+    const p = await client("wp12-ext");
+    for (const [from, days, to] of [["2027-03-27", 3, "2027-03-30"], ["2027-10-30", 3, "2027-11-02"], ["2027-03-20", 10, "2027-03-30"]] as const) {
+      const id = await fixedLot(p, localToUtc(from, "00:00"));
+      assert.ifError((await adjust(id, "extend", { days })).error);
+      assert.equal(new Date(await expiry(id)).toISOString(), localToUtc(to, "00:00"), `${from} + ${days}`);
+    }
+  });
+
+  test("A-047: freezing a fixed end across spring-forward also lands on local midnight", async () => {
+    const p = await client("wp12-frz");
+    const id = await fixedLot(p, localToUtc("2027-03-27", "00:00"));
+    assert.ifError((await adjust(id, "freeze", { days: 3, date: addDaysKey(todayKey(), 1) })).error);
+    assert.equal(new Date(await expiry(id)).toISOString(), localToUtc("2027-03-30", "00:00"));
+  });
+
+  test("A-036: extending past 366 days of validity is refused as bad_days", async () => {
+    const p = await client("wp12-366");
+    const id = (await db.rpc("grant_lot", { p_profile: p, p_kind: "reformer", p_credits: 2, p_expires: null as unknown as string, p_note: "pack", p_validity_days: 30 })).data as string;
+    const r = await adjust(id, "extend", { days: 365 });
+    assert.match(r.error?.message ?? "", /bad_days/);
+  });
+
+  test("A-080 / A-096: a freeze over days a closure already covers extends only once; the note counts calendar days", async () => {
+    const p = await client("wp12-both");
+    const id = (await db.rpc("grant_lot", { p_profile: p, p_kind: "reformer", p_credits: 4, p_expires: null as unknown as string, p_note: "pack", p_validity_days: 30 })).data as string;
+    const s = (await db.from("class_sessions").insert({ class_type_id: reformer, starts_at: iso(2 * D), ends_at: iso(2 * D + 50 * 60_000), capacity: 3, title: "WP12" }).select("id").single()).data!.id;
+    assert.ifError((await book(p, s)).error);
+    const start = day((await db.from("credit_lots").select("started_at").eq("id", id).single()).data!.started_at!);
+    const cl = (await db.from("closures").insert({ name: "WP12 break", starts_on: addDaysKey(start, 5), ends_on: addDaysKey(start, 7) }).select("id").single()).data!.id;
+    try {
+      await db.rpc("apply_closure", { p_closure: cl });
+      assert.equal(day(await expiry(id)), addDaysKey(start, 33));
+      const note = (await db.from("credit_ledger").select("note").eq("lot_id", id).eq("entry_type", "freeze_extension").like("note", "WP12 break%")).data!;
+      assert.match(note[0].note ?? "", /\+3 days/);
+      // freeze 5 days from day 5: three of them are closure days (already counted), so 30 + 5 in all, not 30 + 3 + 5
+      assert.ifError((await adjust(id, "freeze", { days: 5, date: addDaysKey(start, 5) })).error);
+      assert.equal(day(await expiry(id)), addDaysKey(start, 35));
+    } finally {
+      await db.from("closures").delete().eq("id", cl);
+    }
+  });
+});
