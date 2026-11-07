@@ -1060,6 +1060,29 @@ describe("WP3: engine hardening", () => {
     assert.equal(status(await db.rpc("join_waitlist", { p_profile: p, p_session: s })), "beyond_window");
   });
 
+  test("A-081: refund-if-filled returns the late canceller's class only when the class was otherwise full", async () => {
+    await db.from("studio_settings").update({ refund_late_cancel_if_filled: true }).eq("id", 1);
+    try {
+      // Class with free spots anyway: a newcomer doesn't refund the late canceller.
+      const s = await session(3 * H + 1000, 3);
+      const x = await client("wp3-lf-x"); const lx = await grant(x, 1, 30 * D);
+      await cancel(bid(await book(x, s)), x);
+      assert.ifError((await book(await client("wp3-lf-n"), s, "manual", "manual")).error);
+      assert.equal(await lotRemaining(lx), 0);
+      // Full class: the newcomer took the late canceller's spot.
+      const f = await session(3 * H + 2000, 2);
+      const y = await client("wp3-lf-y"); const ly = await grant(y, 1, 30 * D);
+      const yb = bid(await book(y, f));
+      assert.ifError((await book(await client("wp3-lf-o"), f, "manual", "manual")).error);
+      await cancel(yb, y);
+      assert.ifError((await book(await client("wp3-lf-m"), f, "manual", "manual")).error);
+      assert.equal(await lotRemaining(ly), 1);
+      await assertLedgerInvariant();
+    } finally {
+      await db.from("studio_settings").update({ refund_late_cancel_if_filled: false }).eq("id", 1);
+    }
+  });
+
   test("A-064: events can't be cancelled by clients in the engine; the studio can remove someone", async () => {
     const event = (await db.from("class_types").select("id").eq("kind", "event").limit(1).single()).data!.id;
     const { data: s } = await db.from("class_sessions").insert({ class_type_id: event, starts_at: iso(9 * D + 13_000), ends_at: iso(9 * D + 13_000 + 90 * 60_000), capacity: 5, title: "WP3 event", price_cents: 0 }).select("id").single();
