@@ -218,3 +218,28 @@ describe("payments CSV (A-042)", () => {
     assert.equal(csvCell("-12.50"), '"-12.50"', "amounts stay numbers");
   });
 });
+
+describe("calendar file (A-090)", () => {
+  const base = { uid: "abc", title: "Reformer · Re·Form", start: "2027-03-28T06:00:00Z", end: "2027-03-28T06:50:00Z" };
+  test("escapes ; , \\ and newlines, strips CR, folds lines at 75 octets", async () => {
+    const { buildIcs } = await import("../src/lib/ics");
+    const ics = buildIcs({ ...base, location: "Studio; Limassol, Cyprus", description: "Line 1\r\nLine 2 \\ end" });
+    assert.ok(ics.includes("LOCATION:Studio\\; Limassol\\, Cyprus"));
+    assert.ok(ics.includes("DESCRIPTION:Line 1\\nLine 2 \\\\ end"));
+    const long = buildIcs({ ...base, description: "Ä".repeat(120) });
+    for (const line of long.split("\r\n")) assert.ok(Buffer.byteLength(line, "utf8") <= 75, `line too long: ${line.length}`);
+    const unfolded = long.replace(/\r\n /g, "");
+    assert.ok(unfolded.includes(`DESCRIPTION:${"Ä".repeat(120)}`), "folding keeps characters whole");
+    assert.ok(!/\r(?!\n)/.test(long));
+  });
+  test("has a SEQUENCE that grows, and STATUS:CANCELLED when cancelled", async () => {
+    const { buildIcs } = await import("../src/lib/ics");
+    const seq = (s: string) => Number(/SEQUENCE:(\d+)/.exec(s)![1]);
+    const a = buildIcs(base, new Date("2027-01-01T00:00:00Z"));
+    const b = buildIcs(base, new Date("2027-01-02T00:00:00Z"));
+    assert.ok(seq(b) > seq(a));
+    assert.ok(!a.includes("STATUS:CANCELLED") && a.includes("STATUS:CONFIRMED"));
+    const c = buildIcs({ ...base, cancelled: true });
+    assert.ok(c.includes("STATUS:CANCELLED") && !c.includes("BEGIN:VALARM"), "a cancelled class has no reminder");
+  });
+});
