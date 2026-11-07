@@ -79,3 +79,4 @@
 | A-022 | High | class page in 3 stages (sessionById + one Promise.all) | count.mjs | A-022, A-100, A-101 |
 | A-100 | Low | Home, Schedule, Packs, My classes, Today read in one stage | count.mjs | A-022, A-100, A-101 |
 | A-101 | Low | nextBooking ordered on the class's own start time | typecheck | A-050, A-051 / A-022, A-100, A-101 |
+| A-052 | Medium | next/image with sizes and priority, remotePatterns; 640px variant left open | manual /studio check | A-052: her photos through next/image |
