@@ -1458,3 +1458,50 @@ describe("WP7: privacy lifecycle (A-010, A-011)", () => {
     assert.ok(result!.warn_inactive.length >= 1);
   });
 });
+
+describe("her answers, 7 Nov (A-031, A-033, A-085)", () => {
+  const D = 86_400_000;
+  const bid = (r: { data: unknown }) => (r.data as { booking_id: string }).booking_id;
+  const ledgerOk = async () => {
+    const { data: lots } = await db.from("credit_lots").select("id, remaining").order("created_at", { ascending: false }).limit(200);
+    for (const l of lots ?? []) {
+      const { data: rows } = await db.from("credit_ledger").select("delta").eq("lot_id", l.id);
+      assert.equal(l.remaining, (rows ?? []).reduce((n, r) => n + r.delta, 0), `lot ${l.id} out of step with the ledger`);
+    }
+  };
+
+  test("A-031: the studio cancels a paid event: the payment is marked for a full refund", async () => {
+    const p = await client("ans-event");
+    const sid = await clientsOnlyEvent(5 * D);
+    await db.from("class_sessions").update({ clients_only: false, price_cents: 4000 }).eq("id", sid);
+    const r = await book(p, sid, "drop_in", "online", "cash");
+    assert.ifError(r.error);
+    const pay = (await db.from("payments").select("id").eq("booking_id", bid(r)).single()).data!;
+    assert.ifError((await db.rpc("confirm_payment", { p_payment: pay.id, p_provider_ref: undefined as unknown as string, p_method: "cash" })).error);
+    const { data: told, error } = await db.rpc("cancel_session", { p_session: sid, p_reason: "test" });
+    assert.ifError(error);
+    assert.equal(told?.length, 1);
+    assert.equal((await db.from("payments").select("status").eq("id", pay.id).single()).data?.status, "needs_refund");
+    assert.equal(await balance(p), 0); // money back, not a class
+  });
+
+  test("A-033: a late cancel gets the class back when the studio then cancels that class", async () => {
+    const p = await client("ans-late");
+    const lot = await grant(p, 2, 30 * D);
+    const sid = await session(2 * 3_600_000);
+    const b = bid(await book(p, sid));
+    assert.equal(((await db.rpc("cancel_booking", { p_booking: b, p_profile: p })).data as { status: string }).status, "late_cancelled");
+    assert.equal(await lotRemaining(lot), 1);
+    const { data: told, error } = await db.rpc("cancel_session", { p_session: sid, p_reason: "test" });
+    assert.ifError(error);
+    assert.deepEqual(told?.map((t) => t.booking_id), [b]); // they're told their class is back
+    assert.equal((await db.from("bookings").select("status").eq("id", b).single()).data?.status, "studio_cancelled");
+    assert.equal(await lotRemaining(lot), 2);
+    const { data: back } = await db.from("credit_ledger").select("delta, note").eq("booking_id", b).eq("entry_type", "cancel_refund");
+    assert.deepEqual(back, [{ delta: 1, note: "studio_cancel" }]);
+    // Cancelling again changes nothing.
+    assert.ifError((await db.rpc("cancel_session", { p_session: sid, p_reason: "again" })).error);
+    assert.equal(await lotRemaining(lot), 2);
+    await ledgerOk();
+  });
+});
