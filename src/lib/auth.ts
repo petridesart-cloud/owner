@@ -12,16 +12,19 @@ export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 /** The signed-in user and their profile, or null. Cached for the request. */
 export const getViewer = cache(async (): Promise<{ userId: string; email: string; profile: Profile } | null> => {
   const supabase = await supabaseServer();
-  const { data, error } = await supabase.auth.getUser();
-  const user = data.user;
+  // A-021: getClaims checks the token's signature locally (asymmetric signing keys), with no Auth round trip;
+  // with a symmetric secret it falls back to one getUser call. The proxy has already refreshed an expiring token.
+  const { data, error } = await supabase.auth.getClaims();
+  const claims = data?.claims;
   // A-055: "not signed in" is null; a failure to reach Auth is an error (the error page), never a sign-out.
-  if (!user) {
+  if (!claims?.sub) {
     if (error && (error.name === "AuthRetryableFetchError" || (error.status ?? 0) >= 500)) throw unavailable(error);
     return null;
   }
-  const profile = await ensureProfile(user.id, user.email);
+  const email = typeof claims.email === "string" ? claims.email : "";
+  const profile = await ensureProfile(claims.sub, email);
   if (!profile) return null;
-  return { userId: user.id, email: user.email ?? "", profile };
+  return { userId: claims.sub, email, profile };
 });
 
 /**

@@ -20,6 +20,7 @@ export function DayStrip({ keys, counts, selected, today, href, className = "" }
             <li key={k} className="snap-start">
               <Link
                 ref={on ? active : undefined}
+                prefetch={false}
                 href={`${href}${href.includes("?") ? "&" : "?"}day=${k}`}
                 scroll={false}
                 aria-current={on ? "date" : undefined}

@@ -15,7 +15,8 @@ const nextConfig: NextConfig = {
   // every server action (A-094): accepted because only signed-in admins can upload, the bucket caps files
   // at 5 MB, and the per-email/IP auth limits keep anonymous posts small and few. Moving the upload to a
   // route handler would let this go back to the 1 MB default.
-  experimental: { serverActions: { bodySizeLimit: "6mb" } },
+  // staleTimes (A-023): a page visited a moment ago is reused for 30 s when going back and forth; every page is per-user and dynamic.
+  experimental: { serverActions: { bodySizeLimit: "6mb" }, staleTimes: { dynamic: 30 } },
   turbopack: {
     rules: {
       "*.css": { loaders: ["@tailwindcss/turbopack"], as: "*.css" },

@@ -21,7 +21,9 @@ export async function proxy(request: NextRequest) {
       },
     },
   });
-  await supabase.auth.getUser();
+  // A-021: only rotate the cookies when the token is near its end. getSession() reads the cookie and calls
+  // Auth just to refresh an expiring token; who the user is gets checked where it matters (getViewer, getClaims).
+  await supabase.auth.getSession();
   response.headers.set(CSP_HEADER, csp);
   return response;
 }

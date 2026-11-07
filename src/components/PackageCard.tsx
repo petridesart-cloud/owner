@@ -12,7 +12,7 @@ export function packageDates(p: Pick<PackageView, "startedAt" | "expiresAt">) {
 /** "Reformer Package / 2 per week · 1 month / 13.10.2026 – 11.11.2026 / 3 classes left" */
 export function PackageCard({ p }: { p: PackageView }) {
   return (
-    <Link href={`/bookings/package/${p.id}`} className="card pressable group block overflow-hidden hover:shadow-[var(--shadow-lift)]">
+    <Link href={`/bookings/package/${p.id}`} prefetch={false} className="card pressable group block overflow-hidden hover:shadow-[var(--shadow-lift)]">
       <div className="lilac-wash flex items-center gap-4 px-5 py-5">
         <div className="min-w-0 flex-1">
           <p className="font-serif text-[1.45rem] leading-tight text-ink">{p.title}</p>
@@ -33,7 +33,7 @@ export function PackageCard({ p }: { p: PackageView }) {
 export function PastPackageRow({ p }: { p: PackageView }) {
   const pct = Math.round((p.attended / Math.max(p.total, 1)) * 100);
   return (
-    <Link href={`/bookings/package/${p.id}`} className="flex min-h-16 items-center gap-4 px-4 py-3 hover:bg-lilac-50">
+    <Link href={`/bookings/package/${p.id}`} prefetch={false} className="flex min-h-16 items-center gap-4 px-4 py-3 hover:bg-lilac-50">
       <div className="min-w-0 flex-1">
         <p className="font-medium text-ink">{p.title}</p>
         <p className="text-sm text-ink">{p.subtitle}</p>

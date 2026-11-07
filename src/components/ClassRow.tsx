@@ -55,6 +55,7 @@ export function ClassRow({ c, state, showDate = false, locked = false }: { c: Av
   return (
     <Link
       href={`/book/${c.id}`}
+      prefetch={false}
       aria-label={label}
       className={`card pressable group relative flex min-h-[76px] items-center gap-4 overflow-hidden px-4 py-3.5 hover:-translate-y-0.5 hover:shadow-[var(--shadow-lift)] ${cancelled || past ? "opacity-60" : ""}`}
     >
