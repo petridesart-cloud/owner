@@ -46,7 +46,7 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
 
   return (
     <div>
-      <PageTitle eyebrow="My profile" title="My classes">My progress</PageTitle>
+      <PageTitle title="My classes">Your packages and upcoming classes</PageTitle>
 
       <div className="space-y-6">
         {purchased && <div className="px-5"><Notice tone="success">Thank you! Your classes are ready to book.</Notice></div>}
@@ -155,7 +155,7 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
             </ul>
           ) : (
             <Card className="px-5 py-7 text-center">
-              <p className="font-serif text-xl text-ink">No sessions booked</p>
+              <p className="font-serif text-xl text-ink">No classes booked</p>
               <p className="mt-1 text-sm text-ink-soft">Your next class is a tap away.</p>
               <ButtonLink href="/schedule" variant="soft" className="mt-4">See the schedule</ButtonLink>
             </Card>
@@ -167,7 +167,7 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
             <ul className="card divide-y divide-line overflow-hidden">
               {past.map((x) => <li key={x.id}><PastPackageRow p={x} /></li>)}
             </ul>
-            {packages.hidden > 0 && <Link href="/bookings?all=1" prefetch={false} className="mt-3 block text-center text-sm text-ink-soft underline underline-offset-4">Show all past packages</Link>}
+            {packages.hidden > 0 && <Link href="/bookings?all=1" prefetch={false} className="mt-3 flex min-h-11 items-center justify-center text-sm text-ink-soft underline underline-offset-4">Show all past packages</Link>}
           </Section>
         )}
       </div>

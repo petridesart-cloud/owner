@@ -42,9 +42,11 @@ export function BookActions(props: Props) {
   const [codeOpen, setCodeOpen] = useState(false);
   const [code, setCode] = useState("");
   const [codeError, setCodeError] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null); // which button was tapped, so only that one shows "Reserving…" (A-109)
   const book = (method: "credit" | "pay" | "studio" | "trial" | "drop_in" | "free", useCode: string | null = null) =>
     safely(async () => {
       setError(null);
+      setBusy(method);
       const res = await bookAction(props.sessionId, method, payBy, answer, useCode);
       if (!res.ok) { setError(res.error); router.refresh(); return; }
       go(res.data!.redirect);
@@ -144,7 +146,7 @@ export function BookActions(props: Props) {
           const cents = d?.applies ? d.cents : o.cents;
           return (
             <Button key={o.mode} variant={i === 0 ? "primary" : "ghost"} className="w-full" disabled={pending} onClick={() => book(o.mode, d?.applies ? discount!.code : null)}>
-              {pending ? "Reserving…" : `${o.label} · ${d?.applies ? `€${(cents / 100).toFixed(cents % 100 ? 2 : 0)}` : o.price}`}
+              {pending && busy === o.mode ? "Reserving…" : `${o.label} · ${d?.applies ? `€${(cents / 100).toFixed(cents % 100 ? 2 : 0)}` : o.price}`}
             </Button>
           );
         })}
@@ -157,16 +159,16 @@ export function BookActions(props: Props) {
       {error && <Notice tone="error">{error}</Notice>}
       {canUseCredit && (
         <Button className="w-full" disabled={pending} onClick={() => book("credit")}>
-          {pending ? "Securing…" : props.creditCost > 1 ? `Use ${props.creditCost} classes` : "Secure your spot · 1 class"}
+          {pending && busy === "credit" ? "Securing…" : props.creditCost > 1 ? `Use ${props.creditCost} classes` : "Secure your spot · 1 class"}
         </Button>
       )}
       {props.online ? (
         <Button variant={canUseCredit ? "ghost" : "primary"} className="w-full" disabled={pending} onClick={() => book("pay")}>
-          {pending && !canUseCredit ? "Opening checkout…" : `Pay ${props.priceLabel}`}
+          {pending && busy === "pay" ? "Opening checkout…" : `Pay ${props.priceLabel}`}
         </Button>
       ) : props.payLater ? (
         <Button variant={canUseCredit ? "ghost" : "primary"} className="w-full" disabled={pending} onClick={() => book("studio")}>
-          {pending && !canUseCredit ? "Reserving…" : `Reserve · pay ${props.priceLabel} at the studio`}
+          {pending && busy === "studio" ? "Reserving…" : `Reserve · pay ${props.priceLabel} at the studio`}
         </Button>
       ) : null}
       <p className="text-center text-sm text-ink-soft">

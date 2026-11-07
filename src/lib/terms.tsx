@@ -106,7 +106,7 @@ export function MarkedText({ text }: { text: string }) {
         <Fragment key={i}>
           {b.t === "ul" ? <ul>{b.v.map((li, j) => <li key={j}><Inline text={li} /></li>)}</ul>
             : b.t === "table" ? (
-              <div className="-mx-1 overflow-x-auto px-1">
+              <div role="region" aria-label="Table (scrolls sideways)" tabIndex={0} className="-mx-1 overflow-x-auto px-1">
                 <table>
                   <thead><tr>{b.v[0].map((c, j) => <th key={j} scope="col"><Inline text={c} /></th>)}</tr></thead>
                   <tbody>{b.v.slice(1).map((r, j) => <tr key={j}>{r.map((c, k) => <td key={k}><Inline text={c} /></td>)}</tr>)}</tbody>

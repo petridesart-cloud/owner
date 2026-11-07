@@ -101,7 +101,7 @@ export function Checkbox({ id, children, ...props }: ComponentProps<"input"> & {
 export function Section({ title, action, children, className = "" }: { title: string; action?: ReactNode; children: ReactNode; className?: string }) {
   return (
     <section className={`px-5 ${className}`}>
-      <div className="mb-3 flex items-end justify-between gap-3">
+      <div className="mb-3 flex items-baseline justify-between gap-3">
         <h2 className="display text-[1.05rem] text-ink">{title}</h2>
         {action}
       </div>

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { eur } from "@/lib/money";
 import { paymentReference } from "@/lib/pricing";
-import { dayMonth } from "@/lib/time";
+import { longDate } from "@/lib/time";
 import type { Settings } from "@/lib/auth";
 import { Section } from "./ui";
 
@@ -21,7 +21,7 @@ export function AwaitingPayment({ pending, settings, title = "Awaiting payment" 
               <span className="text-ink">{x.description}
                 <span className="block text-ink-soft">
                   {x.intended_method ? `${METHOD[x.intended_method] ?? x.intended_method} · ` : ""}
-                  {x.booking_id ? "pay before class" : `requested ${dayMonth(x.created_at)}, held ${settings.unpaid_request_expiry_hours}h`}
+                  {x.booking_id ? "pay before class" : `requested ${longDate(x.created_at)}, held ${settings.unpaid_request_expiry_hours}h`}
                 </span>
                 {x.discount_note && <span className="block text-xs font-medium text-plum-700">{x.discount_note}</span>}
               </span>

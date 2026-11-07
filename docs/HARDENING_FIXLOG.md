@@ -98,3 +98,5 @@
 | A-075 | Medium | BottomNav bg-paper/95, labels text-xs text-ink | axe run (e2e) | A-075, A-076, A-077 |
 | A-076 | Medium | min-h-11/size-11 across admin; Attendance native radios + Saved/error status | e2e admin | A-075, A-076, A-077 |
 | A-077 | Medium | Manual add defaults to package class when the class has a credit kind; "Already paid (outside the app)" | e2e admin | A-075, A-076, A-077 |
+| A-109 | Low | My classes subtitle, "No classes booked", 44px links, pending label per button, "Rules" pill, items-baseline, longDate; packs titles and enabled Request button (see A-026). Not changed: PackageCard keeps its dotDate range (design freeze) | e2e axe | A-109, A-110: copy and layout polish |
+| A-110 | Low | Demo banner inside header (role=note), legal table scroll region (focusable), class page title + sr-only dt (see A-024) | e2e axe | A-109, A-110 |
