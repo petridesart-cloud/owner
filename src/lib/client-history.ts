@@ -1,6 +1,7 @@
 import "server-only";
 import { db } from "@/lib/supabase/admin";
 import { kindLabels } from "@/lib/kinds";
+import { lotIsCurrent } from "@/lib/lots";
 import { labelOf } from "@/lib/kind-label";
 
 /** A credit kind: "reformer", "mat" or any class type she added with its own packages. */
@@ -64,13 +65,11 @@ export async function clientHistory(profileId: string) {
 
   const groups: Group[] = (lots ?? []).map((l) => {
     const classes = (bookings ?? []).filter((b) => lotOf.get(b.id) === l.id).map(row).sort((a, b) => a.startsAt.localeCompare(b.startsAt));
-    const live = l.remaining > 0 && (!l.expires_at || l.expires_at > now);
-    const started = !l.expires_at || l.expires_at > now;
     return {
       key: l.id, kind: l.credit_kind, title: l.payments?.products?.name ?? l.payments?.description ?? l.note ?? `${labelOf(labels, l.credit_kind)} classes`,
       total: l.total, remaining: l.remaining, startsAt: l.started_at, endsAt: l.expires_at,
       paidCents: l.payments?.amount_cents ?? null, paidAt: l.payments?.paid_at ?? null, method: l.payments?.method ?? null,
-      current: live || (started && classes.some((c) => c.status === "upcoming")), classes,
+      current: lotIsCurrent(l, classes.some((c) => c.status === "upcoming"), Date.parse(now)), classes,
     };
   });
 

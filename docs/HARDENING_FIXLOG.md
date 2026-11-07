@@ -114,3 +114,4 @@
 | A-106 | Low | removed ClickToLoadMap, .live.mjs and unused exports; /magic notFound(); `npm run check:dead` (knip). Kept: viva.ts, membership code, guide.css (used by the guides) | typecheck, lint | A-106, A-107 |
 | A-107 | Low | widen-types marks nullable RPC args; casts removed in saveClassType, createClassType, adjustLot, health save. Not done: creditBalance shape, RPC string-array casts | typecheck | A-106, A-107 |
 | A-108 | Low | credit→class copy pass, `monthsLabel`, `eur` shared, `dotDate(keyToDate())`, imports ordered. Not done: tmpl export, parq alias | typecheck, unit | A-108 |
+| A-064 | Medium | `lotIsCurrent()` shared; events guard and capacity in SQL (WP3); freeze days in SQL (WP12); timezone documented fixed. Left: low-class notice ignores freezes | typecheck | A-064 |

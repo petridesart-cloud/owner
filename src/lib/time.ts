@@ -1,4 +1,5 @@
-// All times are stored in UTC and shown in the studio's timezone.
+// All times are stored in UTC and shown in the studio's timezone. It is fixed to Europe/Nicosia: the
+// studio_settings.timezone column is not read anywhere (A-064).
 export const STUDIO_TZ = "Europe/Nicosia";
 const LOCALE = "en-GB";
 

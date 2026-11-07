@@ -1,4 +1,5 @@
 import { monthsLabel } from "@/lib/copy";
+import { lotIsCurrent } from "@/lib/lots";
 import "server-only";
 import { db } from "@/lib/supabase/admin";
 import { kindLabels } from "@/lib/kinds";
@@ -69,14 +70,13 @@ export async function clientPackages(profileId: string, lotId?: string, opts: { 
     const subtitle = p?.per_week && p.months
       ? `${p.credits ?? l.total} classes · ${months(p.months)}`
       : l.note?.split(" · ").slice(1).join(" · ") || `${l.total} classes`;
-    const expiredOut = !!l.expires_at && new Date(l.expires_at).getTime() <= now;
     const upcoming = classes.some((c) => c.status === "upcoming");
     return {
       id: l.id, title, subtitle, kind: l.credit_kind, kindLabel, total: l.total, remaining: l.remaining,
       used: classes.length, attended: classes.filter((c) => c.status === "attended").length,
       missed: classes.filter((c) => c.status === "missed").length, expired,
       startedAt: l.started_at, expiresAt: l.expires_at, validityDays: l.validity_days,
-      current: !expiredOut && (l.remaining > 0 || upcoming), classes,
+      current: lotIsCurrent(l, upcoming, now), classes,
     };
   });
   return Object.assign(views, { hidden });
