@@ -115,3 +115,4 @@
 | A-107 | Low | widen-types marks nullable RPC args; casts removed in saveClassType, createClassType, adjustLot, health save. Not done: creditBalance shape, RPC string-array casts | typecheck | A-106, A-107 |
 | A-108 | Low | credit→class copy pass, `monthsLabel`, `eur` shared, `dotDate(keyToDate())`, imports ordered. Not done: tmpl export, parq alias | typecheck, unit | A-108 |
 | A-064 | Medium | `lotIsCurrent()` shared; events guard and capacity in SQL (WP3); freeze days in SQL (WP12); timezone documented fixed. Left: low-class notice ignores freezes | typecheck | A-064 |
+| A-003 | Critical | Runbook `docs/launch/3-backup-restore.md`, disabled `.github/workflows/backup.yml` template, setup.sql "DEMO / LOCAL ONLY" header. Owner: Pro plan and/or the nightly dump secrets, one restore drill | docs only | A-003, A-058, A-069: runbook and docs |

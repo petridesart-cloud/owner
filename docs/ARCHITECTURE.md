@@ -238,3 +238,103 @@ Environment flags (`src/lib/env.ts`): `APP_ENV=production` (real app; forces dem
 - **Health data:** stored only in `health_notes`/`health_history`, shown only to admins, never emailed.
 - **Rate limiting:** in SQL for auth, codes and booking-type actions.
 - **Headers:** security headers in `next.config.ts` (HSTS, nosniff, frame DENY, referrer, permissions). A Content-Security-Policy in **Report-Only** mode comes from `src/proxy.ts` with a fresh nonce per request (`src/lib/csp.ts`: own origin, nonce + `strict-dynamic` scripts, Supabase images, the Google map frame, `form-action 'self'` + Stripe Checkout); violations are logged by `/api/csp-report`. `e2e/authz.spec.ts` checks pages have none. To enforce it later, change `CSP_HEADER` and add `frame-ancestors 'none'`.
+
+## 12. Function index: where each SQL function is currently defined (A-069)
+
+Migrations are never edited, so a function's body lives in the *latest* migration that replaces it. Check here before
+changing one, and replace it in a new file. (Generated from `supabase/migrations/*.sql`; `admin_adjust_credits` was dropped in `20261106000907`.
+Functions created inside other statements or helper `pg_temp` functions are not listed.)
+
+| Function | Latest definition |
+|---|---|
+| `active_client_ids` | `20261106000906_wp9_perf_rpcs.sql` |
+| `add_credit_kind` | `20261103000200_round6.sql` |
+| `add_local_days` | `20261106000905_wp12_time_fixes.sql` |
+| `admin_adjust_lot` | `20261106000905_wp12_time_fixes.sql` |
+| `apply_closure` | `20261106000905_wp12_time_fixes.sql` |
+| `apply_late_fill_refund` | `20261106000401_wp3_late_fill.sql` |
+| `auth_user_by_email` | `20261025001900_round4.sql` |
+| `book_session` | `20261106000400_wp3_booking_waitlist.sql` |
+| `can_access_event` | `20261025001600_review_fixes.sql` |
+| `can_see_session` | `20261106000904_wp11_rls_grants.sql` |
+| `can_view_health` | `20261106000300_wp2_health_consent.sql` |
+| `cancel_booking` | `20261106000907_wp13_cleanup.sql` |
+| `cancel_session` | `20261106000900_answers_studio_cancel_late.sql` |
+| `cancel_sessions` | `20261106000402_wp3_payments_closures.sql` |
+| `clear_health_data` | `20261106000300_wp2_health_consent.sql` |
+| `closed_days` | `20261011000800_studio_policy.sql` |
+| `compute_expiry` | `20261011000800_studio_policy.sql` |
+| `confirm_closure` | `20261106000402_wp3_payments_closures.sql` |
+| `confirm_payment` | `20261106000402_wp3_payments_closures.sql` |
+| `credit_balance` | `20261011000800_studio_policy.sql` |
+| `credit_ledger_no_truncate` | `20261106000904_wp11_rls_grants.sql` |
+| `due_reminders` | `20261106000600_wp5_tick.sql` |
+| `enforce_retention` | `20261106000800_wp7_privacy_lifecycle.sql` |
+| `erase_profile` | `20261106000800_wp7_privacy_lifecycle.sql` |
+| `expire_credits` | `20261011000600_payments_memberships.sql` |
+| `expire_unpaid_requests` | `20261011000800_studio_policy.sql` |
+| `extend_timetable` | `20261103000200_round6.sql` |
+| `first_class_at` | `20261106000906_wp9_perf_rpcs.sql` |
+| `generate_sessions` | `20261025001600_review_fixes.sql` |
+| `generate_sessions_range` | `20261025001600_review_fixes.sql` |
+| `grant_lot` | `20261011000800_studio_policy.sql` |
+| `grant_membership_period` | `20261011000600_payments_memberships.sql` |
+| `guard_clients_only` | `20261025001500_event_access.sql` |
+| `guard_closed_booking` | `20261011000800_studio_policy.sql` |
+| `guard_code_uses` | `20261106000405_wp3_code_uses.sql` |
+| `guard_free_booking` | `20261025001900_round4.sql` |
+| `guard_minor_booking` | `20261106000903_wp8_adults_only.sql` |
+| `guard_no_show_future` | `20261106000407_wp3_no_show_after_start.sql` |
+| `guard_policy_versions` | `20261106000902_wp8_policy_versions.sql` |
+| `guard_private_booking` | `20261103000200_round6.sql` |
+| `handle_new_user` | `20261106000100_wp1_auth_linking.sql` |
+| `handle_user_confirmed` | `20261106000100_wp1_auth_linking.sql` |
+| `health_consent_standing` | `20261106000300_wp2_health_consent.sql` |
+| `install_baseline` | `20261025000300_production_baseline.sql` |
+| `install_catalogue` | `20261024000200_demo_seed_v2.sql` |
+| `is_admin` | `20261011000200_functions.sql` |
+| `is_closed_on` | `20261011000800_studio_policy.sql` |
+| `is_studio_client` | `20261025001500_event_access.sql` |
+| `join_waitlist` | `20261106000400_wp3_booking_waitlist.sql` |
+| `leave_waitlist` | `20261011000200_functions.sql` |
+| `ledger_append_only` | `20261106000800_wp7_privacy_lifecycle.sql` |
+| `locked_events` | `20261106000906_wp9_perf_rpcs.sql` |
+| `lot_class_range` | `20261011000800_studio_policy.sql` |
+| `lot_usable_for` | `20261025001900_round4.sql` |
+| `low_credit_groups` | `20261106000600_wp5_tick.sql` |
+| `my_profile_id` | `20261011000200_functions.sql` |
+| `notification_reclaim` | `20261106000500_wp4_notifications_retry.sql` |
+| `notification_retry_claim` | `20261106000500_wp4_notifications_retry.sql` |
+| `notification_stale` | `20261106000500_wp4_notifications_retry.sql` |
+| `onboard_profile` | `20261106000902_wp8_policy_versions.sql` |
+| `pause_membership` | `20261011000600_payments_memberships.sql` |
+| `payments_by_method` | `20261106000906_wp9_perf_rpcs.sql` |
+| `period_end` | `20261011000600_payments_memberships.sql` |
+| `phone_key` | `20261025000800_trial_by_phone.sql` |
+| `process_waitlist` | `20261025001900_round4.sql` |
+| `profiles_lower_email` | `20261106000100_wp1_auth_linking.sql` |
+| `rate_limited` | `20261025000700_rate_limits.sql` |
+| `recalc_lot_expiry` | `20261011000800_studio_policy.sql` |
+| `record_policy_version` | `20261106000902_wp8_policy_versions.sql` |
+| `release_unpaid_payment` | `20261025000100_round1_fixes.sql` |
+| `replace_recurring_rules` | `20261106000700_wp6_atomic_writes.sql` |
+| `replace_timetable_from` | `20261025001300_admin_round1.sql` |
+| `reset_demo_data` | `20261025000100_round1_fixes.sql` |
+| `resume_membership` | `20261106000905_wp12_time_fixes.sql` |
+| `return_credit` | `20261106000905_wp12_time_fixes.sql` |
+| `save_health_answers` | `20261106000300_wp2_health_consent.sql` |
+| `save_timetable` | `20261106000700_wp6_atomic_writes.sql` |
+| `seed_demo` | `20261106000907_wp13_cleanup.sql` |
+| `seed_demo_profiles` | `20261025001400_demo_seed_fix.sql` |
+| `session_availability` | `20261106000906_wp9_perf_rpcs.sql` |
+| `settings` | `20261011000200_functions.sql` |
+| `spend_credits` | `20261025001900_round4.sql` |
+| `spots_taken` | `20261011000200_functions.sql` |
+| `stats_months` | `20261025001900_round4.sql` |
+| `tick` | `20261011000200_functions.sql` |
+| `tidy_package_name` | `20261025001700_studio_notes_2.sql` |
+| `tidy_package_names` | `20261025001700_studio_notes_2.sql` |
+| `trial_eligible` | `20261025000800_trial_by_phone.sql` |
+| `update_session` | `20261106000406_wp3_update_session.sql` |
+| `usable_credits` | `20261011000800_studio_policy.sql` |
+| `withdraw_health_consent` | `20261106000300_wp2_health_consent.sql` |
