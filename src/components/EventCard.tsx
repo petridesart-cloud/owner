@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Lock, MapPin } from "lucide-react";
 import { Badge, Eyebrow } from "@/components/ui";
@@ -8,11 +9,10 @@ import { longDate, time } from "@/lib/time";
 import { eventTitleClass } from "@/lib/event-font";
 
 /** Her background picture (or the soft gradient), with the details on a frosted panel so the text stays readable. */
-export function EventCard({ e, cover, booked, clientsOnly, font }: { e: Availability; cover?: MediaItem; booked: boolean; clientsOnly: boolean; font?: string | null }) {
+export function EventCard({ e, cover, booked, clientsOnly, font, priority = false }: { e: Availability; cover?: MediaItem; booked: boolean; clientsOnly: boolean; font?: string | null; priority?: boolean }) {
   return (
     <div className="relative overflow-hidden rounded-[var(--radius-card)] bg-gradient-to-br from-[#d9ecf3] via-lilac-100 to-mauve-soft">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      {cover && <img src={cover.url} alt="" loading="lazy" className="absolute inset-0 size-full object-cover" />}
+      {cover && <Image src={cover.url} alt="" fill sizes="(max-width: 480px) 100vw, 480px" priority={priority} className="object-cover" />}
       <div className={`relative p-6 ${cover ? "pt-36" : ""}`}>
         <div className={cover ? "-mx-3 -mb-3 rounded-[18px] bg-white/85 p-4 backdrop-blur-md" : ""}>
           <Eyebrow>{longDate(e.starts_at)} · {time(e.starts_at)}</Eyebrow>
@@ -36,8 +36,7 @@ export function EventCard({ e, cover, booked, clientsOnly, font }: { e: Availabi
 export function LockedEvent({ cover, signedIn, next = "/events" }: { cover?: MediaItem; signedIn: boolean; next?: string }) {
   return (
     <div className="relative h-56 overflow-hidden rounded-[var(--radius-card)] bg-gradient-to-br from-[#d9ecf3] via-lilac-100 to-mauve-soft shadow-[var(--shadow-soft)]">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      {cover && <img src={cover.url} alt="" loading="lazy" className="absolute inset-0 size-full scale-110 object-cover blur-xl" />}
+      {cover && <Image src={cover.url} alt="" fill sizes="(max-width: 480px) 100vw, 480px" className="scale-110 object-cover blur-xl" />}
       <div aria-hidden className="absolute inset-x-6 bottom-6 space-y-2 blur-sm">
         <div className="h-3 w-1/3 rounded-full bg-white/70" /><div className="h-7 w-2/3 rounded-full bg-white/70" /><div className="h-3 w-1/2 rounded-full bg-white/70" />
       </div>

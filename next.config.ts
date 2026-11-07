@@ -8,7 +8,15 @@ const securityHeaders = [
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), interest-cohort=()" },
 ];
 
+// Her photos live in the project's public Storage bucket; next/image resizes them (A-052).
+const storage = (() => { try { return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""); } catch { return null; } })();
+const localStorageHost = !!storage && ["127.0.0.1", "localhost"].includes(storage.hostname);
+
 const nextConfig: NextConfig = {
+  images: {
+    remotePatterns: storage ? [{ protocol: storage.protocol.replace(":", "") as "http" | "https", hostname: storage.hostname, port: storage.port, pathname: "/storage/v1/object/public/media/**" }] : [],
+    dangerouslyAllowLocalIP: localStorageHost, // only when the dev database itself is local
+  },
   // Fonts read at runtime by the icon / Open Graph image routes.
   outputFileTracingIncludes: { "/*": ["./src/assets/fonts/**"] },
   // Photos are resized in the browser (≤1600px JPEG) before upload; this leaves headroom. It applies to
