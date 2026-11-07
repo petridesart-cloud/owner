@@ -107,6 +107,7 @@ export default async function SessionAdmin({ params }: { params: Promise<{ id: s
                 </div>
                 <Field id="phone" label="Phone"><input id="phone" name="phone" type="tel" className={inputClass} /></Field>
                 <Field id="email" label="Email" hint="So they get the confirmation and can sign in later with this email."><input id="email" name="email" type="email" className={inputClass} /></Field>
+                <label className="flex min-h-10 items-center gap-2 text-sm"><input type="checkbox" name="adult" className="size-4 accent-ink" /> This person is 18 or over</label>
               </div>
             </details>
             <Field id="note" label="Note (optional)" hint={s.signup_question ? `e.g. their answer to: ${s.signup_question}` : "Anything you need to remember for this booking."}>

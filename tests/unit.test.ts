@@ -10,6 +10,7 @@ import { cronAuthorized } from "../src/lib/cron-auth";
 import { schedulerWarning } from "../src/lib/scheduler";
 import { retryingFetch } from "../src/lib/supabase/retry-fetch";
 import fs from "node:fs";
+import { ageOn, isAdult } from "../src/lib/age";
 import { DOC_SETTINGS, legalMarkdown } from "../src/lib/legal-docs";
 import { cookiesText, privacyText, waiverText } from "../src/lib/legal";
 import { defaultTerms } from "../src/lib/terms";
@@ -192,5 +193,17 @@ describe("legal documents (A-012, A-013, A-060)", () => {
     assert.match(cookiesText(), /Up to 400 days/);
     assert.doesNotMatch(cookiesText(), /map|analytics cookies are set|1 week/i);
     assert.match(waiverText(DOC_SETTINGS), /currently pregnant, gave birth within the last 3 months, or had surgery in the last 12 months/);
+  });
+});
+
+describe("adults only: 18 on the studio's calendar day (A-062)", () => {
+  test("turns 18 on the birthday itself, not the day before", () => {
+    assert.equal(isAdult("2008-11-07", "2026-11-06"), false);
+    assert.equal(isAdult("2008-11-07", "2026-11-07"), true);
+  });
+  test("a 29 February birthday counts from 1 March in other years", () => {
+    assert.equal(ageOn("2008-02-29", "2026-02-28"), 17);
+    assert.equal(ageOn("2008-02-29", "2026-03-01"), 18);
+    assert.equal(ageOn("2008-02-29", "2028-02-29"), 20);
   });
 });

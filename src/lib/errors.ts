@@ -13,6 +13,7 @@ const MESSAGES: Record<string, string> = {
   payment_cancelled: "That payment request was cancelled or has expired.",
   credits_not_accepted: "Credits can't be used for this event. It's paid individually.",
   not_cancellable: "This booking can't be cancelled.",
+  minor_not_allowed: "Classes are for adults: this person is under 18 on the day of the class.",
   documents_not_accepted: "Please accept the Studio Rules, policies, Terms and Health & Safety acknowledgement.",
   empty_policy: "That text is empty. Write something, or empty it to go back to the default.",
   policy_versions_append_only: "Earlier versions of the legal texts are kept as they were.",

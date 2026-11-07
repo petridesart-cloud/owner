@@ -89,6 +89,8 @@ export async function manualBook(sessionId: string, _: ActionResult, form: FormD
   if (!profileId) {
     const parsed = NewClient.safeParse({ first_name: form.get("first_name") ?? "", last_name: form.get("last_name") ?? "", email: form.get("email") ?? "", phone: form.get("phone") ?? "" });
     if (!parsed.success) return { ok: false, error: "Pick a client, or enter at least the name of someone new." };
+    // A-062: classes are for adults; she confirms it for someone without a date of birth on file.
+    if (form.get("adult") !== "on") return { ok: false, error: "Please confirm they're 18 or over: classes are for adults." };
     const { first_name, last_name, phone } = parsed.data;
     const email = parsed.data.email || null;
     const existing = email ? (await db().from("profiles").select("id").eq("email", email).is("deleted_at", null).maybeSingle()).data : null;
@@ -921,8 +923,10 @@ const ImportClient = z.object({
   credits_expire: z.string().trim().optional(),
 });
 
-export async function importClients(rows: Record<string, unknown>[]): Promise<ActionResult<{ created: number; updated: number; skipped: number }>> {
+export async function importClients(rows: Record<string, unknown>[], adults = false): Promise<ActionResult<{ created: number; updated: number; skipped: number }>> {
   await admin("import_clients", { count: rows.length });
+  // A-062: classes are for adults; the file has no dates of birth, so she confirms it for everyone in it.
+  if (adults !== true) return { ok: false, error: "Please confirm everyone in the file is 18 or over: classes are for adults." };
   let created = 0, updated = 0, skipped = 0, failedGrants = 0;
   const valid: z.infer<typeof ImportClient>[] = [];
   for (const raw of rows.slice(0, 2000)) {

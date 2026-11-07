@@ -3,29 +3,21 @@ import { z } from "zod";
 import { db } from "@/lib/supabase/admin";
 import { HEALTH_CONSENT_VERSION, needsClearance, needsHealthConsent } from "@/lib/health";
 import { todayKey } from "@/lib/time";
+import { ageOn as ageOnDay, isAdult } from "@/lib/age";
 
 export { PHOTO_CONSENT, type PhotoConsent } from "@/lib/photo-consent";
 
 export const nameSchema = z.string().trim().min(1, "Please fill this in.").max(60);
 export const phoneSchema = z.string().trim().regex(/^\+?[0-9 ()-]{8,20}$/, "Please enter a valid phone number, e.g. +357 99 123456.");
 // Required (her answer, round 1). Clients are 18 or over (her answer, round 4).
+// A-062: checked on the studio's calendar day (not the UTC date), and 29 February birthdays count from 1 March.
 export const dobSchema = z.string({ error: "Please add your date of birth." }).trim()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Please add your date of birth.")
-  .refine((d) => d >= yearsAgo(100), "Please check the date.")
-  .refine((d) => d <= yearsAgo(18), "Classes are for adults: you need to be 18 or over.");
+  .refine((d) => !Number.isNaN(Date.parse(d)) && ageOn(d) <= 100 && ageOn(d) >= 0, "Please check the date.")
+  .refine((d) => isAdult(d, todayKey()), "Classes are for adults: you need to be 18 or over.");
 
-function yearsAgo(n: number) {
-  const t = new Date();
-  t.setFullYear(t.getFullYear() - n);
-  return t.toISOString().slice(0, 10);
-}
-
-/** Age in whole years on a given day (default today). */
-export function ageOn(dob: string, on = todayKey()) {
-  const [y, m, d] = dob.split("-").map(Number);
-  const [Y, M, D] = on.split("-").map(Number);
-  return Y - y - (M < m || (M === m && D < d) ? 1 : 0);
-}
+/** Age in whole years on a given day (default today, studio time). */
+export const ageOn = (dob: string, on = todayKey()) => ageOnDay(dob, on);
 
 export const fullName = (first: string, last: string) => `${first} ${last}`.trim();
 

@@ -1562,3 +1562,23 @@ describe("WP8: versioned legal texts and acceptance (A-009, A-060)", () => {
     assert.ok(!(rows ?? []).some((r) => r.type === "fitness_declaration"));
   });
 });
+
+describe("WP8: adults only (A-062)", () => {
+  test("nobody under 18 on the day of the class can be booked, online or by the studio", async () => {
+    const p = await client("wp8-minor");
+    const sid = await session(3 * 86_400_000);
+    const classDay = new Date(Date.now() + 3 * 86_400_000);
+    // 18 the day after the class (studio time): refused; 18 on the day itself: allowed.
+    const dob = (daysAfterClass: number) => {
+      const d = new Date(classDay.getTime() + daysAfterClass * 86_400_000);
+      const key = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Nicosia" }).format(d);
+      return `${Number(key.slice(0, 4)) - 18}${key.slice(4)}`;
+    };
+    await db.from("profiles").update({ date_of_birth: dob(1) }).eq("id", p);
+    await grant(p, 2, 30 * 86_400_000);
+    assert.equal((await book(p, sid)).error?.message, "minor_not_allowed");
+    assert.equal((await book(p, sid, "manual", "manual")).error?.message, "minor_not_allowed");
+    await db.from("profiles").update({ date_of_birth: dob(0) }).eq("id", p);
+    assert.ifError((await book(p, sid)).error);
+  });
+});
