@@ -3,7 +3,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getSettings, requireAdmin } from "@/lib/auth";
-import { env } from "@/lib/env";
+import { env, paymentsLive } from "@/lib/env";
 import { db } from "@/lib/supabase/admin";
 import { EVENT_POLICY, cancelBooking, cancelSession, cancelSessions, notifyCancelled, notifyOffers, onPaymentPaid, policyLine, runTick, sessionInfo } from "@/lib/booking";
 import { notify } from "@/lib/notifications";
@@ -548,6 +548,10 @@ export async function saveSettings(_: ActionResult, form: FormData): Promise<Act
   const wantOnline = form.get("online_payments_enabled") === "on";
   if (wantOnline && !(await paymentsUnlocked())) {
     return { ok: false, error: "Online payments stay off until every item under “Before online payments” is ticked in Compliance." };
+  }
+  // Without card payment keys only the demo's test checkout exists; it must never grant classes for free (A-040).
+  if (wantOnline && !paymentsLive() && !env.demoMode) {
+    return { ok: false, error: "Online payments need the card payment account connected first. Ask your developer." };
   }
   const offsets = str("reminder_offsets").split(",").map((s) => Math.round(Number(s.trim()) * 60)).filter((n) => n > 0 && n <= 10080);
   const { error } = await db().from("studio_settings").update({
