@@ -11,7 +11,10 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   // Fonts read at runtime by the icon / Open Graph image routes.
   outputFileTracingIncludes: { "/*": ["./src/assets/fonts/**"] },
-  // Photos are resized in the browser (≤1600px JPEG) before upload; this leaves headroom.
+  // Photos are resized in the browser (≤1600px JPEG) before upload; this leaves headroom. It applies to
+  // every server action (A-094): accepted because only signed-in admins can upload, the bucket caps files
+  // at 5 MB, and the per-email/IP auth limits keep anonymous posts small and few. Moving the upload to a
+  // route handler would let this go back to the 1 MB default.
   experimental: { serverActions: { bodySizeLimit: "6mb" } },
   turbopack: {
     rules: {
