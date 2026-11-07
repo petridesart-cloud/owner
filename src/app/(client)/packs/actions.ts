@@ -6,12 +6,15 @@ import { TOO_MANY, bookingLimited, rateLimited } from "@/lib/rate-limit";
 import { findCode } from "@/lib/rewards";
 import type { Discount } from "@/lib/discount";
 import { safeNext } from "@/lib/safe-next";
+import { parse, uuid } from "@/lib/validate";
 
 const METHODS = ["cash", "revolut", "bank_transfer"] as const;
 export type PayMethod = (typeof METHODS)[number];
 
 export async function buyPackAction(productId: string, acceptedTerms: boolean, method: PayMethod = "cash", code: string | null = null, back: string | null = null): Promise<ActionResult<{ redirect: string }>> {
   // Where they were (this tab, this package chosen): every detour brings them back there (A-026).
+  const ok = parse(uuid, productId);
+  if (!ok.ok) return ok;
   const here = safeNext(back, "/packs");
   const next = encodeURIComponent(here);
   const viewer = await getViewer();

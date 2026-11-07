@@ -2,6 +2,8 @@
 import { revalidatePath } from "next/cache";
 import { redirect, unstable_rethrow } from "next/navigation";
 import { z } from "zod";
+import { parse, payMethod, uuid } from "@/lib/validate";
+import { parseSettingsNumbers } from "@/lib/settings-form";
 import { getSettings, requireAdmin } from "@/lib/auth";
 import { emailLive, env, paymentsLive } from "@/lib/env";
 import { db } from "@/lib/supabase/admin";
@@ -24,6 +26,12 @@ async function admin(action: string, details?: Record<string, unknown>) {
   return viewer;
 }
 
+/** A-066: studio only, then the arguments are checked (before anything reaches the audit log). */
+async function check<S extends z.ZodType>(schema: S, input: unknown) {
+  await requireAdmin();
+  return parse(schema, input);
+}
+
 /** A-054: a write that fails turns into an error result instead of a silent "Saved". */
 function failed(e: unknown): { ok: false; error: string } {
   unstable_rethrow(e);
@@ -33,6 +41,8 @@ function failed(e: unknown): { ok: false; error: string } {
 
 // ── Check-in & roster ──────────────────────────────────────────────────
 export async function toggleCheckIn(bookingId: string, checked: boolean): Promise<ActionResult> {
+  const a = await check(z.object({ bookingId: uuid, checked: z.boolean() }), { bookingId, checked });
+  if (!a.ok) return a;
   await admin("check_in", { bookingId, checked });
   const { error } = await db().from("bookings").update({ checked_in_at: checked ? new Date().toISOString() : null }).eq("id", bookingId);
   if (error) return failed(error);
@@ -42,6 +52,8 @@ export async function toggleCheckIn(bookingId: string, checked: boolean): Promis
 
 /** Her answer: attendance stays editable (attended / no-show / not marked), in case of a mistake. */
 export async function setAttendance(bookingId: string, state: "attended" | "no_show" | "unmarked"): Promise<ActionResult> {
+  const a = await check(z.object({ bookingId: uuid, state: z.enum(["attended", "no_show", "unmarked"]) }), { bookingId, state });
+  if (!a.ok) return a;
   await admin("attendance", { bookingId, state });
   const { data: b } = await db().from("bookings").select("status, checked_in_at, class_sessions(starts_at)").eq("id", bookingId).single();
   if (!b || !["confirmed", "no_show"].includes(b.status)) return { ok: false, error: "This booking can't be marked. Please refresh." };
@@ -58,6 +70,8 @@ export async function setAttendance(bookingId: string, state: "attended" | "no_s
 }
 
 export async function markNoShow(bookingId: string): Promise<ActionResult> {
+  const a = await check(z.object({ bookingId: uuid }), { bookingId });
+  if (!a.ok) return a;
   await admin("no_show", { bookingId });
   const { data: b } = await db().from("bookings").select("class_sessions(starts_at)").eq("id", bookingId).single();
   if (!b?.class_sessions || new Date(b.class_sessions.starts_at) > new Date()) return { ok: false, error: friendlyError("class_not_started") }; // A-083: Remove is for upcoming classes
@@ -69,6 +83,8 @@ export async function markNoShow(bookingId: string): Promise<ActionResult> {
 
 /** Remove someone from a class. Inside the cutoff it's a late cancel unless she chooses to return the class (A-085). */
 export async function adminCancelBooking(bookingId: string, sessionId: string, returnClass = false): Promise<ActionResult> {
+  const a = await check(z.object({ bookingId: uuid, sessionId: uuid, returnClass: z.boolean() }), { bookingId, sessionId, returnClass });
+  if (!a.ok) return a;
   const viewer = await admin("cancel_booking", { bookingId, returnClass });
   const res = await cancelBooking(viewer.profile, bookingId, true, returnClass === true);
   revalidatePath(`/admin/classes/${sessionId}`);
@@ -145,12 +161,15 @@ function sessionRow(form: FormData) {
   const p = SessionForm.safeParse(Object.fromEntries(form));
   if (!p.success) return null;
   const starts = localToUtc(p.data.date, p.data.time);
+  // A-065: a price is euros with at most 2 decimals (no NaN, nothing negative); empty = the class type's price.
+  const cents = p.data.price ? priceCents(p.data.price) : null;
+  if (p.data.price && cents === null) return null;
   return {
     class_type_id: p.data.class_type_id,
     starts_at: starts,
     ends_at: new Date(new Date(starts).getTime() + p.data.duration * 60_000).toISOString(),
     capacity: p.data.capacity,
-    price_cents: p.data.price ? Math.round(Number(p.data.price.replace(",", ".")) * 100) : null,
+    price_cents: cents,
     title: p.data.title || null,
     location: p.data.location || null,
     description: p.data.description || null,
@@ -222,6 +241,8 @@ export async function allowEventAccess(sessionId: string, _: ActionResult, form:
 }
 
 export async function removeEventAccess(sessionId: string, profileId: string): Promise<ActionResult> {
+  const a = await check(z.object({ sessionId: uuid, profileId: uuid }), { sessionId, profileId });
+  if (!a.ok) return a;
   await admin("event_access_remove", { sessionId, profileId });
   const { error } = await db().from("event_access").delete().eq("session_id", sessionId).eq("profile_id", profileId);
   if (error) return failed(error);
@@ -235,7 +256,9 @@ const Slot = z.object({ weekday: z.number().int().min(1).max(7), time: z.string(
 export async function saveTimetable(_: ActionResult, form: FormData): Promise<ActionResult> {
   await admin("save_timetable");
   const from = String(form.get("valid_from"));
-  const slots = z.array(Slot).safeParse(JSON.parse(String(form.get("slots") ?? "[]")));
+  let rawSlots: unknown = [];
+  try { rawSlots = JSON.parse(String(form.get("slots") ?? "[]")); } catch { return { ok: false, error: "The class times couldn't be read. Please reload the page and try again." }; }
+  const slots = z.array(Slot).safeParse(rawSlots);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(from)) return { ok: false, error: "Pick the date it starts." };
   if (!slots.success || slots.data.length === 0) return { ok: false, error: "Add at least one class time." };
   // A-095: on the Sunday the clocks go forward, 03:00-03:59 doesn't exist, so a Sunday class then would move.
@@ -415,6 +438,7 @@ export async function createCode(_: ActionResult, form: FormData): Promise<Actio
 }
 
 export async function setCodeActive(id: string, active: boolean) {
+  if (!(await check(z.object({ id: uuid, active: z.boolean() }), { id, active })).ok) return;
   await admin("code_active", { id, active });
   const { data } = await db().from("discount_codes").update({ active }).eq("id", id).select("profile_id").maybeSingle();
   revalidatePath("/admin/clients/codes");
@@ -423,6 +447,8 @@ export async function setCodeActive(id: string, active: boolean) {
 
 // ── Payments (offline "Mark as paid" and memberships) ──────────────────
 export async function markPaid(paymentId: string, method: "cash" | "card_in_person" | "bank_transfer" | "revolut"): Promise<ActionResult> {
+  const a = await check(z.object({ paymentId: uuid, method: payMethod }), { paymentId, method });
+  if (!a.ok) return a;
   await admin("mark_paid", { paymentId, method });
   let res: Awaited<ReturnType<typeof onPaymentPaid>>;
   try {
@@ -440,6 +466,8 @@ export async function markPaid(paymentId: string, method: "cash" | "card_in_pers
  * missed and she chooses not to charge. An upcoming unpaid class is cancelled from its roster instead.
  */
 export async function cancelPaymentRequest(paymentId: string): Promise<ActionResult> {
+  const a = await check(z.object({ paymentId: uuid }), { paymentId });
+  if (!a.ok) return a;
   await admin("cancel_payment_request", { paymentId });
   const { data: p } = await db().from("payments").select("id, booking_id, bookings!payments_booking_id_fkey(status, class_sessions(starts_at))").eq("id", paymentId).eq("status", "pending").maybeSingle();
   if (!p) return { ok: false, error: "Already settled." };
@@ -455,6 +483,8 @@ export async function cancelPaymentRequest(paymentId: string): Promise<ActionRes
 
 /** A refund she paid back by hand (a paid event the studio cancelled, or a payment that came after the spot was gone; A-031). */
 export async function markRefunded(paymentId: string): Promise<ActionResult> {
+  const a = await check(z.object({ paymentId: uuid }), { paymentId });
+  if (!a.ok) return a;
   await admin("mark_refunded", { paymentId });
   const { data, error } = await db().from("payments").update({ status: "refunded" }).eq("id", paymentId).eq("status", "needs_refund").select("id");
   if (error) return failed(error);
@@ -465,6 +495,8 @@ export async function markRefunded(paymentId: string): Promise<ActionResult> {
 
 /** Record an in-person renewal for an offline monthly package and grant the next period. */
 export async function renewMembership(membershipId: string, method: "cash" | "card_in_person" | "bank_transfer" | "revolut"): Promise<ActionResult> {
+  const a = await check(z.object({ membershipId: uuid, method: payMethod }), { membershipId, method });
+  if (!a.ok) return a;
   await admin("renew_membership", { membershipId, method });
   const { data: m } = await db().from("memberships").select("*, products!memberships_product_id_fkey(*)").eq("id", membershipId).single();
   if (!m) return { ok: false, error: "Membership not found." };
@@ -486,6 +518,8 @@ export async function renewMembership(membershipId: string, method: "cash" | "ca
 }
 
 export async function setMembershipState(membershipId: string, action: "pause" | "resume" | "cancel" | "reactivate"): Promise<ActionResult> {
+  const a = await check(z.object({ membershipId: uuid, action: z.enum(["pause", "resume", "cancel", "reactivate"]) }), { membershipId, action });
+  if (!a.ok) return a;
   await admin("membership_" + action, { membershipId });
   const res = action === "pause" ? await db().rpc("pause_membership", { p_membership: membershipId })
     : action === "resume" ? await db().rpc("resume_membership", { p_membership: membershipId })
@@ -564,6 +598,8 @@ export async function createClosure(_: ActionResult, form: FormData): Promise<Ac
 
 /** Confirm: cancel classes in the range (notify + return classes) and freeze packages. */
 export async function confirmClosure(closureId: string): Promise<ActionResult> {
+  const a = await check(z.object({ closureId: uuid }), { closureId });
+  if (!a.ok) return a;
   await admin("confirm_closure", { closureId });
   const { data: c } = await db().from("closures").select("*").eq("id", closureId).single();
   if (!c) return { ok: false, error: "Not found." };
@@ -577,6 +613,7 @@ export async function confirmClosure(closureId: string): Promise<ActionResult> {
 }
 
 export async function dismissClosure(closureId: string) {
+  if (!(await check(z.object({ closureId: uuid }), { closureId })).ok) return;
   await admin("dismiss_closure", { closureId });
   must(await db().from("closures").delete().eq("id", closureId).eq("confirmed", false), "dismiss closure");
   revalidatePath("/admin/closures");
@@ -594,7 +631,14 @@ export async function paymentsUnlocked() {
 
 export async function saveSettings(_: ActionResult, form: FormData): Promise<ActionResult> {
   await admin("save_settings");
-  const num = (k: string) => Number(form.get(k));
+  const cur = await getSettings();
+  const nums = parseSettingsNumbers((k) => (form.get(k) == null ? null : String(form.get(k))), {
+    cancellation_cutoff_hours: cur.cancellation_cutoff_hours, waitlist_window_hours: cur.waitlist_window_minutes / 60, waitlist_close_minutes: cur.waitlist_close_minutes,
+    hold_minutes: cur.hold_minutes, rollover_max: cur.rollover_max, unpaid_request_expiry_hours: cur.unpaid_request_expiry_hours,
+    expiry_reminder_days: cur.expiry_reminder_days, student_discount_pct: cur.student_discount_pct, booking_window_weeks: Math.round(cur.booking_window_days / 7),
+  });
+  if (!nums.ok) return { ok: false, error: `Please check: ${Object.values(nums.errors).join("; ")}.` };
+  const num = (k: keyof typeof nums.values) => nums.values[k];
   const str = (k: string) => String(form.get(k) ?? "").trim();
   const revolut = String(form.get("revolut_link") ?? "").trim();
   if (revolut && !/^https:\/\/[^\s"'<>]+$/.test(revolut)) return { ok: false, error: "The Revolut link must start with https://" };
@@ -610,7 +654,7 @@ export async function saveSettings(_: ActionResult, form: FormData): Promise<Act
   const { error } = await db().from("studio_settings").update({
     cancellation_cutoff_hours: num("cancellation_cutoff_hours"),
     waitlist_window_minutes: Math.round(num("waitlist_window_hours") * 60),
-    waitlist_close_minutes: Math.min(720, Math.max(0, Math.round(num("waitlist_close_minutes") || 0))),
+    waitlist_close_minutes: num("waitlist_close_minutes"),
     waitlist_sms: form.get("waitlist_sms") === "on",
     alert_bookings: form.get("alert_bookings") === "on",
     alert_signups: form.get("alert_signups") === "on",
@@ -632,7 +676,7 @@ export async function saveSettings(_: ActionResult, form: FormData): Promise<Act
     revolut_link: str("revolut_link"), bank_account_name: str("bank_account_name"), bank_iban: str("bank_iban").replace(/\s+/g, " "),
     legal_name: str("legal_name"), trader_name: str("trader_name"), address: str("address"),
     contact_email: str("contact_email"), contact_phone: str("contact_phone"), instagram_handle: str("instagram_handle").replace(/^@/, ""),
-    booking_window_days: Math.min(26, Math.max(1, Math.round(num("booking_window_weeks")) || 4)) * 7, // 1 week to 6 months
+    booking_window_days: num("booking_window_weeks") * 7, // 1 week to 6 months
     updated_at: new Date().toISOString(),
   }).eq("id", 1);
   if (error) return { ok: false, error: "Some values are out of range. Please check them." };
@@ -992,7 +1036,7 @@ export async function importTimetable(rows: Record<string, unknown>[], name: str
     const typeName = String(r.class_type ?? r.type ?? "reformer").trim().toLowerCase();
     const type = types?.find((t) => t.slug === typeName || t.name.toLowerCase() === typeName || t.kind === typeName);
     if (!day || day < 1 || day > 7 || !/^\d{2}:\d{2}$/.test(time) || !type) continue;
-    slots.push({ weekday: day, time, class_type_id: type.id, capacity: r.capacity ? Number(r.capacity) : null });
+    slots.push({ weekday: day, time, class_type_id: type.id, capacity: Number.isInteger(Number(r.capacity)) && Number(r.capacity) >= 1 && Number(r.capacity) <= 100 ? Number(r.capacity) : null });
   }
   const fd = new FormData();
   fd.set("name", name); fd.set("valid_from", from); fd.set("valid_to", to); fd.set("slots", JSON.stringify(slots));

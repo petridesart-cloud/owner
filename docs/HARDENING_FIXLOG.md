@@ -108,3 +108,5 @@
 | A-058 | Medium | pg_advisory_lock(hashtext('app_migrations')) in migrate.mjs; expand/contract rule in CLAUDE.md | tests/migrate.test.ts (two parallel runs) | A-056, A-057, A-058, A-069, A-084 |
 | A-069 | Medium | `20261106000907`: drop admin_adjust_credits, cancel_booking without free_cancel_until, notifyOffers grace removed; column kept | engine.test.ts "admin adjustment requires a reason" | A-056, A-057, A-058, A-069, A-084 |
 | A-084 | Low | seed_demo → seed_demo_base + Mat classes to 4; Mat default capacity 4 | engine.test.ts (suite) | A-056, A-057, A-058, A-069, A-084 |
+| A-065 | Medium | `parseSettingsNumbers()` (empty keeps, ranges, per-field message), price validation in `sessionRow`, guarded JSON.parse in saveTimetable, import capacity check. Not done: import `to` (timetables repeat) | unit.test.ts "settings form and action arguments" | A-065, A-066 |
+| A-066 | Medium | `parse()`/`uuid`/`payMethod` (src/lib/validate.ts) on the admin positional actions and bookAction/join/leave/buyPack | unit.test.ts, e2e admin/packages | A-065, A-066 |

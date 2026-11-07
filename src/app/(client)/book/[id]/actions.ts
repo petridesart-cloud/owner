@@ -7,6 +7,8 @@ import { TOO_MANY, bookingLimited, rateLimited } from "@/lib/rate-limit";
 import { findCode } from "@/lib/rewards";
 import { db } from "@/lib/supabase/admin";
 import type { Discount } from "@/lib/discount";
+import { z } from "zod";
+import { parse, uuid } from "@/lib/validate";
 
 async function onboardedProfile() {
   const viewer = await getViewer();
@@ -21,6 +23,8 @@ async function onboardedProfile() {
 export async function bookAction(
   sessionId: string, method: "credit" | "pay" | "studio" | "trial" | "drop_in" | "free", payBy: "cash" | "revolut" = "cash", answer = "", code: string | null = null,
 ): Promise<ActionResult<{ redirect: string }>> {
+  const a = parse(z.object({ sessionId: uuid, method: z.enum(["credit", "pay", "studio", "trial", "drop_in", "free"]) }), { sessionId, method });
+  if (!a.ok) return a;
   const v = await onboardedProfile();
   if ("error" in v) return { ok: false, error: v.error! };
   if (payBy !== "cash" && payBy !== "revolut") return { ok: false, error: "Please choose cash or Revolut." };
@@ -61,6 +65,8 @@ export async function checkSingleCodeAction(sessionId: string, modes: ("trial" |
 }
 
 export async function joinWaitlistAction(sessionId: string): Promise<ActionResult<{ position: number }>> {
+  const a = parse(uuid, sessionId);
+  if (!a.ok) return a;
   const v = await onboardedProfile();
   if ("error" in v) return { ok: false, error: v.error! };
   const res = await joinWaitlist(v.profile, sessionId);
@@ -69,6 +75,8 @@ export async function joinWaitlistAction(sessionId: string): Promise<ActionResul
 }
 
 export async function leaveWaitlistAction(entryId: string, sessionId: string): Promise<ActionResult> {
+  const a = parse(z.object({ entryId: uuid, sessionId: uuid }), { entryId, sessionId });
+  if (!a.ok) return a;
   const v = await onboardedProfile();
   if ("error" in v) return { ok: false, error: v.error! };
   const res = await leaveWaitlist(v.profile, entryId);

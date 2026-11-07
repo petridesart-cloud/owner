@@ -433,3 +433,25 @@ describe("config checks and safe logs (WP13: A-056, A-057)", () => {
     assert.match(safeError(new Error("Resend 422: bad maria@x.io")), /\[email\]/);
   });
 });
+
+describe("settings form and action arguments (WP13: A-065, A-066)", () => {
+  const cur = { cancellation_cutoff_hours: 6, waitlist_window_hours: 2, waitlist_close_minutes: 60, hold_minutes: 10, rollover_max: 0, unpaid_request_expiry_hours: 48, expiry_reminder_days: 7, student_discount_pct: 10, booking_window_weeks: 4 };
+  test("an empty box keeps the saved value; 0 hours of free cancellation is refused with the field named", async () => {
+    const { parseSettingsNumbers } = await import("../src/lib/settings-form");
+    const keep = parseSettingsNumbers((k) => (k === "cancellation_cutoff_hours" ? "" : null), cur);
+    assert.ok(keep.ok && keep.values.cancellation_cutoff_hours === 6);
+    const zero = parseSettingsNumbers((k) => (k === "cancellation_cutoff_hours" ? "0" : null), cur);
+    assert.ok(!zero.ok && /Free cancellation/.test(zero.errors.cancellation_cutoff_hours!));
+    const bad = parseSettingsNumbers((k) => ({ student_discount_pct: "150", hold_minutes: "abc", waitlist_close_minutes: "0" })[k as string] ?? null, cur);
+    assert.ok(!bad.ok && Object.keys(bad.errors).sort().join() === "hold_minutes,student_discount_pct");
+    const good = parseSettingsNumbers((k) => ({ booking_window_weeks: "13", waitlist_close_minutes: "0" })[k as string] ?? null, cur);
+    assert.ok(good.ok && good.values.booking_window_weeks === 13 && good.values.waitlist_close_minutes === 0);
+  });
+  test("action arguments: ids must be UUIDs and modes come from a list", async () => {
+    const { parse, uuid, payMethod } = await import("../src/lib/validate");
+    assert.ok(parse(uuid, "5b0e2b4e-7f0c-4d3a-9c55-2f6f0b0e1a11").ok);
+    assert.ok(!parse(uuid, "'; drop table x").ok);
+    assert.ok(parse(payMethod, "revolut").ok);
+    assert.ok(!parse(payMethod, "paypal").ok);
+  });
+});

@@ -56,13 +56,13 @@ export async function ensureProfile(userId: string, email?: string | null, opts:
 }
 
 /** Does this login still exist in Auth? A deleted or erased account's leftover token must never create a profile. */
-export async function loginExists(userId: string): Promise<boolean> {
+export const loginExists = cache(async (userId: string): Promise<boolean> => {
   const { data, error } = await db().auth.admin.getUserById(userId);
   if (data?.user) return true;
   if (error && (error.status === 404 || error.code === "user_not_found")) return false;
   if (error) throw unavailable(error);
   return false;
-}
+});
 
 export async function requireViewer(next = "/") {
   const viewer = await getViewer();
