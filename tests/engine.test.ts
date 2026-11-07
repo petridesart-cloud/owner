@@ -1184,4 +1184,16 @@ describe("WP3: engine hardening", () => {
     assert.equal(status(await cancel(b, p)), "event_no_cancel");
     assert.equal(((await cancel(b, p, true)).data as { status: string }).status, "cancelled");
   });
+
+  test("A-035: the booking window can be 26 weeks; private sessions are never booked online", async () => {
+    const was = (await db.from("studio_settings").select("booking_window_days").single()).data!.booking_window_days;
+    assert.ifError((await db.from("studio_settings").update({ booking_window_days: 182 }).eq("id", 1)).error);
+    await db.from("studio_settings").update({ booking_window_days: was }).eq("id", 1);
+    const priv = (await db.from("class_types").select("id").eq("slug", "private-reformer").single()).data!.id;
+    const { data: s } = await db.from("class_sessions").insert({ class_type_id: priv, starts_at: iso(3 * D + 14_000), ends_at: iso(3 * D + 14_000 + 50 * 60_000), capacity: 1, title: "WP3 private" }).select("id").single();
+    const p = await client("wp3-priv");
+    await db.rpc("grant_lot", { p_profile: p, p_kind: "private_reformer", p_credits: 1, p_expires: null as unknown as string, p_note: "t" });
+    assert.match(status(await book(p, s!.id)), /private_class/);
+    assert.ifError((await book(p, s!.id, "credit", "manual")).error);
+  });
 });

@@ -5445,6 +5445,15 @@ create unique index if not exists payments_one_pending_request on public.payment
     and purpose in ('pack', 'membership');
 
 
+-- ===== 20261106000404_wp3_booking_window.sql =====
+-- WP3 (A-035): the booking window can be up to 26 weeks, as the Settings form allows.
+
+-- ── A-035: up to 26 weeks ahead (the Settings form allows 1–26 weeks) ───────────────────
+alter table public.studio_settings drop constraint if exists studio_settings_booking_window_days_check;
+alter table public.studio_settings add constraint studio_settings_booking_window_days_check
+  check (booking_window_days between 7 and 182);
+
+
 -- ===== seed.sql =====
 -- Demo data lives in public.seed_demo() (migration 20261011000400) so the admin
 -- "Reset demo data" button can rebuild it. Dates are relative to now().
