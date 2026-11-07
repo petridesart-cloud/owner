@@ -71,3 +71,11 @@
 | A-047 | Medium | calendar-day extend/freeze, add_local_days | engine.test.ts WP12 | A-047, A-080, A-096: package ends move by calendar days |
 | A-080 | Low | freeze minus closure days (counted once) | engine.test.ts WP12 | A-047, A-080, A-096 |
 | A-096 | Low | apply_closure note counts calendar days | engine.test.ts WP12 | A-047, A-080, A-096 |
+| A-014 | High | vercel.json regions fra1 (code part; owner checks the function log) | n/a | A-021, A-023, A-014 |
+| A-021 | High | proxy refreshes via getSession; getViewer uses getClaims (one fewer Auth call) | count.mjs before/after | A-021, A-023, A-014 |
+| A-023 | High | prefetch={false} on Footer, Bubbles, DayStrip, ClassRow, package cards; staleTimes.dynamic 30 | count.mjs | A-021, A-023, A-014 |
+| A-050 | Medium | events-only availability, first_class_at, payments_by_method, CSV paging, clients list from SQL | engine.test.ts WP9 | A-050, A-051 |
+| A-051 | Medium | newest 12 past packages ("Show all"), event photos by slot, grouped reward uses | engine.test.ts WP9 | A-050, A-051 |
+| A-022 | High | class page in 3 stages (sessionById + one Promise.all) | count.mjs | A-022, A-100, A-101 |
+| A-100 | Low | Home, Schedule, Packs, My classes, Today read in one stage | count.mjs | A-022, A-100, A-101 |
+| A-101 | Low | nextBooking ordered on the class's own start time | typecheck | A-050, A-051 / A-022, A-100, A-101 |

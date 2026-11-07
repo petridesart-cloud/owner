@@ -28,19 +28,20 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   scheduleTick();
   const { day } = await searchParams;
   const key = day && /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : todayKey();
-  const [settings, seeHealth] = await Promise.all([getSettings(), canViewHealth()]);
-  const sessions = await sessionsWithRoster(localToUtc(key, "00:00"), localToUtc(addDaysKey(key, 1), "00:00"));
-  const live = sessions.filter((s) => s.status === "scheduled");
-  const booked = live.reduce((n, s) => n + s.roster.length, 0);
-  const cap = live.reduce((n, s) => n + s.capacity, 0);
-  const isToday = key === todayKey();
-  const [{ data: refunds }, { data: awaiting }, { data: renewals }] = await Promise.all([
+  // A-100: one stage for everything the page reads.
+  const [settings, seeHealth, sessions, { data: refunds }, { data: awaiting }, { data: renewals }] = await Promise.all([
+    getSettings(), canViewHealth(),
+    sessionsWithRoster(localToUtc(key, "00:00"), localToUtc(addDaysKey(key, 1), "00:00")),
     db().from("payments").select("id, description, amount_cents, method, profiles(id, full_name)").eq("status", "needs_refund").order("created_at"),
     db().from("payments").select("id, description, amount_cents, created_at, purpose, intended_method, discount_note, profiles(id, full_name)").eq("status", "pending").eq("provider", "offline").order("created_at"),
     db().from("memberships").select("id, current_period_end, status, profiles(id, full_name), products!memberships_product_id_fkey(name, price_cents)")
       .eq("provider", "offline").eq("cancel_at_period_end", false).in("status", ["active", "past_due"])
       .lte("current_period_end", new Date(nowMs() + 7 * 86_400_000).toISOString()).order("current_period_end"),
   ]);
+  const live = sessions.filter((s) => s.status === "scheduled");
+  const booked = live.reduce((n, s) => n + s.roster.length, 0);
+  const cap = live.reduce((n, s) => n + s.capacity, 0);
+  const isToday = key === todayKey();
 
   return (
     <div>

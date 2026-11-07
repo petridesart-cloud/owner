@@ -18,8 +18,8 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
   const { purchased, requested, all } = await searchParams;
   const viewer = await requireViewer("/bookings");
   const p = viewer.profile;
-  const settings = await getSettings();
-  const [packages, { data: bookings }, { data: waits }, { data: pending }] = await Promise.all([
+  const [settings, packages, { data: bookings }, { data: waits }, { data: pending }] = await Promise.all([
+    getSettings(),
     clientPackages(p.id, undefined, { all: all === "1" }),
     db().from("bookings").select("id, status, paid_with, late_refund_pending, payment:payments!bookings_payment_id_fkey(status, amount_cents, intended_method), class_sessions!inner(id, starts_at, ends_at, title, location, class_types(name, kind))")
       .eq("profile_id", p.id).eq("status", "confirmed").gt("class_sessions.starts_at", new Date().toISOString()),

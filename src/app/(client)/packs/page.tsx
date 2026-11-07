@@ -17,14 +17,16 @@ export const dynamic = "force-dynamic";
 
 export default async function PacksPage({ searchParams }: { searchParams: Promise<{ cancelled?: string; type?: string }> }) {
   const { cancelled, type } = await searchParams;
-  const [s, viewer, { data: products }, kinds] = await Promise.all([
+  const viewerP = getViewer();
+  const [s, viewer, { data: products }, kinds, tabsAll, rewardRows] = await Promise.all([
     getSettings(),
-    getViewer(),
+    viewerP,
     db().from("products").select("*").eq("active", true).is("archived_at", null).order("sort_order"),
     getKinds(),
+    getTabs(),
+    viewerP.then((v) => (v ? availableRewards(v.profile.id, "package") : [])),
   ]);
   const all = products ?? [];
-  const tabsAll = await getTabs();
   const isAdmin = viewer?.profile.role === "admin";
   const offered = (k: string) => all.some((p) => p.credit_kind === k && (p.tag === "package" || p.tag === "trial" || p.tag === "drop_in"));
   const kindsIn = (tab: string) => kinds.filter((k) => k.tab === tab && offered(k.key));
@@ -34,7 +36,7 @@ export default async function PacksPage({ searchParams }: { searchParams: Promis
   const tab = tabs.find((t) => t.key === type) ?? tabs.find((t) => t.key === kinds.find((k) => k.key === type)?.tab) ?? tabs[0];
   const tabKinds = tab ? kindsIn(tab.key) : [];
   const many = tabKinds.length > 1;
-  const rewards = viewer ? (await availableRewards(viewer.profile.id, "package")).map(({ id: _id, ...r }) => (void _id, r)) : [];
+  const rewards = rewardRows.map(({ id: _id, ...r }) => (void _id, r));
   const monthsOf = (p: (typeof all)[number]) => p.months ?? Math.round((p.validity_days ?? 30) / 30);
   const groups: Group[] = tabKinds.flatMap((k) => {
     const packs = all.filter((p) => p.tag === "package" && p.credit_kind === k.key);

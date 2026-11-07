@@ -19,12 +19,18 @@ export const dynamic = "force-dynamic";
 export default async function Home() {
   scheduleTick();
   const now = new Date();
-  const [settings, viewer, classes] = await Promise.all([
+  // A-100: everything that needs only the viewer starts together with it (one stage, not three).
+  const viewerP = getViewer();
+  const withPid = async <T,>(f: (pid: string | undefined) => T | PromiseLike<T>): Promise<T> => f((await viewerP)?.profile.id);
+  const [settings, viewer, classes, state, mine, logo, requested] = await Promise.all([
     getSettings(),
-    getViewer(),
+    viewerP,
     availability(now, new Date(now.getTime() + 21 * 86_400_000)),
+    withPid((pid) => viewerSessionState(pid)),
+    withPid((pid) => (pid ? nextBooking(pid) : null)),
+    logoSrc(),
+    withPid((pid) => (pid ? db().from("payments").select("id, description, amount_cents").eq("profile_id", pid).eq("status", "pending").eq("provider", "offline").is("booking_id", null).limit(1).maybeSingle().then((r) => r.data) : null)),
   ]);
-  const state = await viewerSessionState(viewer?.profile.id);
   const open = classes.filter((c) => c.status === "scheduled");
   const next = open.filter((c) => c.kind !== "event" && c.spots_left > 0).slice(0, 3);
   const event = open.find((c) => c.kind === "event");
@@ -36,13 +42,6 @@ export default async function Home() {
   const eventClientsOnly = !!event && !!eventExtrasMap.get(event.id)?.clients_only;
   const eventCover = eventCovers[0];
   const firstName = viewer?.profile.full_name?.split(" ")[0];
-  const pid = viewer?.profile.id;
-  const [mine, logo, requested] = await Promise.all([
-    pid ? nextBooking(pid) : null,
-    logoSrc(),
-    pid ? db().from("payments").select("id, description, amount_cents").eq("profile_id", pid).eq("status", "pending").eq("provider", "offline").is("booking_id", null).limit(1).maybeSingle().then((r) => r.data) : null,
-  ]);
-
   return (
     <div className="pb-4">
       <section className="lilac-wash relative overflow-hidden rounded-b-[36px] px-6 pb-9 pt-8 text-center">

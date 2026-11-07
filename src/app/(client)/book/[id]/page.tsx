@@ -10,7 +10,7 @@ import { BackButton } from "@/components/BackButton";
 import { Badge, ButtonLink, Eyebrow, Notice } from "@/components/ui";
 import { spotsLabel } from "@/components/ClassRow";
 import { getSettings, getViewer } from "@/lib/auth";
-import { availability, creditBalance, eventExtras, lockedEventIds } from "@/lib/data";
+import { creditBalance, eventExtras, lockedEventIds, sessionById } from "@/lib/data";
 import { Lock } from "lucide-react";
 import { db } from "@/lib/supabase/admin";
 import { eur, vatLine } from "@/lib/money";
@@ -28,16 +28,16 @@ export default async function BookPage({ params, searchParams }: { params: Promi
   const { cancelled } = await searchParams;
   if (!/^[0-9a-f-]{36}$/.test(id)) notFound();
 
-  const { data: s } = await db().from("class_sessions").select("starts_at").eq("id", id).maybeSingle();
-  if (!s) notFound();
-  const start = new Date(s.starts_at);
-  const [c] = await availability(new Date(start.getTime() - 1000), new Date(start.getTime() + 1000), { includePrivate: true }).then((r) => r.filter((x) => x.id === id));
+  // A-022: three stages instead of a 13-step waterfall. (1) who, settings, texts, labels and this class with its type;
+  // (2) the private-session check (rare); (3) everything about this person and class at once.
+  const viewerP = getViewer();
+  const [viewer, settings, texts, labels, c, extrasMap] = await Promise.all([viewerP, getSettings(), getTexts(), kindLabels(), sessionById(id), eventExtras([id])]);
   if (!c) notFound();
+  const profile = viewer?.profile;
+  const start = new Date(c.starts_at);
   // A private session: only for the person she booked in (and the studio). Nobody else sees it or books it.
-  const { data: ptype } = await db().from("class_types").select("private").eq("id", c.class_type_id).maybeSingle();
-  if (ptype?.private) {
-    const v = await getViewer();
-    const mine = v && (v.profile.role === "admin" || (await db().from("bookings").select("id").eq("session_id", id).eq("profile_id", v.profile.id).in("status", ["confirmed", "held"]).maybeSingle()).data);
+  if (c.private) {
+    const mine = viewer && (viewer.profile.role === "admin" || (await db().from("bookings").select("id").eq("session_id", id).eq("profile_id", viewer.profile.id).in("status", ["confirmed", "held"]).maybeSingle()).data);
     if (!mine) {
       return (
         <div className="px-5 pt-3">
@@ -52,12 +52,43 @@ export default async function BookPage({ params, searchParams }: { params: Promi
     }
   }
 
-  const [viewer, settings, texts, extrasMap] = await Promise.all([getViewer(), getSettings(), getTexts(), eventExtras([id])]);
-  const profile = viewer?.profile;
   const ev = c.kind === "event" ? extrasMap.get(id) : undefined;
   const bring = ev ? (ev.what_to_bring ?? "").split("\n").map((l) => l.trim()).filter(Boolean) : texts.what_to_bring;
+  const classDay = dayKey(c.starts_at);
+  const nowIso = new Date().toISOString();
+  const pid = profile?.id;
+  const none = Promise.resolve({ data: null });
+  const [
+    locked, booking, entry, usable, closedRes, ctypeRes, singleProducts, trialOkRaw, unpaidRes, requestedRes, frozenRes, balanceRaw, rewardRows,
+  ] = await Promise.all([
+    ev?.clients_only ? lockedEventIds([id], pid) : Promise.resolve(new Set<string>()),
+    pid ? db().from("bookings").select("id, status").eq("session_id", id).eq("profile_id", pid).eq("status", "confirmed").maybeSingle().then((r) => r.data) : null,
+    pid ? db().from("waitlist_entries").select("id, status, offer_expires_at, created_at").eq("session_id", id).eq("profile_id", pid).in("status", ["waiting", "offered"]).maybeSingle().then((r) => r.data) : null,
+    pid && c.credit_kind ? db().rpc("usable_credits", { p_profile: pid, p_kind: c.credit_kind, p_class: c.starts_at }).then((r) => r.data?.[0] ?? null) : null,
+    db().rpc("is_closed_on", { p_at: c.starts_at }),
+    db().from("class_types").select("credit_cost").eq("id", c.class_type_id).single(),
+    // Trial (first class of this type only) and drop-in, or a paid event: reserve now, pay by cash or Revolut.
+    c.credit_kind ? db().from("products").select("tag, name, price_cents").eq("active", true).eq("credit_kind", c.credit_kind).in("tag", ["trial", "drop_in"]).order("sort_order").then((r) => r.data ?? []) : [],
+    // Same check as the booking engine (also matches the phone number, so a new email doesn't give a second trial).
+    pid && c.credit_kind ? db().rpc("trial_eligible", { p_profile: pid, p_kind: c.credit_kind }).then((r) => r.data === true) : false,
+    // Say up front what would otherwise only fail on tap: one unpaid class at a time; a package already requested.
+    pid ? db().from("bookings").select("id, class_sessions!inner(starts_at, ends_at, title, class_types(name))").eq("profile_id", pid)
+      .eq("status", "confirmed").eq("paid_with", "pay_at_studio").gt("class_sessions.ends_at", nowIso).limit(1).maybeSingle() : none,
+    pid && c.credit_kind
+      ? db().from("payments").select("id, products!inner(credit_kind)").eq("profile_id", pid).eq("status", "pending")
+          .is("booking_id", null).eq("products.credit_kind", c.credit_kind).limit(1).maybeSingle()
+      : none,
+    // A package frozen on this day (her rule): say so, rather than "after the expiry".
+    pid && c.credit_kind
+      ? db().from("lot_freezes").select("starts_on, ends_on, credit_lots!inner(profile_id, credit_kind, remaining)")
+          .eq("credit_lots.profile_id", pid).eq("credit_lots.credit_kind", c.credit_kind).gt("credit_lots.remaining", 0)
+          .lte("starts_on", classDay).gte("ends_on", classDay).limit(1).maybeSingle()
+      : none,
+    pid && c.credit_kind ? creditBalance(pid) : null,
+    pid ? availableRewards(pid) : [],
+  ]);
   // Clients-only event this person can't open: no details at all, just "Clients only".
-  if (ev?.clients_only && (await lockedEventIds([id], profile?.id)).has(id)) {
+  if (locked.has(id)) {
     return (
       <div className="px-5 pt-3">
         <BackButton href="/events" />
@@ -72,12 +103,6 @@ export default async function BookPage({ params, searchParams }: { params: Promi
     );
   }
   const policy = c.kind === "event" ? ev?.event_policy ?? EVENT_POLICY : null; // events: no cancellations or refunds in the app
-  const [booking, entry] = profile
-    ? await Promise.all([
-        db().from("bookings").select("id, status").eq("session_id", id).eq("profile_id", profile.id).eq("status", "confirmed").maybeSingle().then((r) => r.data),
-        db().from("waitlist_entries").select("id, status, offer_expires_at, created_at").eq("session_id", id).eq("profile_id", profile.id).in("status", ["waiting", "offered"]).maybeSingle().then((r) => r.data),
-      ])
-    : [null, null];
 
   let position = 0;
   if (entry?.status === "waiting") {
@@ -90,54 +115,26 @@ export default async function BookPage({ params, searchParams }: { params: Promi
   const closeLabel = settings.waitlist_close_minutes % 60 === 0 ? `${settings.waitlist_close_minutes / 60} hour${settings.waitlist_close_minutes === 60 ? "" : "s"}` : `${settings.waitlist_close_minutes} minutes`;
   const offered = entry?.status === "offered" && new Date(entry.offer_expires_at!) > new Date();
   const full = c.spots_left === 0 && !offered;
-  const usable = profile && c.credit_kind
-    ? (await db().rpc("usable_credits", { p_profile: profile.id, p_kind: c.credit_kind, p_class: c.starts_at })).data?.[0]
-    : null;
   const creditCount = usable?.usable ?? 0;
   // A Reformer package can't be used for Mat (and the other way round): say so instead of just "get a package".
-  const balance = profile && c.credit_kind && creditCount === 0 ? await creditBalance(profile.id) : null;
+  const balance = creditCount === 0 ? balanceRaw : null;
   const otherKind = balance ? Object.keys(balance).find((k) => k !== c.credit_kind && typeof balance[k] === "number" && balance[k] > 0) : undefined;
   const otherCredits = otherKind ? balance![otherKind] : 0;
-  const labels = await kindLabels();
-  const classDay = dayKey(c.starts_at);
-  // A package frozen on this day (her rule): say so, rather than "after the expiry".
-  const { data: frozen } = profile && c.credit_kind && creditCount === 0
-    ? await db().from("lot_freezes").select("starts_on, ends_on, credit_lots!inner(profile_id, credit_kind, remaining)")
-        .eq("credit_lots.profile_id", profile.id).eq("credit_lots.credit_kind", c.credit_kind).gt("credit_lots.remaining", 0)
-        .lte("starts_on", classDay).gte("ends_on", classDay).limit(1).maybeSingle()
-    : { data: null };
+  const frozen = creditCount === 0 ? frozenRes.data : null;
   const blockedByExpiry = !frozen && !!usable && usable.total > 0 && usable.usable === 0;
-  const { data: closed } = await db().rpc("is_closed_on", { p_at: c.starts_at });
-  const { data: ctype } = await db().from("class_types").select("credit_cost").eq("id", c.class_type_id).single();
+  const closed = closedRes.data;
+  const ctype = ctypeRes.data;
   const next = `/book/${id}`;
-
-  // Trial (first class of this type only) and drop-in, or a paid event: reserve now, pay by cash or Revolut.
-  const { data: singleProducts } = c.credit_kind
-    ? await db().from("products").select("tag, name, price_cents").eq("active", true).eq("credit_kind", c.credit_kind).in("tag", ["trial", "drop_in"]).order("sort_order")
-    : { data: [] };
-  let trialOk = false;
-  if (profile && c.credit_kind && singleProducts?.some((p) => p.tag === "trial")) {
-    // Same check as the booking engine (also matches the phone number, so a new email doesn't give a second trial).
-    trialOk = (await db().rpc("trial_eligible", { p_profile: profile.id, p_kind: c.credit_kind })).data === true;
-  }
-  // Say up front what would otherwise only fail on tap: one unpaid class at a time; a package already requested.
-  const [{ data: unpaid }, { data: requestedPack }] = profile && creditCount === 0
-    ? await Promise.all([
-        db().from("bookings").select("id, class_sessions!inner(starts_at, ends_at, title, class_types(name))").eq("profile_id", profile.id)
-          .eq("status", "confirmed").eq("paid_with", "pay_at_studio").gt("class_sessions.ends_at", new Date().toISOString()).limit(1).maybeSingle(),
-        c.credit_kind
-          ? db().from("payments").select("id, products!inner(credit_kind)").eq("profile_id", profile.id).eq("status", "pending")
-              .is("booking_id", null).eq("products.credit_kind", c.credit_kind).limit(1).maybeSingle()
-          : Promise.resolve({ data: null }),
-      ])
-    : [{ data: null }, { data: null }];
+  const unpaid = creditCount === 0 ? unpaidRes.data : null;
+  const requestedPack = creditCount === 0 ? requestedRes.data : null;
+  const trialOk = singleProducts.some((p) => p.tag === "trial") && trialOkRaw;
   const singles = unpaid && !(c.kind === "event" && c.price_cents === 0) ? [] : c.kind === "event"
     ? [{ mode: "drop_in" as const, target: "event" as const, label: "Reserve your spot", price: eur(c.price_cents), cents: c.price_cents }]
-    : (singleProducts ?? []).filter((p) => p.tag === "drop_in" || trialOk)
+    : singleProducts.filter((p) => p.tag === "drop_in" || trialOk)
         .map((p) => ({ mode: p.tag as "trial" | "drop_in", target: p.tag as "trial" | "drop_in", label: p.tag === "trial" ? "Book your trial" : "Drop-in", price: eur(p.price_cents), cents: p.price_cents }));
   // Her rewards for this client that work on what's offered here (trial / drop-in / event), applied by themselves.
-  const singleRewards = profile && singles.length
-    ? (await availableRewards(profile.id)).filter((r) => r.kind !== "free_classes" && singles.some((o) => r.appliesTo.includes(o.target))).map(({ id: _id, ...r }) => (void _id, r))
+  const singleRewards = singles.length
+    ? rewardRows.filter((r) => r.kind !== "free_classes" && singles.some((o) => r.appliesTo.includes(o.target))).map(({ id: _id, ...r }) => (void _id, r))
     : [];
 
   return (
