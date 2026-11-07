@@ -3,16 +3,21 @@ import { alertStudio } from "@/lib/studio-alerts";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { safeNext } from "@/lib/safe-next";
-import { getSettings, requireViewer } from "@/lib/auth";
+import { requireViewer } from "@/lib/auth";
 import { CONDITIONS, POSTPARTUM } from "@/lib/health";
-import { saveHealthAnswers } from "@/lib/profile";
+import { saveHealthAnswers, withdrawHealthConsent } from "@/lib/profile";
 
 export type HealthState = { ok: boolean; error?: string };
 const KEYS = new Set<string>(CONDITIONS.map((c) => c.key));
 
 export async function saveHealth(_: HealthState, form: FormData): Promise<HealthState> {
   const viewer = await requireViewer("/health");
-  const settings = await getSettings();
+  if (form.get("in_person") === "on") {
+    // They'd rather tell her in person: nothing stored, earlier answers removed, booking stays open.
+    const res = await saveHealthAnswers(viewer.profile.id, "in_person", false);
+    if (!res.ok) return { ok: false, error: res.error };
+    return done(viewer, form);
+  }
   const none = form.get("none") === "on";
   const conditions = none ? [] : form.getAll("condition").map(String).filter((k) => KEYS.has(k));
   if (!none && !conditions.length) return { ok: false, error: "Please tick what applies to you, or “No injuries or medical conditions”." };
@@ -37,8 +42,12 @@ export async function saveHealth(_: HealthState, form: FormData): Promise<Health
   const res = await saveHealthAnswers(viewer.profile.id, {
     conditions, details: text("details", 1500), pregnancy, pregnancyWeeks, postpartumMonths,
     bpMeds: bp === "yes", medication: text("medication", 500),
-  }, form.get("health_consent") === "on", settings.policy_version);
+  }, form.get("health_consent") === "on");
   if (!res.ok) return { ok: false, error: res.error };
+  return done(viewer, form);
+}
+
+async function done(viewer: Awaited<ReturnType<typeof requireViewer>>, form: FormData): Promise<HealthState> {
   // An update (not the first answers at sign-up): tell the studio, without any of the answers.
   if (viewer.profile.parq_completed_at) await alertStudio("details", `Health answers updated: ${viewer.profile.full_name ?? viewer.profile.email ?? "a client"}`,
     ["They've updated their health answers. Open their page in the studio to read them."], { path: `/admin/clients/${viewer.profile.id}` });
@@ -46,4 +55,15 @@ export async function saveHealth(_: HealthState, form: FormData): Promise<Health
   revalidatePath("/account");
   const next = String(form.get("next") ?? "");
   redirect(safeNext(next, "/account?health=saved"));
+}
+
+/** Account → Health → "Delete my health information" (GDPR art. 7(3): as easy as giving it). */
+export async function deleteHealthInfo() {
+  const viewer = await requireViewer("/account");
+  const res = await withdrawHealthConsent(viewer.profile.id);
+  if (!res.ok) redirect("/account?health=failed#health");
+  if (res.removed) await alertStudio("details", `Health answers removed: ${viewer.profile.full_name ?? viewer.profile.email ?? "a client"}`,
+    ["They've deleted their health answers. Please ask them in person before their next class."], { path: `/admin/clients/${viewer.profile.id}` });
+  revalidatePath("/account");
+  redirect("/account?health=deleted#health");
 }

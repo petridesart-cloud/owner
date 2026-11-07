@@ -142,7 +142,6 @@ export default async function SettingsPage() {
                 {n("waitlist_window_hours", "Waitlist claim window (hours)", s.waitlist_window_minutes / 60, undefined, 0.25)}
                 {t("reminder_offsets", "Class reminders (hours before)", s.reminder_offsets_minutes.map((m) => m / 60).join(", "), "e.g. 24, 2")}
                 {n("hold_minutes", "Online payment hold (minutes)", s.hold_minutes)}
-                {t("policy_version", "Policy version", s.policy_version, "Change when the policy text changes")}
               </div>
               <Checkbox id="refund_late_cancel_if_filled" name="refund_late_cancel_if_filled" defaultChecked={s.refund_late_cancel_if_filled}>
                 Return the class for a late cancellation if someone else takes the spot
@@ -280,7 +279,7 @@ export default async function SettingsPage() {
                         <div className="grid grid-cols-2 gap-3">
                           <Field id={`pc-${p.id}`} label="Classes"><input id={`pc-${p.id}`} name="credits" type="number" min={1} defaultValue={p.credits} className={inputClass} /></Field>
                           <Field id={`pm-${p.id}`} label="Months"><input id={`pm-${p.id}`} name="months" type="number" min={1} max={12} defaultValue={p.months ?? 1} className={inputClass} /></Field>
-                          <Field id={`pv-${p.id}`} label="Valid (days)" hint="From the first class"><input id={`pv-${p.id}`} name="validity_days" type="number" min={1} defaultValue={p.validity_days ?? ""} className={inputClass} /></Field>
+                          <Field id={`pv-${p.id}`} label="Valid (days)" hint="From the first class"><input id={`pv-${p.id}`} name="validity_days" type="number" min={1} max={366} defaultValue={p.validity_days ?? ""} className={inputClass} /></Field>
                           <Field id={`pp-${p.id}`} label="Price €"><input id={`pp-${p.id}`} name="price" inputMode="decimal" defaultValue={(p.price_cents / 100).toFixed(2)} className={inputClass} /></Field>
                         </div>
                       ) : (

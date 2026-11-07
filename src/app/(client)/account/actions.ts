@@ -1,14 +1,16 @@
 "use server";
 import { alertStudio } from "@/lib/studio-alerts";
+import { eraseProfile } from "@/lib/erase";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import { getSettings, requireViewer } from "@/lib/auth";
+import { safeNext } from "@/lib/safe-next";
 import { PHOTO_CONSENT, dobSchema, fullName, nameSchema, phoneSchema, type PhotoConsent } from "@/lib/profile";
 
-export type SaveState = { ok: boolean; message?: string; error?: string };
+export type SaveState = { ok: boolean; message?: string; error?: string; /** Where to go back to (a class page), after saving the date of birth (A-072). */ back?: string };
 
 export async function saveProfile(_: SaveState, form: FormData): Promise<SaveState> {
   const viewer = await requireViewer("/account");
@@ -28,21 +30,23 @@ export async function saveProfile(_: SaveState, form: FormData): Promise<SaveSta
 
   const p = viewer.profile;
   const d = parsed.data;
-  const me = form.get("marketing_email") === "on";
-  const reminders = form.get("reminder_emails") === "on";
   const photos = String(form.get("photo_consent") ?? "");
   const photoConsent = photos in PHOTO_CONSENT ? (photos as PhotoConsent) : p.photo_consent;
-  await db().from("profiles").update({
+  const saved = await db().from("profiles").update({
     first_name: d.first_name, last_name: d.last_name, full_name: fullName(d.first_name, d.last_name), phone: d.phone,
     date_of_birth: d.date_of_birth, goal: d.goal || null,
     emergency_contact_name: d.emergency_contact_name || null, emergency_contact_phone: d.emergency_contact_phone || null,
     emergency_contact_relation: d.emergency_contact_relation || null,
-    photo_consent: photoConsent, marketing_email: me, reminder_emails: reminders,
+    photo_consent: photoConsent,
   }).eq("id", p.id);
+  if (saved.error) { console.error("profile save failed", saved.error); return { ok: false, error: "Your details couldn't be saved. Please try again." }; }
   const changes: { profile_id: string; type: "marketing_email" | "photos"; granted: boolean; version: string }[] = [];
-  if (me !== p.marketing_email) changes.push({ profile_id: p.id, type: "marketing_email", granted: me, version: settings.policy_version });
   if (photoConsent && photoConsent !== p.photo_consent) changes.push({ profile_id: p.id, type: "photos", granted: photoConsent !== "none", version: `${settings.policy_version}:${photoConsent}` });
-  if (changes.length) await db().from("consents").insert(changes);
+  if (changes.length) {
+    const { error } = await db().from("consents").insert(changes);
+    // The new choice is saved but its consent record isn't: say so rather than "Saved" (A-019).
+    if (error) { console.error("consent log failed", error); return { ok: false, error: "Your details were saved, but your consent choice wasn't recorded. Please save again." }; }
+  }
   // Her note: an email when a client changes their details (which ones, not the values of anything sensitive).
   const LABELS: [string, unknown, unknown][] = [
     ["name", fullName(d.first_name, d.last_name), p.full_name], ["mobile number", d.phone, p.phone], ["date of birth", d.date_of_birth, p.date_of_birth],
@@ -53,6 +57,24 @@ export async function saveProfile(_: SaveState, form: FormData): Promise<SaveSta
   const changed = LABELS.filter(([, a, b]) => (a ?? "") !== (b ?? "")).map(([l]) => l);
   if (changed.length) await alertStudio("details", `Details updated: ${fullName(d.first_name, d.last_name)}`,
     [`Changed: ${changed.join(", ")}.`, changed.includes("mobile number") ? `New mobile number: ${d.phone}` : ""], { path: `/admin/clients/${p.id}` });
+  revalidatePath("/account");
+  const back = String(form.get("next") ?? "");
+  return { ok: true, message: "Saved.", back: back ? safeNext(back, "") || undefined : undefined };
+}
+
+/** Notifications are their own section and save on their own (A-078). */
+export async function saveNotifications(_: SaveState, form: FormData): Promise<SaveState> {
+  const viewer = await requireViewer("/account");
+  const settings = await getSettings();
+  const p = viewer.profile;
+  const me = form.get("marketing_email") === "on";
+  const reminders = form.get("reminder_emails") === "on";
+  const saved = await db().from("profiles").update({ marketing_email: me, reminder_emails: reminders }).eq("id", p.id);
+  if (saved.error) { console.error("notification save failed", saved.error); return { ok: false, error: "That didn't save. Please try again." }; }
+  if (me !== p.marketing_email) {
+    const { error } = await db().from("consents").insert({ profile_id: p.id, type: "marketing_email", granted: me, version: settings.policy_version });
+    if (error) { console.error("consent log failed", error); return { ok: false, error: "Saved, but your choice wasn't recorded. Please save again." }; }
+  }
   revalidatePath("/account");
   return { ok: true, message: "Saved." };
 }
@@ -71,9 +93,9 @@ export async function signOutAction() {
 export async function deleteAccount(form: FormData) {
   const viewer = await requireViewer("/account");
   if (String(form.get("confirm")).trim().toUpperCase() !== "DELETE") redirect("/account?delete=confirm");
-  const { data: uid } = await db().rpc("erase_profile", { p_profile: viewer.profile.id });
-  const supabase = await supabaseServer();
-  await supabase.auth.signOut();
-  if (uid) await db().auth.admin.deleteUser(uid as string);
+  // Erase first; the login is deleted only once the data is gone (A-010, A-019).
+  if (!(await eraseProfile(viewer.profile.id, viewer.profile.email ?? viewer.email))) redirect("/account?delete=failed");
+  // The login is gone already: just clear this browser's session cookies.
+  await (await supabaseServer()).auth.signOut({ scope: "local" });
   redirect("/?deleted=1");
 }

@@ -9,7 +9,7 @@ export type RosterSession = Awaited<ReturnType<typeof sessionsWithRoster>>[numbe
 export async function sessionsWithRoster(from: string, to: string) {
   const { data } = await db()
     .from("class_sessions")
-    .select("id, starts_at, ends_at, capacity, status, title, location, class_types(name, kind), bookings(id, status, paid_with, source, checked_in_at, payment:payments!bookings_payment_id_fkey(status, intended_method, products(tag)), profiles(id, full_name, phone, photo_consent, date_of_birth, parq_completed_at, health_notes(note, injuries, medication, parq_yes, conditions, details, pregnancy, pregnancy_weeks, postpartum_months, bp_meds, clearance_needed, clearance_received_at))), waitlist_entries(id, status, created_at, profiles(id, full_name))")
+    .select("id, starts_at, ends_at, capacity, status, title, location, class_types(name, kind), bookings(id, status, paid_with, source, checked_in_at, payment:payments!bookings_payment_id_fkey(status, intended_method, products(tag)), profiles(id, full_name, phone, photo_consent, date_of_birth, parq_completed_at, health_mode, health_notes(note, injuries, medication, parq_yes, conditions, details, pregnancy, pregnancy_weeks, postpartum_months, bp_meds, clearance_needed, clearance_received_at))), waitlist_entries(id, status, created_at, profiles(id, full_name))")
     .gte("starts_at", from)
     .lt("starts_at", to)
     .order("starts_at");
@@ -18,12 +18,10 @@ export async function sessionsWithRoster(from: string, to: string) {
   const ids = [...new Set(rows.flatMap((s) => s.bookings.map((b) => b.profiles?.id)).filter(Boolean))] as string[];
   const first = new Map<string, string>();
   if (ids.length) {
-    const { data: prior } = await db().from("bookings").select("profile_id, class_sessions!inner(starts_at)")
-      .in("profile_id", ids).in("status", ["confirmed", "no_show", "late_cancelled"]);
-    for (const b of prior ?? []) {
-      const cur = first.get(b.profile_id);
-      if (!cur || b.class_sessions.starts_at < cur) first.set(b.profile_id, b.class_sessions.starts_at);
-    }
+    // A-050: in SQL (one row per person), not every booking they ever made through a 1,000-row API cap.
+    const { data: prior, error } = await db().rpc("first_class_at", { p_ids: ids });
+    if (error) throw error;
+    for (const r of prior ?? []) first.set(r.profile_id, r.first_class);
   }
   return rows.map((s) => ({
     ...s,

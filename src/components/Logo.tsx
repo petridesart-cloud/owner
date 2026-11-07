@@ -10,7 +10,6 @@ export function Logo({ size = 120, src = "/logo-instagram.png", className = "", 
       width={size}
       height={size}
       priority={priority}
-      unoptimized={src.startsWith("http")}
       alt={decorative ? "" : "Re·Form Pilates Studio"}
       className={`rounded-full ${className}`}
     />

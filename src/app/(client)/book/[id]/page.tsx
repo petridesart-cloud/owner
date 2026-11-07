@@ -10,34 +10,43 @@ import { BackButton } from "@/components/BackButton";
 import { Badge, ButtonLink, Eyebrow, Notice } from "@/components/ui";
 import { spotsLabel } from "@/components/ClassRow";
 import { getSettings, getViewer } from "@/lib/auth";
-import { availability, creditBalance, eventExtras, lockedEventIds } from "@/lib/data";
+import { creditBalance, eventExtras, lockedEventIds, sessionById } from "@/lib/data";
 import { Lock } from "lucide-react";
 import { db } from "@/lib/supabase/admin";
 import { eur, vatLine } from "@/lib/money";
-import { dayKey, dotDate, longDate, nowMs, relativeHours, time } from "@/lib/time";
+import { dayKey, dotDate, longDate, nowMs, relativeHours, time, weekdayShort, dayMonth } from "@/lib/time";
+import { seeYou } from "@/lib/copy";
 import { BookActions } from "./BookActions";
 import { EVENT_POLICY } from "@/lib/booking";
 import { getTexts } from "@/lib/content";
 import { Flower } from "@/components/Flower";
 
-export const metadata: Metadata = { title: "Book a class" };
 export const dynamic = "force-dynamic";
+
+/** A-110: each class page has its own title ("Reformer Pilates · Fri 6 Nov 17:00 · Re·Form"). */
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  if (!/^[0-9a-f-]{36}$/.test(id)) return { title: "Book a class" };
+  const c = await sessionById(id).catch(() => null);
+  if (!c || c.private) return { title: "Book a class" };
+  return { title: `${c.title} · ${weekdayShort(c.starts_at)} ${dayMonth(c.starts_at)} ${time(c.starts_at)}` };
+}
 
 export default async function BookPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ cancelled?: string }> }) {
   const { id } = await params;
   const { cancelled } = await searchParams;
   if (!/^[0-9a-f-]{36}$/.test(id)) notFound();
 
-  const { data: s } = await db().from("class_sessions").select("starts_at").eq("id", id).maybeSingle();
-  if (!s) notFound();
-  const start = new Date(s.starts_at);
-  const [c] = await availability(new Date(start.getTime() - 1000), new Date(start.getTime() + 1000), { includePrivate: true }).then((r) => r.filter((x) => x.id === id));
+  // A-022: three stages instead of a 13-step waterfall. (1) who, settings, texts, labels and this class with its type;
+  // (2) the private-session check (rare); (3) everything about this person and class at once.
+  const viewerP = getViewer();
+  const [viewer, settings, texts, labels, c, extrasMap] = await Promise.all([viewerP, getSettings(), getTexts(), kindLabels(), sessionById(id), eventExtras([id])]);
   if (!c) notFound();
+  const profile = viewer?.profile;
+  const start = new Date(c.starts_at);
   // A private session: only for the person she booked in (and the studio). Nobody else sees it or books it.
-  const { data: ptype } = await db().from("class_types").select("private").eq("id", c.class_type_id).maybeSingle();
-  if (ptype?.private) {
-    const v = await getViewer();
-    const mine = v && (v.profile.role === "admin" || (await db().from("bookings").select("id").eq("session_id", id).eq("profile_id", v.profile.id).in("status", ["confirmed", "held"]).maybeSingle()).data);
+  if (c.private) {
+    const mine = viewer && (viewer.profile.role === "admin" || (await db().from("bookings").select("id").eq("session_id", id).eq("profile_id", viewer.profile.id).in("status", ["confirmed", "held"]).maybeSingle()).data);
     if (!mine) {
       return (
         <div className="px-5 pt-3">
@@ -52,12 +61,43 @@ export default async function BookPage({ params, searchParams }: { params: Promi
     }
   }
 
-  const [viewer, settings, texts, extrasMap] = await Promise.all([getViewer(), getSettings(), getTexts(), eventExtras([id])]);
-  const profile = viewer?.profile;
   const ev = c.kind === "event" ? extrasMap.get(id) : undefined;
   const bring = ev ? (ev.what_to_bring ?? "").split("\n").map((l) => l.trim()).filter(Boolean) : texts.what_to_bring;
+  const classDay = dayKey(c.starts_at);
+  const nowIso = new Date().toISOString();
+  const pid = profile?.id;
+  const none = Promise.resolve({ data: null });
+  const [
+    locked, booking, entry, usable, closedRes, ctypeRes, singleProducts, trialOkRaw, unpaidRes, requestedRes, frozenRes, balanceRaw, rewardRows,
+  ] = await Promise.all([
+    ev?.clients_only ? lockedEventIds([id], pid) : Promise.resolve(new Set<string>()),
+    pid ? db().from("bookings").select("id, status").eq("session_id", id).eq("profile_id", pid).eq("status", "confirmed").maybeSingle().then((r) => r.data) : null,
+    pid ? db().from("waitlist_entries").select("id, status, offer_expires_at, created_at").eq("session_id", id).eq("profile_id", pid).in("status", ["waiting", "offered"]).maybeSingle().then((r) => r.data) : null,
+    pid && c.credit_kind ? db().rpc("usable_credits", { p_profile: pid, p_kind: c.credit_kind, p_class: c.starts_at }).then((r) => r.data?.[0] ?? null) : null,
+    db().rpc("is_closed_on", { p_at: c.starts_at }),
+    db().from("class_types").select("credit_cost").eq("id", c.class_type_id).single(),
+    // Trial (first class of this type only) and drop-in, or a paid event: reserve now, pay by cash or Revolut.
+    c.credit_kind ? db().from("products").select("tag, name, price_cents").eq("active", true).eq("credit_kind", c.credit_kind).in("tag", ["trial", "drop_in"]).order("sort_order").then((r) => r.data ?? []) : [],
+    // Same check as the booking engine (also matches the phone number, so a new email doesn't give a second trial).
+    pid && c.credit_kind ? db().rpc("trial_eligible", { p_profile: pid, p_kind: c.credit_kind }).then((r) => r.data === true) : false,
+    // Say up front what would otherwise only fail on tap: one unpaid class at a time; a package already requested.
+    pid ? db().from("bookings").select("id, class_sessions!inner(starts_at, ends_at, title, class_types(name))").eq("profile_id", pid)
+      .eq("status", "confirmed").eq("paid_with", "pay_at_studio").gt("class_sessions.ends_at", nowIso).limit(1).maybeSingle() : none,
+    pid && c.credit_kind
+      ? db().from("payments").select("id, products!inner(credit_kind)").eq("profile_id", pid).eq("status", "pending")
+          .is("booking_id", null).eq("products.credit_kind", c.credit_kind).limit(1).maybeSingle()
+      : none,
+    // A package frozen on this day (her rule): say so, rather than "after the expiry".
+    pid && c.credit_kind
+      ? db().from("lot_freezes").select("starts_on, ends_on, credit_lots!inner(profile_id, credit_kind, remaining)")
+          .eq("credit_lots.profile_id", pid).eq("credit_lots.credit_kind", c.credit_kind).gt("credit_lots.remaining", 0)
+          .lte("starts_on", classDay).gte("ends_on", classDay).limit(1).maybeSingle()
+      : none,
+    pid && c.credit_kind ? creditBalance(pid) : null,
+    pid ? availableRewards(pid) : [],
+  ]);
   // Clients-only event this person can't open: no details at all, just "Clients only".
-  if (ev?.clients_only && (await lockedEventIds([id], profile?.id)).has(id)) {
+  if (locked.has(id)) {
     return (
       <div className="px-5 pt-3">
         <BackButton href="/events" />
@@ -72,12 +112,6 @@ export default async function BookPage({ params, searchParams }: { params: Promi
     );
   }
   const policy = c.kind === "event" ? ev?.event_policy ?? EVENT_POLICY : null; // events: no cancellations or refunds in the app
-  const [booking, entry] = profile
-    ? await Promise.all([
-        db().from("bookings").select("id, status").eq("session_id", id).eq("profile_id", profile.id).eq("status", "confirmed").maybeSingle().then((r) => r.data),
-        db().from("waitlist_entries").select("id, status, offer_expires_at, created_at").eq("session_id", id).eq("profile_id", profile.id).in("status", ["waiting", "offered"]).maybeSingle().then((r) => r.data),
-      ])
-    : [null, null];
 
   let position = 0;
   if (entry?.status === "waiting") {
@@ -90,54 +124,30 @@ export default async function BookPage({ params, searchParams }: { params: Promi
   const closeLabel = settings.waitlist_close_minutes % 60 === 0 ? `${settings.waitlist_close_minutes / 60} hour${settings.waitlist_close_minutes === 60 ? "" : "s"}` : `${settings.waitlist_close_minutes} minutes`;
   const offered = entry?.status === "offered" && new Date(entry.offer_expires_at!) > new Date();
   const full = c.spots_left === 0 && !offered;
-  const usable = profile && c.credit_kind
-    ? (await db().rpc("usable_credits", { p_profile: profile.id, p_kind: c.credit_kind, p_class: c.starts_at })).data?.[0]
-    : null;
   const creditCount = usable?.usable ?? 0;
+  // A-024: only someone with a usable package class is booked in automatically; everyone else gets a held offer.
+  const waitlistPromise = c.kind !== "event" && creditCount > 0
+    ? `If a spot opens up to ${closeLabel} before class, we'll book you in with one of your package classes and email you.`
+    : "If a spot opens, we'll hold it for you and email you.";
   // A Reformer package can't be used for Mat (and the other way round): say so instead of just "get a package".
-  const balance = profile && c.credit_kind && creditCount === 0 ? await creditBalance(profile.id) : null;
+  const balance = creditCount === 0 ? balanceRaw : null;
   const otherKind = balance ? Object.keys(balance).find((k) => k !== c.credit_kind && typeof balance[k] === "number" && balance[k] > 0) : undefined;
   const otherCredits = otherKind ? balance![otherKind] : 0;
-  const labels = await kindLabels();
-  const classDay = dayKey(c.starts_at);
-  // A package frozen on this day (her rule): say so, rather than "after the expiry".
-  const { data: frozen } = profile && c.credit_kind && creditCount === 0
-    ? await db().from("lot_freezes").select("starts_on, ends_on, credit_lots!inner(profile_id, credit_kind, remaining)")
-        .eq("credit_lots.profile_id", profile.id).eq("credit_lots.credit_kind", c.credit_kind).gt("credit_lots.remaining", 0)
-        .lte("starts_on", classDay).gte("ends_on", classDay).limit(1).maybeSingle()
-    : { data: null };
+  const frozen = creditCount === 0 ? frozenRes.data : null;
   const blockedByExpiry = !frozen && !!usable && usable.total > 0 && usable.usable === 0;
-  const { data: closed } = await db().rpc("is_closed_on", { p_at: c.starts_at });
-  const { data: ctype } = await db().from("class_types").select("credit_cost").eq("id", c.class_type_id).single();
+  const closed = closedRes.data;
+  const ctype = ctypeRes.data;
   const next = `/book/${id}`;
-
-  // Trial (first class of this type only) and drop-in, or a paid event: reserve now, pay by cash or Revolut.
-  const { data: singleProducts } = c.credit_kind
-    ? await db().from("products").select("tag, name, price_cents").eq("active", true).eq("credit_kind", c.credit_kind).in("tag", ["trial", "drop_in"]).order("sort_order")
-    : { data: [] };
-  let trialOk = false;
-  if (profile && c.credit_kind && singleProducts?.some((p) => p.tag === "trial")) {
-    // Same check as the booking engine (also matches the phone number, so a new email doesn't give a second trial).
-    trialOk = (await db().rpc("trial_eligible", { p_profile: profile.id, p_kind: c.credit_kind })).data === true;
-  }
-  // Say up front what would otherwise only fail on tap: one unpaid class at a time; a package already requested.
-  const [{ data: unpaid }, { data: requestedPack }] = profile && creditCount === 0
-    ? await Promise.all([
-        db().from("bookings").select("id, class_sessions!inner(starts_at, title, class_types(name))").eq("profile_id", profile.id)
-          .eq("status", "confirmed").eq("paid_with", "pay_at_studio").gt("class_sessions.starts_at", new Date().toISOString()).limit(1).maybeSingle(),
-        c.credit_kind
-          ? db().from("payments").select("id, products!inner(credit_kind)").eq("profile_id", profile.id).eq("status", "pending")
-              .is("booking_id", null).eq("products.credit_kind", c.credit_kind).limit(1).maybeSingle()
-          : Promise.resolve({ data: null }),
-      ])
-    : [{ data: null }, { data: null }];
+  const unpaid = creditCount === 0 ? unpaidRes.data : null;
+  const requestedPack = creditCount === 0 ? requestedRes.data : null;
+  const trialOk = singleProducts.some((p) => p.tag === "trial") && trialOkRaw;
   const singles = unpaid && !(c.kind === "event" && c.price_cents === 0) ? [] : c.kind === "event"
     ? [{ mode: "drop_in" as const, target: "event" as const, label: "Reserve your spot", price: eur(c.price_cents), cents: c.price_cents }]
-    : (singleProducts ?? []).filter((p) => p.tag === "drop_in" || trialOk)
+    : singleProducts.filter((p) => p.tag === "drop_in" || trialOk)
         .map((p) => ({ mode: p.tag as "trial" | "drop_in", target: p.tag as "trial" | "drop_in", label: p.tag === "trial" ? "Book your trial" : "Drop-in", price: eur(p.price_cents), cents: p.price_cents }));
   // Her rewards for this client that work on what's offered here (trial / drop-in / event), applied by themselves.
-  const singleRewards = profile && singles.length
-    ? (await availableRewards(profile.id)).filter((r) => r.kind !== "free_classes" && singles.some((o) => r.appliesTo.includes(o.target))).map(({ id: _id, ...r }) => (void _id, r))
+  const singleRewards = singles.length
+    ? rewardRows.filter((r) => r.kind !== "free_classes" && singles.some((o) => r.appliesTo.includes(o.target))).map(({ id: _id, ...r }) => (void _id, r))
     : [];
 
   return (
@@ -155,11 +165,11 @@ export default async function BookPage({ params, searchParams }: { params: Promi
         </div>
 
         <dl className="mt-4 space-y-2 text-[0.95rem] text-ink">
-          <div className="flex items-center gap-2.5"><dt><CalendarDays aria-label="When" size={17} className="text-ink-soft" /></dt>
+          <div className="flex items-center gap-2.5"><dt><CalendarDays aria-hidden size={17} className="text-ink-soft" /><span className="sr-only">When</span></dt>
             <dd><span className="font-medium">{longDate(c.starts_at)}</span> · {time(c.starts_at)}–{time(c.ends_at)}</dd></div>
-          <div className="flex items-center gap-2.5"><dt><MapPin aria-label="Where" size={17} className="text-ink-soft" /></dt>
+          <div className="flex items-center gap-2.5"><dt><MapPin aria-hidden size={17} className="text-ink-soft" /><span className="sr-only">Where</span></dt>
             <dd>{c.location ?? "Re·Form Studio"}</dd></div>
-          <div className="flex items-center gap-2.5"><dt><Users aria-label="Spots" size={17} className="text-ink-soft" /></dt>
+          <div className="flex items-center gap-2.5"><dt><Users aria-hidden size={17} className="text-ink-soft" /><span className="sr-only">Spots</span></dt>
             <dd className={c.spots_left === 1 ? "font-medium text-plum-700" : ""}>{c.status === "cancelled" ? "Cancelled" : spotsLabel(c)}</dd></div>
         </dl>
 
@@ -194,35 +204,37 @@ export default async function BookPage({ params, searchParams }: { params: Promi
           ) : booking ? (
             <div className="space-y-3 text-center">
               <Badge tone="booked">You&apos;re booked</Badge>
-              <p className="text-sm text-ink-soft">{c.kind === "event" ? "See you there! You'll find it in My classes." : "See you on the reformer. Manage or cancel in My classes."}</p>
+              <p className="text-sm text-ink-soft">{c.kind === "event" ? `${seeYou(c.kind)} You'll find it in My classes.` : `${seeYou(c.kind)} Manage or cancel in My classes.`}</p>
               <ButtonLink href="/bookings" variant="soft" className="w-full">My classes</ButtonLink>
             </div>
           ) : !viewer ? (
             <div className="space-y-3">
-              <PriceSummary price={c.price_cents} settings={settings} event={c.kind === "event"} policy={policy} />
-              <ButtonLink href={`/login?next=${encodeURIComponent(next)}`} className="w-full">Secure your spot</ButtonLink>
-              <p className="text-center text-xs text-ink-soft">Sign in with your email to book. No password needed.</p>
+              <PriceSummary price={c.price_cents} settings={settings} event={c.kind === "event"} policy={policy}
+                trial={c.kind !== "event" ? singleProducts.find((p) => p.tag === "trial") : undefined} kindName={labelOf(labels, c.credit_kind)} />
+              <ButtonLink href={`/signup?next=${encodeURIComponent(next)}`} className="w-full">Secure your spot</ButtonLink>
+              <p className="text-center text-sm text-ink-soft">
+                New here? Create an account in a minute. Already a client?{" "}
+                <Link href={`/login?next=${encodeURIComponent(next)}`} className="inline-flex min-h-11 items-center font-medium text-ink underline underline-offset-4">Sign in</Link>
+              </p>
             </div>
           ) : !profile?.onboarded_at ? (
             <ButtonLink href={`/welcome?next=${encodeURIComponent(next)}`} className="w-full">Add your details to book</ButtonLink>
           ) : !profile.date_of_birth || !profile.parq_completed_at ? (
             <div className="space-y-3">
               <Notice>One more step before booking: {!profile.date_of_birth && !profile.parq_completed_at ? "your date of birth and a few health questions" : !profile.date_of_birth ? "your date of birth" : "a few health questions (1 minute)"}.</Notice>
-              <ButtonLink href={profile.date_of_birth ? `/health?next=${encodeURIComponent(next)}` : "/account?dob=1"} className="w-full">Complete my details</ButtonLink>
+              <ButtonLink href={profile.date_of_birth ? `/health?next=${encodeURIComponent(next)}` : `/account?dob=1&next=${encodeURIComponent(next)}`} className="w-full">Complete my details</ButtonLink>
             </div>
           ) : entry?.status === "waiting" ? (
             <div className="space-y-3">
               <Notice>
                 You&apos;re <strong>{ordinal(position)}</strong> on the waitlist.{" "}
-                {c.kind === "event"
-                  ? "If a spot opens, we'll hold it for you and email you."
-                  : `If a spot opens up to ${closeLabel} before class, we'll book you in using a credit from your package and email you.`}
+                {waitlistPromise}
               </Notice>
               <BookActions mode="leave" sessionId={id} entryId={entry.id} />
             </div>
           ) : full ? (
             <div className="space-y-3">
-              <p className="text-sm text-ink-soft">This class is full{c.waitlist_count ? ` and ${c.waitlist_count} ${c.waitlist_count === 1 ? "person is" : "people are"} waiting` : ""}. {c.kind === "event" ? "Join the waitlist: if a spot opens, we email you and hold it for you." : `Join the waitlist: if a spot opens up to ${closeLabel} before class, we'll book you in using a credit from your package and email you.`}</p>
+              <p className="text-sm text-ink-soft">This class is full{c.waitlist_count ? ` and ${c.waitlist_count} ${c.waitlist_count === 1 ? "person is" : "people are"} waiting` : ""}. Join the waitlist: {waitlistPromise.charAt(0).toLowerCase() + waitlistPromise.slice(1)}</p>
               <BookActions mode="waitlist" sessionId={id} />
             </div>
           ) : (
@@ -246,7 +258,8 @@ export default async function BookPage({ params, searchParams }: { params: Promi
               )}
               {creditCount === 0 && !singles.length && !unpaid && !requestedPack && <PriceSummary price={c.price_cents} settings={settings} event={c.kind === "event"} policy={policy} />}
               {creditCount === 0 && singles.length > 0 && c.kind === "event" && <p className="text-sm text-ink-soft">Please read the event terms above.</p>}
-              {creditCount === 0 && singles.length > 0 && c.kind !== "event" && <p className="text-sm text-ink-soft">Free cancellation up to {settings.cancellation_cutoff_hours}h before class. <Link href="/policy" className="underline underline-offset-4">Policies</Link></p>}
+              {creditCount === 0 && singles.length > 0 && c.kind !== "event" && <p className="text-sm text-ink-soft">Free cancellation up to {settings.cancellation_cutoff_hours}h before class. <Link href="/policy/payments" className="inline-flex min-h-11 items-center underline underline-offset-4">Cancellation policy</Link></p>}
+              {creditCount === 0 && singles.length > 0 && c.price_cents > 0 && <NoWithdrawal />}
               {creditCount > 0 && <p className="text-sm text-ink-soft">Free cancellation up to {settings.cancellation_cutoff_hours}h before class.</p>}
               {(creditCount > 0 || singles.length > 0 || settings.online_payments_enabled || settings.allow_pay_later) && (
                 <BookActions
@@ -267,24 +280,35 @@ export default async function BookPage({ params, searchParams }: { params: Promi
   );
 }
 
-function PriceSummary({ price, settings, event = false, policy = null }: { price: number; settings: { vat_rate: number; vat_registered: boolean; cancellation_cutoff_hours: number; online_payments_enabled: boolean }; event?: boolean; policy?: string | null }) {
+function PriceSummary({ price, settings, event = false, policy = null, trial, kindName = "" }: { price: number; trial?: { price_cents: number }; kindName?: string; settings: { vat_rate: number; vat_registered: boolean; cancellation_cutoff_hours: number; online_payments_enabled: boolean }; event?: boolean; policy?: string | null }) {
   const vat = vatLine(price, Number(settings.vat_rate), settings.vat_registered);
   return (
     <div className="rounded-2xl border border-line bg-paper p-4 text-sm">
       <div className="flex items-baseline justify-between">
-        <span className="text-ink">{event ? "Event fee" : "Single class"}</span>
+        <span className="text-ink">{event ? "Event fee" : trial ? "Drop-in" : "Single class"}</span>
         <span className="font-serif text-2xl text-ink">{price === 0 ? "Free" : eur(price)}</span>
       </div>
       {vat && <p className="mt-0.5 text-right text-xs text-ink-soft">{vat}</p>}
+      {trial && <p className="mt-2 text-sm leading-relaxed text-ink">First time at Re·Form? Your first {kindName} class is {eur(trial.price_cents)} (trial).</p>}
       {event && policy ? (
         <p className="mt-3 text-sm leading-relaxed text-ink-soft">See the event terms above.</p>
       ) : (
         <p className="mt-3 text-sm leading-relaxed text-ink-soft">
           Free cancellation up to {settings.cancellation_cutoff_hours} hours before{event ? "" : " class"}. Later cancellations aren&apos;t refunded.{" "}
-          <Link href="/policy/payments" className="underline underline-offset-4">Cancellation policy</Link>
+          <Link href="/policy/payments" className="inline-flex min-h-11 items-center underline underline-offset-4">Cancellation policy</Link>
         </p>
       )}
+      {price > 0 && <NoWithdrawal />}
     </div>
+  );
+}
+
+/** A-012: a single class or event is a leisure service for a set date, so there's no 14-day withdrawal right. */
+function NoWithdrawal() {
+  return (
+    <p className="mt-2 text-xs leading-relaxed text-ink-soft">
+      Booked for this date and time, so the 14-day right of withdrawal doesn&apos;t apply (EU Directive 2011/83/EU, art. 16(l)). See the <Link href="/legal/terms" className="underline underline-offset-4">Terms</Link>.
+    </p>
   );
 }
 

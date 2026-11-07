@@ -1,5 +1,8 @@
 import "server-only";
 import { db } from "@/lib/supabase/admin";
+import { kindLabels } from "@/lib/kinds";
+import { lotIsCurrent } from "@/lib/lots";
+import { labelOf } from "@/lib/kind-label";
 
 /** A credit kind: "reformer", "mat" or any class type she added with its own packages. */
 export type Kind = string;
@@ -43,12 +46,13 @@ export const tally = (rows: ClassRow[]) => ({
  */
 export async function clientHistory(profileId: string) {
   const now = new Date().toISOString();
-  const [{ data: lots }, { data: ledger }, { data: bookings }] = await Promise.all([
+  const [{ data: lots }, { data: ledger }, { data: bookings }, labels] = await Promise.all([
     db().from("credit_lots").select("id, credit_kind, total, remaining, expires_at, started_at, created_at, note, payment_id, membership_id, payments(amount_cents, paid_at, method, description, products(name))")
       .eq("profile_id", profileId).order("created_at", { ascending: false }),
     db().from("credit_ledger").select("lot_id, booking_id, entry_type").eq("profile_id", profileId).eq("entry_type", "booking_debit"),
     db().from("bookings").select("id, status, checked_in_at, paid_with, class_sessions(id, starts_at, title, class_types(name, kind, credit_kind)), payment:payments!bookings_payment_id_fkey(amount_cents, paid_at, method, status, products(tag, name))")
       .eq("profile_id", profileId).neq("status", "expired").neq("status", "held"),
+    kindLabels(),
   ]);
   const lotOf = new Map<string, string>();
   for (const e of ledger ?? []) if (e.booking_id && e.lot_id) lotOf.set(e.booking_id, e.lot_id);
@@ -61,13 +65,11 @@ export async function clientHistory(profileId: string) {
 
   const groups: Group[] = (lots ?? []).map((l) => {
     const classes = (bookings ?? []).filter((b) => lotOf.get(b.id) === l.id).map(row).sort((a, b) => a.startsAt.localeCompare(b.startsAt));
-    const live = l.remaining > 0 && (!l.expires_at || l.expires_at > now);
-    const started = !l.expires_at || l.expires_at > now;
     return {
-      key: l.id, kind: l.credit_kind, title: l.payments?.products?.name ?? l.payments?.description ?? l.note ?? `${l.credit_kind} classes`,
+      key: l.id, kind: l.credit_kind, title: l.payments?.products?.name ?? l.payments?.description ?? l.note ?? `${labelOf(labels, l.credit_kind)} classes`,
       total: l.total, remaining: l.remaining, startsAt: l.started_at, endsAt: l.expires_at,
       paidCents: l.payments?.amount_cents ?? null, paidAt: l.payments?.paid_at ?? null, method: l.payments?.method ?? null,
-      current: live || (started && classes.some((c) => c.status === "upcoming")), classes,
+      current: lotIsCurrent(l, classes.some((c) => c.status === "upcoming"), Date.parse(now)), classes,
     };
   });
 

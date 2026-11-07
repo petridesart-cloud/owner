@@ -5,6 +5,7 @@ import { z } from "zod";
 import { requireOnboarded } from "@/lib/auth";
 import { recurringRules, saveRecurring, weeklySlots } from "@/lib/recurring";
 import { TOO_MANY, bookingLimited } from "@/lib/rate-limit";
+import { friendlyError } from "@/lib/errors";
 
 export type WeeklyState = { ok: boolean; message?: string; error?: string };
 
@@ -29,7 +30,12 @@ export async function saveWeekly(_: WeeklyState, form: FormData): Promise<Weekly
       if (r.class_types?.credit_kind !== kind) slots.push({ classTypeId: r.class_type_id, weekday: r.weekday, hhmm: r.start_time.slice(0, 5) });
     }
   }
-  const { booked } = await saveRecurring(viewer.profile.id, slots);
+  let booked: number;
+  try {
+    ({ booked } = await saveRecurring(viewer.profile.id, slots));
+  } catch (e) {
+    return { ok: false, error: `${friendlyError(e)} Your weekly times weren't changed.` };
+  }
   revalidatePath("/bookings");
   revalidatePath("/");
   if (!slots.length) return { ok: true, message: "Weekly booking is off. Classes already booked stay booked." };

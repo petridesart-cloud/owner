@@ -6,7 +6,8 @@ import { ShareButton } from "@/components/ShareButton";
 import { Flower } from "@/components/Flower";
 import { getTexts } from "@/lib/content";
 import { ButtonLink, Notice } from "@/components/ui";
-import { requireViewer } from "@/lib/auth";
+import { getSettings, requireViewer } from "@/lib/auth";
+import { AwaitingPayment } from "@/components/AwaitingPayment";
 import { sessionInfo } from "@/lib/booking";
 import { db } from "@/lib/supabase/admin";
 import { longDate, time } from "@/lib/time";
@@ -25,6 +26,14 @@ export default async function Confirmed({ params }: { params: Promise<{ id: stri
     .eq("profile_id", viewer.profile.id).in("status", ["confirmed", "late_cancelled", "no_show"]).neq("id", b.id);
   const firstClass = (previous ?? 0) === 0;
   const rules = (await getTexts()).studio_rules;
+  // A-029: a trial or drop-in is reserved but not paid: say how much, how, and the reference (RF-…).
+  const owes = confirmed && b.paid_with === "pay_at_studio";
+  const [{ data: pending }, settings] = owes
+    ? await Promise.all([
+        db().from("payments").select("id, description, amount_cents, created_at, booking_id, intended_method, discount_note").eq("booking_id", b.id).eq("profile_id", viewer.profile.id).eq("status", "pending"),
+        getSettings(),
+      ])
+    : [{ data: null }, null];
 
   return (
     <div className="px-5 pt-10 text-center">
@@ -39,6 +48,9 @@ export default async function Confirmed({ params }: { params: Promise<{ id: stri
           <p className="mx-auto mt-6 max-w-xs text-sm leading-relaxed text-ink-soft">
             A confirmation is on its way to {viewer.profile.email}.
           </p>
+          {settings && pending?.length ? (
+            <div className="mx-auto mt-6 max-w-sm text-left"><AwaitingPayment pending={pending} settings={settings} title="To pay before class" /></div>
+          ) : null}
           {firstClass ? (
             <section aria-labelledby="first" className="policy-grain mx-auto mt-6 max-w-sm animate-rise rounded-[var(--radius-card)] px-5 py-5 text-left [animation-delay:650ms]">
               <h2 id="first" className="font-serif text-2xl text-ink">Your first class</h2>

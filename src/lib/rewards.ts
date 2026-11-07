@@ -38,14 +38,13 @@ export async function availableRewards(profileId: string, target?: DiscountTarge
   const { data } = await db().from("discount_codes").select("id, code, kind, value, profile_id, expires_on, max_uses, active, applies_to")
     .eq("profile_id", profileId).eq("active", true).order("created_at", { ascending: false });
   const today = todayKey();
-  const out: (Discount & { id: string })[] = [];
-  for (const r of (data ?? []) as Row[]) {
-    if (r.expires_on && r.expires_on < today) continue;
-    if (target && !(r.applies_to ?? ["package"]).includes(target)) continue;
-    if (await uses(r.id, { profileId })) continue;
-    out.push(toDiscount(r));
-  }
-  return out;
+  const open = ((data ?? []) as Row[]).filter((r) => !(r.expires_on && r.expires_on < today) && !(target && !(r.applies_to ?? ["package"]).includes(target)));
+  if (!open.length) return [];
+  // One query for all of this client's uses (A-051), not one per reward.
+  const { data: used } = await db().from("payments").select("discount_code_id").eq("profile_id", profileId)
+    .in("discount_code_id", open.map((r) => r.id)).in("status", ["pending", "paid"]);
+  const usedIds = new Set((used ?? []).map((u) => u.discount_code_id));
+  return open.filter((r) => !usedIds.has(r.id)).map(toDiscount);
 }
 
 /** A readable code for a personal reward, e.g. RW-7KQ2MD (no 0/O/1/I to mix up). */

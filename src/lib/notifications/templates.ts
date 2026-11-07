@@ -1,4 +1,5 @@
 import { env } from "@/lib/env";
+import { lastDay, longDate } from "@/lib/time";
 
 export type TemplateName =
   | "login_code"
@@ -22,18 +23,36 @@ export type TemplateName =
   | "weekly_full"
   | "birthday"
   | "reward"
-  | "studio_alert";
+  | "studio_alert"
+  | "health_expiring"
+  | "account_inactive";
 
 export type TemplateData = {
   name?: string;
   code?: string;
   className?: string;
+  day?: string;       // "Today", "Tomorrow" or a weekday (24h reminder)
   when?: string;      // "Monday 13 October, 08:00"
   location?: string | null;
   note?: string;      // extra sentence (refund info, offer expiry, ...)
   policy?: string;    // cancellation policy line for booking emails
   link?: string;
+  outcome?: string;   // class_cancelled: what happens to what they paid with (cancelledOutcome)
 };
+
+/**
+ * When the studio cancels a class: what happens to what the client paid with (A-031).
+ * Package classes (and online-paid classes of a type with packages) come back as a class. A paid event has no class
+ * to return, so it's refunded in full (her answer, 7 Nov): the payment shows on Today as a refund she pays back by hand.
+ */
+export function cancelledOutcome(paidWith: string | null, hasCreditKind: boolean): string {
+  if (paidWith === "credit" || (paidWith === "payment" && hasCreditKind)) {
+    return "Any class I cancel is always replaced: your class is back in your account, so just pick another time that suits you.";
+  }
+  if (paidWith === "payment") return "You've already paid for this, so you'll get a full refund. I'll pay it back the way you paid.";
+  if (paidWith === "pay_at_studio") return "There's nothing to pay for this one. Book another time that suits you.";
+  return "There's nothing to pay. Book another time that suits you.";
+}
 
 type Rendered = { subject: string; heading: string; lines: string[]; cta?: { label: string; href: string }; sms: string };
 
@@ -77,11 +96,11 @@ export function render(t: TemplateName, raw: TemplateData): Rendered {
       };
     case "reminder_24h":
       return {
-        subject: `Tomorrow: ${d.className}, ${d.when}`,
-        heading: "See you tomorrow",
+        subject: `${d.day ?? "Tomorrow"}: ${d.className}, ${d.when}`,
+        heading: `See you ${dayPhrase(d.day)}`,
         lines: [`Hi ${first(d.name)}, a little reminder: <strong>${d.className}</strong>, ${d.when}.`, d.note ?? "Remember your grip socks · arrive 5–10 minutes early.", d.policy ?? ""],
         cta: { label: "Manage booking", href: `${link}/bookings` },
-        sms: `Re·Form reminder: ${d.className} tomorrow, ${d.when}.`,
+        sms: `Re·Form reminder: ${d.className} ${dayPhrase(d.day)}, ${d.when}.`,
       };
     case "reminder_2h":
       return {
@@ -110,17 +129,17 @@ export function render(t: TemplateName, raw: TemplateData): Rendered {
       return {
         subject: `Class cancelled: ${d.className}, ${d.when}`,
         heading: "We're so sorry",
-        lines: [`I've had to cancel <strong>${d.className}</strong> on ${d.when}.`, d.note ?? "", "Any class I cancel is always replaced: your class is back in your account, so just pick another time that suits you."],
+        lines: [`I've had to cancel <strong>${d.className}</strong> on ${d.when}.`, d.note ?? "", d.outcome ?? cancelledOutcome("credit", true)],
         cta: { label: "Rebook a class", href: `${link}/schedule` },
-        sms: `Re·Form: sorry, ${d.className} on ${d.when} is cancelled. Your class is back in your account, so rebook any time.`,
+        sms: `Re·Form: sorry, ${d.className} on ${d.when} is cancelled. ${raw.outcome && raw.outcome !== cancelledOutcome("credit", true) ? raw.outcome : "Your class is back in your account, so rebook any time."}`,
       };
     case "credits_added":
       return {
         subject: "Your class pack is ready",
-        heading: "Credits added",
+        heading: "Classes added",
         lines: [`Thank you ${first(d.name)}! ${d.note ?? ""}`],
         cta: { label: "Book a class", href: `${link}/schedule` },
-        sms: `Re·Form: ${d.note ?? "credits added"}`,
+        sms: `Re·Form: ${d.note ?? "classes added"}`,
       };
     case "payment_request":
       return {
@@ -201,6 +220,30 @@ export function render(t: TemplateName, raw: TemplateData): Rendered {
         cta: { label: "See packages", href: `${link}/packs` },
         sms: `Re·Form: you have a reward: ${d.note ?? ""} ${link}/packs`,
       };
+    // Retention notices (A-011): 30 days before the stored data is deleted. `when` is the deletion date.
+    case "health_expiring":
+      return {
+        subject: "Your health answers will be deleted soon",
+        heading: "Your health answers",
+        lines: [
+          `Hi ${first(d.name)}, we keep your health answers only while you're coming to classes.`,
+          `As you haven't been to a class for a while, we'll delete them on ${d.when}.`,
+          "If you come back, we'll simply ask the questions again before your next class.",
+        ],
+        cta: { label: "My account", href: `${link}/account` },
+        sms: `Re·Form: your health answers will be deleted on ${d.when}. ${link}/account`,
+      };
+    case "account_inactive":
+      return {
+        subject: "We'll close your Re·Form account soon",
+        heading: "We miss you",
+        lines: [
+          `Hi ${first(d.name)}, you haven't booked or signed in for a long time, so we'll delete your account and personal details on ${d.when}.`,
+          "To keep your account, just sign in before then.",
+        ],
+        cta: { label: "Sign in", href: `${link}/login` },
+        sms: `Re·Form: we'll delete your inactive account on ${d.when}. Sign in to keep it: ${link}/login`,
+      };
     case "studio_alert":
       // To the studio itself: what happened, in one line, with a link to the studio app. Never health details.
       return {
@@ -233,6 +276,22 @@ export function emailHtml(r: Rendered) {
 <p style="margin:0 0 22px;font-family:Georgia,serif;font-size:30px;font-weight:300;color:#5B4470">Re·Form</p>
 <h1 style="margin:0 0 18px;font-family:Georgia,serif;font-weight:400;font-size:22px;letter-spacing:3px;text-transform:uppercase;color:#2E2238">${r.heading}</h1>
 ${body}${cta}
-<p style="margin:28px 0 0;font-size:12px;line-height:1.5;color:#5E5566">Re·Form Pilates Studio · Limassol, Cyprus<br>This is a service message about your booking. <a href="${env.siteUrl}/account#notifications" style="color:#5E5566">Notification settings</a> (turn class reminders off).</p>
+<p style="margin:28px 0 0;font-size:12px;line-height:1.5;color:#5E5566">Re·Form Pilates Studio · Limassol, Cyprus<br>This is a service message about your booking. <a href="${env.siteUrl}/account?open=notifications#notifications" style="color:#5E5566">Notification settings</a> (turn class reminders off).</p>
 </td></tr></table></td></tr></table></body></html>`;
+}
+
+/** "today", "tomorrow" or "on Monday". */
+function dayPhrase(day = "Tomorrow") {
+  return day === "Today" || day === "Tomorrow" ? day.toLowerCase() : `on ${day}`;
+}
+
+/** The "classes expire" line: names the last day they can be used (the stored end is the start of the next day). */
+export function expiringNote(remaining: number, kind: string, expiresAt: string) {
+  return `${remaining} ${kind} class${remaining === 1 ? "" : "es"} can be used until ${longDate(lastDay(expiresAt))}.`;
+}
+
+/** "1 class from your package was used." / "2 classes from your package were used." (the class type's credit cost). */
+export function classesUsedNote(cost: number) {
+  const n = Math.max(1, cost);
+  return n === 1 ? "1 class from your package was used." : `${n} classes from your package were used.`;
 }

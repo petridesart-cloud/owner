@@ -42,11 +42,11 @@ export function Builder({ types, initial, defaults }: {
             <p className="display text-[0.9rem] text-ink" aria-hidden>{label}</p>
             <ul className="mt-2 flex flex-wrap gap-1.5">
               {list.map((s) => (
-                <li key={s.time} className="inline-flex items-center gap-1 rounded-full bg-lilac-100 py-1 pl-3 pr-1 text-sm text-ink">
+                <li key={s.time} className="inline-flex items-center gap-1 rounded-full bg-lilac-100 pl-3 pr-0.5 text-sm text-ink">
                   <span className="font-medium">{s.time}</span>
                   {types.length > 1 && <span className="text-xs text-ink-soft">{typeName(s.class_type_id).split(" ")[0]}</span>}
                   <button type="button" onClick={() => setSlots((x) => x.filter((y) => !(y.weekday === day && y.time === s.time)))}
-                    className="grid size-8 place-items-center rounded-full hover:bg-white" aria-label={`Remove ${label} ${s.time}`}>
+                    className="grid size-11 place-items-center rounded-full hover:bg-white" aria-label={`Remove ${label} ${s.time}`}>
                     <X aria-hidden size={14} />
                   </button>
                 </li>

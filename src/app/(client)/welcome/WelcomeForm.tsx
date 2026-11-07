@@ -17,7 +17,7 @@ export function WelcomeForm({ email, first, last, phone, next }: { email: string
   return (
     <form onSubmit={keepValues(action)} className="space-y-5" noValidate>
       <input type="hidden" name="next" value={next} />
-      {Object.keys(e).length > 0 && <Notice tone="error">Please check the highlighted fields below.</Notice>}
+      {Object.keys(e).length > 0 && <Notice tone="error">{e.form ?? "Please check the highlighted fields below."}</Notice>}
       <div className="grid grid-cols-2 gap-3">
         <Field id="first_name" label="First name" error={e.first_name}>
           <input id="first_name" name="first_name" autoComplete="given-name" required defaultValue={first} className={inputClass} {...err("first_name")} />
@@ -41,9 +41,10 @@ export function WelcomeForm({ email, first, last, phone, next }: { email: string
       <fieldset className="space-y-1">
         <legend className="sr-only">Agreements</legend>
         <Checkbox id="policy" name="policy" required aria-describedby={e.policy ? "policy-error" : undefined}>
-          I accept the <Link href="/policy" target="_blank" className="font-medium underline underline-offset-4">Studio Rules</Link> and the{" "}
-          <Link href="/policy/payments" target="_blank" className="font-medium underline underline-offset-4">Payments, Cancellation &amp; Membership Policy</Link>{" "}
-          (and the <Link href="/legal/terms" target="_blank" className="font-medium underline underline-offset-4">Terms</Link>).
+          I accept the <Link href="/policy" target="_blank" className="font-medium underline underline-offset-4">Studio Rules</Link>, the{" "}
+          <Link href="/policy/payments" target="_blank" className="font-medium underline underline-offset-4">Payments &amp; Cancellation Policy</Link>, the{" "}
+          <Link href="/legal/terms" target="_blank" className="font-medium underline underline-offset-4">Terms</Link> and the{" "}
+          <Link href="/legal/health" target="_blank" className="font-medium underline underline-offset-4">Health &amp; Safety acknowledgement</Link>.
         </Checkbox>
         {e.policy && <p id="policy-error" className="pl-8 text-xs font-medium text-burgundy">{e.policy}</p>}
       </fieldset>

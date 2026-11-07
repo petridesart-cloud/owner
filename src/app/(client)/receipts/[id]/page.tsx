@@ -5,6 +5,8 @@ import { BackButton } from "@/components/BackButton";
 import { PrintButton } from "@/components/PrintButton";
 import { logoSrc } from "@/lib/media";
 import { receiptLabel } from "@/lib/receipts";
+import { kindLabels } from "@/lib/kinds";
+import { labelOf } from "@/lib/kind-label";
 import { business } from "@/lib/business";
 import { getSettings, requireViewer } from "@/lib/auth";
 import { db } from "@/lib/supabase/admin";
@@ -24,11 +26,11 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
   if (!pay || (pay.profile_id !== viewer.profile.id && viewer.profile.role !== "admin") || pay.status !== "paid") notFound();
   const s = await getSettings();
   const biz = business(s);
-  const [{ data: client }, logo] = await Promise.all([db().from("profiles").select("full_name, email").eq("id", pay.profile_id!).single(), logoSrc()]);
+  const [{ data: client }, logo, labels] = await Promise.all([db().from("profiles").select("full_name, email").eq("id", pay.profile_id!).single(), logoSrc(), kindLabels()]);
   const pr = pay.products;
   const item = pr?.tag === "package" && pr.credit_kind
-    ? `${pr.credit_kind === "reformer" ? "Reformer" : "Mat"} · ${pr.credits} classes · ${pr.months ?? 1} month${(pr.months ?? 1) > 1 ? "s" : ""}`
-    : pay.description ?? receiptLabel(pay);
+    ? `${labelOf(labels, pr.credit_kind)} · ${pr.credits} classes · ${pr.months ?? 1} month${(pr.months ?? 1) > 1 ? "s" : ""}`
+    : pay.description ?? receiptLabel(pay, labels);
   return (
     <div className="px-5 pt-3">
       <div className="flex items-center justify-between print:hidden"><BackButton href="/account" /><PrintButton /></div>
@@ -52,6 +54,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
           {biz.name}{biz.owner ? ` · ${biz.owner}` : ""}<br />{biz.address ?? "Limassol, Cyprus"}{(biz.email || biz.phone) && <><br />{[biz.email, biz.phone].filter(Boolean).join(" · ")}</>}
         </address>
         <p className="mt-4 text-xs text-ink-soft">Payment confirmation. Thank you for practising with us.</p>
+        {!s.vat_registered && <p className="mt-1 text-xs text-ink-soft">Not a tax invoice. No VAT charged: the seller is not VAT-registered.</p>}
       </article>
     </div>
   );

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { ComponentProps, ReactNode } from "react";
+import { cloneElement, isValidElement, type ComponentProps, type ReactElement, type ReactNode } from "react";
 
 type Variant = "primary" | "soft" | "ghost" | "danger";
 const base =
@@ -59,7 +59,7 @@ export function Card({ className = "", ...props }: ComponentProps<"div">) {
 export function Notice({ tone = "info", children }: { tone?: "info" | "error" | "success"; children: ReactNode }) {
   const tones = { info: "bg-lilac-50 border-lilac-200", error: "bg-burgundy-soft border-burgundy/25 text-burgundy", success: "bg-mauve-soft border-mauve/40" };
   return (
-    <div role={tone === "error" ? "alert" : "status"} className={`rounded-2xl border px-4 py-3 text-sm leading-relaxed ${tones[tone]}`}>
+    <div role={tone === "error" ? "alert" : "status"} tabIndex={tone === "error" ? -1 : undefined} className={`rounded-2xl border px-4 py-3 text-sm leading-relaxed focus:outline-none ${tones[tone]}`}>
       {children}
     </div>
   );
@@ -68,10 +68,18 @@ export function Notice({ tone = "info", children }: { tone?: "info" | "error" | 
 export function Field({
   label, hint, error, id, children,
 }: { label: string; hint?: ReactNode; error?: string; id: string; children: ReactNode }) {
+  // A-071: the field is linked to its hint and its error, and marked invalid, without each form wiring it by hand.
+  const described = error ? `${id}-error` : hint ? `${id}-hint` : undefined;
+  const control = isValidElement(children) && (children.props as { id?: string }).id === id
+    ? cloneElement(children as ReactElement<Record<string, unknown>>, {
+        "aria-describedby": (children.props as Record<string, unknown>)["aria-describedby"] ?? described,
+        "aria-invalid": (children.props as Record<string, unknown>)["aria-invalid"] ?? (error ? true : undefined),
+      })
+    : children;
   return (
     <div className="space-y-1.5">
       <label htmlFor={id} className="block text-sm font-medium text-ink">{label}</label>
-      {children}
+      {control}
       {hint && !error && <p id={`${id}-hint`} className="text-xs leading-relaxed text-ink-soft">{hint}</p>}
       {error && <p id={`${id}-error`} className="text-xs font-medium text-burgundy">{error}</p>}
     </div>
@@ -93,7 +101,7 @@ export function Checkbox({ id, children, ...props }: ComponentProps<"input"> & {
 export function Section({ title, action, children, className = "" }: { title: string; action?: ReactNode; children: ReactNode; className?: string }) {
   return (
     <section className={`px-5 ${className}`}>
-      <div className="mb-3 flex items-end justify-between gap-3">
+      <div className="mb-3 flex items-baseline justify-between gap-3">
         <h2 className="display text-[1.05rem] text-ink">{title}</h2>
         {action}
       </div>

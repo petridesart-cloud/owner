@@ -1,4 +1,5 @@
-// All times are stored in UTC and shown in the studio's timezone.
+// All times are stored in UTC and shown in the studio's timezone. It is fixed to Europe/Nicosia: the
+// studio_settings.timezone column is not read anywhere (A-064).
 export const STUDIO_TZ = "Europe/Nicosia";
 const LOCALE = "en-GB";
 
@@ -15,7 +16,7 @@ const d = (v: string | Date) => (typeof v === "string" ? new Date(v) : v);
 
 export const time = (v: string | Date) => fTime.format(d(v));
 export const weekdayShort = (v: string | Date) => fWeekdayShort.format(d(v));
-export const weekdayLong = (v: string | Date) => fWeekdayLong.format(d(v));
+const weekdayLong = (v: string | Date) => fWeekdayLong.format(d(v));
 export const dayMonth = (v: string | Date) => fDayMonth.format(d(v));
 export const longDate = (v: string | Date) => fLong.format(d(v));
 export const monthYear = (v: string | Date) => fMonth.format(d(v));
@@ -48,10 +49,6 @@ export function isBirthday(dob: string | null | undefined, key: string) {
 /** Accessible label, e.g. "Monday 13 October, 08:00". */
 export const spokenDateTime = (v: string | Date) => `${longDate(v)}, ${time(v)}`;
 
-export function hoursUntil(v: string | Date) {
-  return (d(v).getTime() - Date.now()) / 3_600_000;
-}
-
 export function relativeHours(v: string | Date) {
   const mins = Math.round((d(v).getTime() - Date.now()) / 60_000);
   if (mins >= 36 * 60) return `${Math.round(mins / 1440)} days`;
@@ -61,16 +58,25 @@ export function relativeHours(v: string | Date) {
   return m ? `${h}h ${m}m` : `${h}h`;
 }
 
-/** Convert a studio-local date + "HH:MM" into a UTC ISO string. */
+/**
+ * Convert a studio-local date + "HH:MM" into a UTC ISO string.
+ * Around the clock changes: a time that happens twice (autumn) means the first one;
+ * a time that doesn't exist (spring, 03:00-03:59) moves forward to the next valid time.
+ */
 export function localToUtc(dateKey: string, hhmm: string) {
-  const guess = new Date(`${dateKey}T${hhmm}:00Z`);
-  // Find the offset the studio timezone has at that instant and correct for it.
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: STUDIO_TZ, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
-  }).formatToParts(guess);
-  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value);
-  const asLocal = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"));
-  return new Date(guess.getTime() - (asLocal - guess.getTime())).toISOString();
+  const guess = new Date(`${dateKey}T${hhmm}:00Z`).getTime(); // the wall-clock time, read as if it were UTC
+  const offsetAt = (ms: number) => {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: STUDIO_TZ, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
+    }).formatToParts(new Date(ms));
+    const get = (t: string) => Number(parts.find((p) => p.type === t)?.value);
+    return Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute")) - ms;
+  };
+  // The offset just before and just after any change within a day of this time.
+  const before = guess - offsetAt(guess - 86_400_000), after = guess - offsetAt(guess + 86_400_000);
+  const ok = (t: number) => t + offsetAt(t) === guess;
+  const valid = [before, after].filter(ok);
+  return new Date(valid.length ? Math.min(...valid) : before).toISOString();
 }
 export const nowMs = () => Date.now();
 
@@ -82,3 +88,28 @@ export function dotDate(v: string | Date) {
 
 /** Last valid day of something that expires at the start of a day. */
 export const lastDay = (expiresAt: string) => new Date(new Date(expiresAt).getTime() - 1);
+
+/** "Today", "Tomorrow" or the weekday of a class, by studio calendar day (not by hours from now). */
+export function dayWord(v: string | Date, now: Date = new Date()) {
+  const k = dayKey(v), t = dayKey(now);
+  if (k === t) return "Today";
+  if (k === addDaysKey(t, 1)) return "Tomorrow";
+  return weekdayLong(v);
+}
+
+/** "31.12.2026", "31/12/2026" or "2026-12-31" as a day key, or null if it isn't a real date. */
+export function importDateKey(raw: string) {
+  const t = raw.trim();
+  let y: number, m: number, d: number, x: RegExpMatchArray | null;
+  if ((x = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/))) [y, m, d] = [+x[1], +x[2], +x[3]];
+  else if ((x = t.match(/^(\d{1,2})[./](\d{1,2})[./](\d{4})$/))) [d, m, y] = [+x[1], +x[2], +x[3]];
+  else return null;
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) return null;
+  return dt.toISOString().slice(0, 10);
+}
+
+/** When free cancellation closed: "12:00" today, or "Fri 23:30" on another day (A-028: absolute, never "1 min ago"). */
+export function closedAt(cutoffAt: Date, now: Date = new Date()) {
+  return dayKey(cutoffAt) === dayKey(now) ? time(cutoffAt) : `${weekdayShort(cutoffAt)} ${time(cutoffAt)}`;
+}

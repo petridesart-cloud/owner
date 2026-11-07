@@ -56,7 +56,7 @@ export function DeletePhoto({ id }: { id: string }) {
   return (
     <button type="button" disabled={pending} aria-label="Remove photo"
       onClick={() => confirm("Remove this photo?") && start(async () => { await deletePhoto(id); router.refresh(); })}
-      className="absolute right-1 top-1 grid size-8 place-items-center rounded-full bg-white/90 text-burgundy shadow">
+      className="absolute right-0 top-0 grid size-11 place-items-center rounded-full bg-white/90 text-burgundy shadow">
       <Trash2 aria-hidden size={15} />
     </button>
   );
@@ -68,9 +68,9 @@ export function PhotoControls({ id, caption, first, last }: { id: string; captio
   const [pending, start] = useTransition();
   const [saved, setSaved] = useState(false);
   const move = (dir: -1 | 1) => start(async () => { await movePhoto(id, dir); router.refresh(); });
-  const btn = "grid size-8 place-items-center rounded-full bg-lilac-50 text-ink disabled:opacity-30";
+  const btn = "grid size-11 place-items-center rounded-full bg-lilac-50 text-ink disabled:opacity-30";
   return (
-    <div className="mt-1 w-24 space-y-1">
+    <div className="mt-1 w-36 space-y-1">
       <input aria-label="Caption" placeholder="Caption" defaultValue={caption} maxLength={80}
         onBlur={(e) => { if (e.target.value !== caption) start(async () => { await setCaption(id, e.target.value); setSaved(true); router.refresh(); }); }}
         className="block w-full rounded-lg border border-line bg-white px-2 py-1 text-xs text-ink" />

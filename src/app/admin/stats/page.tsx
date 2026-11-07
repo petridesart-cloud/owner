@@ -60,7 +60,6 @@ export default async function StatsPage({ searchParams }: { searchParams: Promis
   const monthKey = `${month}-01`;
   const wFrom = localToUtc(weekStart, "00:00"), wTo = localToUtc(addDaysKey(weekStart, 7), "00:00");
   const mFrom = localToUtc(monthKey, "00:00"), mTo = localToUtc(nextMonth(monthKey), "00:00");
-  const yFrom = localToUtc(`${year}-01-01`, "00:00"), yTo = localToUtc(`${year + 1}-01-01`, "00:00");
 
   const sel = "starts_at, capacity, class_types(kind, credit_kind), bookings!bookings_session_id_fkey(status, checked_in_at)";
   const [{ data: week }, { data: monthRows }, { data: monthPay }, { count: newClients }, { data: yearPayments }, { data: monthLedger }, { data: board }] = await Promise.all([
@@ -68,7 +67,7 @@ export default async function StatsPage({ searchParams }: { searchParams: Promis
     db().from("class_sessions").select(sel).eq("status", "scheduled").gte("starts_at", mFrom).lt("starts_at", mTo),
     db().from("payments").select("amount_cents, purpose, products(credit_kind, tag)").eq("status", "paid").gte("paid_at", mFrom).lt("paid_at", mTo),
     db().from("profiles").select("id", { count: "exact", head: true }).eq("role", "client").is("deleted_at", null).gte("created_at", mFrom).lt("created_at", mTo),
-    db().from("payments").select("amount_cents, method, provider, paid_at").eq("status", "paid").gte("paid_at", yFrom).lt("paid_at", yTo),
+    db().rpc("payments_by_method", { p_year: year }),
     db().from("credit_ledger").select("delta, entry_type").gte("created_at", mFrom).lt("created_at", mTo),
     db().rpc("stats_months", { p_year: year }),
   ]);
@@ -121,9 +120,9 @@ export default async function StatsPage({ searchParams }: { searchParams: Promis
   const monthFmt = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Nicosia", month: "short" });
   const table = new Map<string, Map<string, number>>();
   for (const p of yearPayments ?? []) {
-    const mo = monthFmt.format(new Date(p.paid_at!));
-    const meth = METHOD[p.method ?? (p.provider === "offline" ? "cash" : "online")] ?? p.method ?? "Other";
-    const row = table.get(mo) ?? new Map(); row.set(meth, (row.get(meth) ?? 0) + p.amount_cents); table.set(mo, row);
+    const mo = monthFmt.format(new Date(`${p.month}-01T12:00:00Z`));
+    const meth = METHOD[p.method] ?? p.method ?? "Other";
+    const row = table.get(mo) ?? new Map(); row.set(meth, (row.get(meth) ?? 0) + Number(p.total_cents)); table.set(mo, row);
   }
   const methods = [...new Set([...table.values()].flatMap((r) => [...r.keys()]))];
   const wb = booked(W), ws = spots(W), mb = booked(M), ms = spots(M);
@@ -219,7 +218,7 @@ export default async function StatsPage({ searchParams }: { searchParams: Promis
         <div className="card mt-3 overflow-x-auto px-4 py-4">
           <div className="mb-3 flex items-center justify-between gap-3">
             <h3 className="display text-[0.95rem]">Payments by method · {year}</h3>
-            <a href={`/admin/export/payments?year=${year}`} className="inline-flex min-h-10 items-center rounded-full border border-line bg-white px-3 text-sm text-ink">Export CSV</a>
+            <a href={`/admin/export/payments?year=${year}`} className="inline-flex min-h-11 items-center rounded-full border border-line bg-white px-3 text-sm text-ink">Export CSV</a>
           </div>
           <table className="w-full text-left text-sm">
             <thead><tr><th scope="col" className="py-1.5 font-medium">Month</th>{methods.map((mm) => <th key={mm} scope="col" className="py-1.5 text-right font-medium">{mm}</th>)}</tr></thead>

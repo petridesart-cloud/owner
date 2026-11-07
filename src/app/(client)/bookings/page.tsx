@@ -7,20 +7,28 @@ import { PackageCard, PastPackageRow } from "@/components/PackageCard";
 import { getSettings, requireViewer } from "@/lib/auth";
 import { clientPackages } from "@/lib/packages";
 import { db } from "@/lib/supabase/admin";
-import { dayMonth, longDate, nowMs, relativeHours, time, weekdayShort } from "@/lib/time";
+import { closedAt, dayMonth, longDate, nowMs, relativeHours, time, weekdayShort } from "@/lib/time";
 import { CancelButton } from "./CancelButton";
+import { FocusNotice } from "@/components/FocusNotice";
 import { eur } from "@/lib/money";
 
 export const metadata: Metadata = { title: "My classes" };
 export const dynamic = "force-dynamic";
 
-export default async function BookingsPage({ searchParams }: { searchParams: Promise<{ purchased?: string; requested?: string }> }) {
-  const { purchased, requested } = await searchParams;
+/** What they are told after cancelling (A-074). */
+const CANCELLED: Record<string, string> = {
+  credit: "Cancelled. Your class is back in your package.",
+  free: "Cancelled. Nothing to pay.",
+  late: "Released to the waitlist. Thank you for freeing the spot.",
+};
+
+export default async function BookingsPage({ searchParams }: { searchParams: Promise<{ purchased?: string; requested?: string; all?: string; cancelled?: string }> }) {
+  const { purchased, requested, all, cancelled } = await searchParams;
   const viewer = await requireViewer("/bookings");
   const p = viewer.profile;
-  const settings = await getSettings();
-  const [packages, { data: bookings }, { data: waits }, { data: pending }] = await Promise.all([
-    clientPackages(p.id),
+  const [settings, packages, { data: bookings }, { data: waits }, { data: pending }] = await Promise.all([
+    getSettings(),
+    clientPackages(p.id, undefined, { all: all === "1" }),
     db().from("bookings").select("id, status, paid_with, late_refund_pending, payment:payments!bookings_payment_id_fkey(status, amount_cents, intended_method), class_sessions!inner(id, starts_at, ends_at, title, location, class_types(name, kind))")
       .eq("profile_id", p.id).eq("status", "confirmed").gt("class_sessions.starts_at", new Date().toISOString()),
     db().from("waitlist_entries").select("id, status, offer_expires_at, created_at, class_sessions!inner(id, starts_at, title, class_types(name))")
@@ -38,10 +46,11 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
 
   return (
     <div>
-      <PageTitle eyebrow="My profile" title="My classes">My progress</PageTitle>
+      <PageTitle title="My classes">Your packages and upcoming classes</PageTitle>
 
       <div className="space-y-6">
         {purchased && <div className="px-5"><Notice tone="success">Thank you! Your classes are ready to book.</Notice></div>}
+        {cancelled && CANCELLED[cancelled] && <div className="px-5"><FocusNotice>{CANCELLED[cancelled]}</FocusNotice></div>}
         {requested && <div className="px-5"><Notice tone="success">Request sent. As soon as your payment is confirmed, your classes appear here.</Notice></div>}
 
         <AwaitingPayment pending={pending ?? []} settings={settings} />
@@ -98,12 +107,15 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
               {upcoming.map((b) => {
                 const start = new Date(b.s.starts_at).getTime();
                 const late = start - now < cutoffMs;
-                const label = `Cancel ${time(b.s.starts_at)} ${b.name}, ${longDate(b.s.starts_at)}`;
+                const label = `${time(b.s.starts_at)} ${b.name}, ${longDate(b.s.starts_at)}`;
                 const warning = late
                   ? b.late_refund_pending || settings.refund_late_cancel_if_filled
                     ? `You're inside the ${settings.cancellation_cutoff_hours}-hour window. Your spot goes to the waitlist; if it's re-booked, we'll return your class.`
                     : `You're inside the ${settings.cancellation_cutoff_hours}-hour window, so this class won't be returned. Releasing it lets someone on the waitlist take your spot.`
-                  : b.paid_with === "credit" ? "Your class goes back to your package straight away." : "Your spot will be released.";
+                  : b.paid_with === "credit" ? "Your class goes back to your package straight away."
+                  : b.paid_with === "pay_at_studio" ? "Your spot will be released and you won't need to pay."
+                  : b.paid_with === "payment" ? "Your spot will be released and we'll refund your payment." : "Your spot will be released.";
+                const outcome = late ? "late" : b.paid_with === "credit" ? "credit" : "free";
                 return (
                   <li key={b.id}>
                     <Card className="overflow-hidden">
@@ -130,10 +142,10 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
                         ) : <>
                         {late && (
                           <p className="mb-2 text-xs leading-relaxed text-ink-soft">
-                            Free cancellation closed {relativeHours(new Date(start - cutoffMs))} ago ({settings.cancellation_cutoff_hours}h before class).
+                            Free cancellation closed at {closedAt(new Date(start - cutoffMs))} ({settings.cancellation_cutoff_hours} hours before class).
                           </p>
                         )}
-                        <CancelButton bookingId={b.id} late={late} label={label} warning={warning} />
+                        <CancelButton bookingId={b.id} late={late} label={label} warning={warning} outcome={outcome} />
                         </>}
                       </div>
                     </Card>
@@ -143,7 +155,7 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
             </ul>
           ) : (
             <Card className="px-5 py-7 text-center">
-              <p className="font-serif text-xl text-ink">No sessions booked</p>
+              <p className="font-serif text-xl text-ink">No classes booked</p>
               <p className="mt-1 text-sm text-ink-soft">Your next class is a tap away.</p>
               <ButtonLink href="/schedule" variant="soft" className="mt-4">See the schedule</ButtonLink>
             </Card>
@@ -155,6 +167,7 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
             <ul className="card divide-y divide-line overflow-hidden">
               {past.map((x) => <li key={x.id}><PastPackageRow p={x} /></li>)}
             </ul>
+            {packages.hidden > 0 && <Link href="/bookings?all=1" prefetch={false} className="mt-3 flex min-h-11 items-center justify-center text-sm text-ink-soft underline underline-offset-4">Show all past packages</Link>}
           </Section>
         )}
       </div>

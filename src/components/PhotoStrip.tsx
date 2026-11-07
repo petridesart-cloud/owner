@@ -1,15 +1,15 @@
+import Image from "next/image";
 import type { MediaItem } from "@/lib/media";
 
 /** Horizontal photo strip; gradient placeholders labelled "photo coming soon" until she uploads. */
-export function PhotoStrip({ photos, label, tall = false, slides = false }: { photos: MediaItem[]; label: string; tall?: boolean; slides?: boolean }) {
+export function PhotoStrip({ photos, label, tall = false, slides = false, priority = false }: { photos: MediaItem[]; label: string; tall?: boolean; slides?: boolean; priority?: boolean }) {
   // slides: one big photo at a time, swiped sideways.
   const size = slides ? "h-80 w-[85%] snap-center" : tall ? "h-72 w-56 snap-start" : "h-52 w-44 snap-start";
   return (
     <div className={`no-scrollbar flex snap-x snap-mandatory gap-3 overflow-x-auto px-5 pb-2 ${slides ? "scroll-px-5" : ""}`}>
-      {photos.length ? photos.map((p) => (
+      {photos.length ? photos.map((p, i) => (
         <figure key={p.id} className={`relative ${size} shrink-0 overflow-hidden rounded-[var(--radius-card)] bg-lilac-100 shadow-[var(--shadow-soft)]`}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={p.url} alt={p.caption ?? label} loading="lazy" className="size-full object-cover" />
+          <Image src={p.url} alt={p.caption ?? label} fill sizes={slides ? "(max-width: 480px) 85vw, 410px" : tall ? "224px" : "176px"} priority={priority && i === 0} className="object-cover" />
           {p.caption && <figcaption className="absolute inset-x-3 bottom-3 rounded-full bg-white/80 px-3 py-1.5 text-center text-xs font-medium text-ink backdrop-blur">{p.caption}</figcaption>}
         </figure>
       )) : (

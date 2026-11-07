@@ -339,6 +339,7 @@ export type Database = {
       consents: {
         Row: {
           created_at: string;
+          doc_version_id: string | null;
           granted: boolean;
           id: number;
           profile_id: string;
@@ -348,6 +349,7 @@ export type Database = {
         ComputedFields: never;
         Insert: {
           created_at?: string;
+          doc_version_id?: string | null;
           granted: boolean;
           id?: never;
           profile_id: string;
@@ -356,6 +358,7 @@ export type Database = {
         };
         Update: {
           created_at?: string;
+          doc_version_id?: string | null;
           granted?: boolean;
           id?: never;
           profile_id?: string;
@@ -363,6 +366,13 @@ export type Database = {
           version?: string | null;
         };
         Relationships: [
+          {
+            foreignKeyName: "consents_doc_version_id_fkey";
+            columns: ["doc_version_id"];
+            isOneToOne: false;
+            referencedRelation: "policy_versions";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "consents_profile_id_fkey";
             columns: ["profile_id"];
@@ -894,6 +904,8 @@ export type Database = {
       };
       notifications: {
         Row: {
+          about_profile_id: string | null;
+          attempts: number;
           body: string;
           booking_id: string | null;
           channel: Database["public"]["Enums"]["notification_channel"];
@@ -901,6 +913,7 @@ export type Database = {
           dedupe_key: string | null;
           error: string | null;
           id: string;
+          next_attempt_at: string | null;
           profile_id: string | null;
           provider_ref: string | null;
           recipient: string;
@@ -908,9 +921,12 @@ export type Database = {
           status: Database["public"]["Enums"]["notification_status"];
           subject: string | null;
           template: string;
+          notification_stale: boolean | null;
         };
-        ComputedFields: never;
+        ComputedFields: "notification_stale";
         Insert: {
+          about_profile_id?: string | null;
+          attempts?: number;
           body: string;
           booking_id?: string | null;
           channel: Database["public"]["Enums"]["notification_channel"];
@@ -918,6 +934,7 @@ export type Database = {
           dedupe_key?: string | null;
           error?: string | null;
           id?: string;
+          next_attempt_at?: string | null;
           profile_id?: string | null;
           provider_ref?: string | null;
           recipient: string;
@@ -927,6 +944,8 @@ export type Database = {
           template: string;
         };
         Update: {
+          about_profile_id?: string | null;
+          attempts?: number;
           body?: string;
           booking_id?: string | null;
           channel?: Database["public"]["Enums"]["notification_channel"];
@@ -934,6 +953,7 @@ export type Database = {
           dedupe_key?: string | null;
           error?: string | null;
           id?: string;
+          next_attempt_at?: string | null;
           profile_id?: string | null;
           provider_ref?: string | null;
           recipient?: string;
@@ -943,6 +963,13 @@ export type Database = {
           template?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "notifications_about_profile_id_fkey";
+            columns: ["about_profile_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "notifications_booking_id_fkey";
             columns: ["booking_id"];
@@ -1018,6 +1045,7 @@ export type Database = {
       };
       payments: {
         Row: {
+          accepted_terms_at: string | null;
           amount_cents: number;
           booking_id: string | null;
           created_at: string;
@@ -1036,10 +1064,12 @@ export type Database = {
           provider_ref: string | null;
           purpose: string;
           status: Database["public"]["Enums"]["payment_status"];
+          terms_version_id: string | null;
           vat_cents: number;
         };
         ComputedFields: never;
         Insert: {
+          accepted_terms_at?: string | null;
           amount_cents: number;
           booking_id?: string | null;
           created_at?: string;
@@ -1058,9 +1088,11 @@ export type Database = {
           provider_ref?: string | null;
           purpose: string;
           status?: Database["public"]["Enums"]["payment_status"];
+          terms_version_id?: string | null;
           vat_cents?: number;
         };
         Update: {
+          accepted_terms_at?: string | null;
           amount_cents?: number;
           booking_id?: string | null;
           created_at?: string;
@@ -1079,6 +1111,7 @@ export type Database = {
           provider_ref?: string | null;
           purpose?: string;
           status?: Database["public"]["Enums"]["payment_status"];
+          terms_version_id?: string | null;
           vat_cents?: number;
         };
         Relationships: [
@@ -1117,7 +1150,42 @@ export type Database = {
             referencedRelation: "profiles";
             referencedColumns: ["id"];
           },
+          {
+            foreignKeyName: "payments_terms_version_id_fkey";
+            columns: ["terms_version_id"];
+            isOneToOne: false;
+            referencedRelation: "policy_versions";
+            referencedColumns: ["id"];
+          },
         ];
+      };
+      policy_versions: {
+        Row: {
+          body: string;
+          created_at: string;
+          doc: string;
+          id: string;
+          sha256: string;
+          version: number;
+        };
+        ComputedFields: never;
+        Insert: {
+          body: string;
+          created_at?: string;
+          doc: string;
+          id?: string;
+          sha256: string;
+          version: number;
+        };
+        Update: {
+          body?: string;
+          created_at?: string;
+          doc?: string;
+          id?: string;
+          sha256?: string;
+          version?: number;
+        };
+        Relationships: [];
       };
       processed_webhooks: {
         Row: {
@@ -1196,6 +1264,7 @@ export type Database = {
       profiles: {
         Row: {
           admin_notes: string | null;
+          can_view_health: boolean;
           created_at: string;
           date_of_birth: string | null;
           deleted_at: string | null;
@@ -1206,7 +1275,10 @@ export type Database = {
           first_name: string | null;
           full_name: string | null;
           goal: string | null;
+          health_expiry_warned_at: string | null;
+          health_mode: string | null;
           id: string;
+          inactive_warned_at: string | null;
           last_name: string | null;
           marketing_email: boolean;
           marketing_sms: boolean;
@@ -1223,6 +1295,7 @@ export type Database = {
         ComputedFields: never;
         Insert: {
           admin_notes?: string | null;
+          can_view_health?: boolean;
           created_at?: string;
           date_of_birth?: string | null;
           deleted_at?: string | null;
@@ -1233,7 +1306,10 @@ export type Database = {
           first_name?: string | null;
           full_name?: string | null;
           goal?: string | null;
+          health_expiry_warned_at?: string | null;
+          health_mode?: string | null;
           id?: string;
+          inactive_warned_at?: string | null;
           last_name?: string | null;
           marketing_email?: boolean;
           marketing_sms?: boolean;
@@ -1249,6 +1325,7 @@ export type Database = {
         };
         Update: {
           admin_notes?: string | null;
+          can_view_health?: boolean;
           created_at?: string;
           date_of_birth?: string | null;
           deleted_at?: string | null;
@@ -1259,7 +1336,10 @@ export type Database = {
           first_name?: string | null;
           full_name?: string | null;
           goal?: string | null;
+          health_expiry_warned_at?: string | null;
+          health_mode?: string | null;
           id?: string;
+          inactive_warned_at?: string | null;
           last_name?: string | null;
           marketing_email?: boolean;
           marketing_sms?: boolean;
@@ -1385,7 +1465,10 @@ export type Database = {
           instagram_handle: string;
           intro_line: string;
           last_cron_tick_at: string | null;
+          last_retention_at: string | null;
           last_tick_at: string | null;
+          last_tick_error: string | null;
+          last_tick_ok_at: string | null;
           legal_name: string;
           map_url: string;
           membership_period_mode: string;
@@ -1394,6 +1477,16 @@ export type Database = {
           refund_late_cancel_if_filled: boolean;
           registration_number: string;
           reminder_offsets_minutes: number[];
+          retention_audit_months: number | null;
+          retention_auth_log_days: number | null;
+          retention_codes_months: number | null;
+          retention_consents_years: number | null;
+          retention_event_extras_months: number | null;
+          retention_health_months: number | null;
+          retention_inactive_months: number | null;
+          retention_messages_months: number | null;
+          retention_notice_days: number;
+          retention_payments_years: number | null;
           revolut_link: string;
           rollover_max: number;
           status_banner: string;
@@ -1434,7 +1527,10 @@ export type Database = {
           instagram_handle?: string;
           intro_line?: string;
           last_cron_tick_at?: string | null;
+          last_retention_at?: string | null;
           last_tick_at?: string | null;
+          last_tick_error?: string | null;
+          last_tick_ok_at?: string | null;
           legal_name?: string;
           map_url?: string;
           membership_period_mode?: string;
@@ -1443,6 +1539,16 @@ export type Database = {
           refund_late_cancel_if_filled?: boolean;
           registration_number?: string;
           reminder_offsets_minutes?: number[];
+          retention_audit_months?: number | null;
+          retention_auth_log_days?: number | null;
+          retention_codes_months?: number | null;
+          retention_consents_years?: number | null;
+          retention_event_extras_months?: number | null;
+          retention_health_months?: number | null;
+          retention_inactive_months?: number | null;
+          retention_messages_months?: number | null;
+          retention_notice_days?: number;
+          retention_payments_years?: number | null;
           revolut_link?: string;
           rollover_max?: number;
           status_banner?: string;
@@ -1482,7 +1588,10 @@ export type Database = {
           instagram_handle?: string;
           intro_line?: string;
           last_cron_tick_at?: string | null;
+          last_retention_at?: string | null;
           last_tick_at?: string | null;
+          last_tick_error?: string | null;
+          last_tick_ok_at?: string | null;
           legal_name?: string;
           map_url?: string;
           membership_period_mode?: string;
@@ -1491,6 +1600,16 @@ export type Database = {
           refund_late_cancel_if_filled?: boolean;
           registration_number?: string;
           reminder_offsets_minutes?: number[];
+          retention_audit_months?: number | null;
+          retention_auth_log_days?: number | null;
+          retention_codes_months?: number | null;
+          retention_consents_years?: number | null;
+          retention_event_extras_months?: number | null;
+          retention_health_months?: number | null;
+          retention_inactive_months?: number | null;
+          retention_messages_months?: number | null;
+          retention_notice_days?: number;
+          retention_payments_years?: number | null;
           revolut_link?: string;
           rollover_max?: number;
           status_banner?: string;
@@ -1509,6 +1628,36 @@ export type Database = {
           waitlist_window_minutes?: number;
         };
         Relationships: [];
+      };
+      team_invites: {
+        Row: {
+          created_at: string;
+          email: string;
+          full_name: string | null;
+          invited_by: string | null;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          email: string;
+          full_name?: string | null;
+          invited_by?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          email?: string;
+          full_name?: string | null;
+          invited_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "team_invites_invited_by_fkey";
+            columns: ["invited_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       template_slots: {
         Row: {
@@ -1632,27 +1781,75 @@ export type Database = {
       };
     };
     Views: {
-      [_ in never]: never;
+      studio_public: {
+        Row: {
+          address: string | null;
+          booking_window_days: number | null;
+          cancellation_cutoff_hours: number | null;
+          contact_email: string | null;
+          contact_phone: string | null;
+          currency: string | null;
+          id: number | null;
+          instagram_handle: string | null;
+          intro_line: string | null;
+          map_url: string | null;
+          policy_version: string | null;
+          status_banner: string | null;
+          studio_name: string | null;
+          timezone: string | null;
+          trader_name: string | null;
+          waitlist_close_minutes: number | null;
+        };
+        ComputedFields: never;
+        Insert: {
+          address?: string | null;
+          booking_window_days?: number | null;
+          cancellation_cutoff_hours?: number | null;
+          contact_email?: string | null;
+          contact_phone?: string | null;
+          currency?: string | null;
+          id?: number | null;
+          instagram_handle?: string | null;
+          intro_line?: string | null;
+          map_url?: string | null;
+          policy_version?: string | null;
+          status_banner?: string | null;
+          studio_name?: string | null;
+          timezone?: string | null;
+          trader_name?: string | null;
+          waitlist_close_minutes?: number | null;
+        };
+        Update: {
+          address?: string | null;
+          booking_window_days?: number | null;
+          cancellation_cutoff_hours?: number | null;
+          contact_email?: string | null;
+          contact_phone?: string | null;
+          currency?: string | null;
+          id?: number | null;
+          instagram_handle?: string | null;
+          intro_line?: string | null;
+          map_url?: string | null;
+          policy_version?: string | null;
+          status_banner?: string | null;
+          studio_name?: string | null;
+          timezone?: string | null;
+          trader_name?: string | null;
+          waitlist_close_minutes?: number | null;
+        };
+        Relationships: [];
+      };
     };
     Functions: {
+      active_client_ids: { Args: Record<PropertyKey, never>; Returns: string[] };
       add_credit_kind: { Args: { p_label: string }; Returns: string };
-      admin_adjust_credits: {
-        Args: {
-          p_actor: string;
-          p_days: number;
-          p_delta: number;
-          p_kind: Database["public"]["Enums"]["credit_kind"];
-          p_profile: string;
-          p_reason: string;
-        };
-        Returns: undefined;
-      };
+      add_local_days: { Args: { p_days: number; p_ts: string }; Returns: string };
       admin_adjust_lot: {
         Args: {
           p_action: string;
-          p_actor: string;
+          p_actor: string | null;
           p_credits: number;
-          p_date: string;
+          p_date: string | null;
           p_days: number;
           p_lot: string;
           p_reason: string;
@@ -1680,7 +1877,12 @@ export type Database = {
         Returns: Json;
       };
       can_access_event: { Args: { p_profile: string; p_session: string }; Returns: boolean };
-      cancel_booking: { Args: { p_admin?: boolean; p_booking: string; p_profile: string }; Returns: Json };
+      can_see_session: { Args: { p_session: string }; Returns: boolean };
+      can_view_health: { Args: Record<PropertyKey, never>; Returns: boolean };
+      cancel_booking: {
+        Args: { p_admin?: boolean; p_booking: string; p_profile: string; p_return_credit?: boolean };
+        Returns: Json;
+      };
       cancel_session: {
         Args: { p_reason: string; p_session: string };
         Returns: {
@@ -1688,8 +1890,18 @@ export type Database = {
           profile_id: string;
         }[];
       };
+      cancel_sessions: {
+        Args: { p_reason: string; p_sessions: string[] };
+        Returns: {
+          booking_id: string;
+          profile_id: string;
+          session_id: string;
+        }[];
+      };
+      clear_health_data: { Args: { p_profile: string; p_version: string }; Returns: boolean };
       closed_days: { Args: { p_from: string; p_to: string }; Returns: number };
       compute_expiry: { Args: { p_start: string; p_validity: number }; Returns: string };
+      confirm_closure: { Args: { p_closure: string }; Returns: Json };
       confirm_payment: { Args: { p_method?: string; p_payment: string; p_provider_ref?: string }; Returns: Json };
       credit_balance: {
         Args: { p_profile: string };
@@ -1699,10 +1911,27 @@ export type Database = {
           remaining: number;
         }[];
       };
-      erase_profile: { Args: { p_profile: string }; Returns: string };
+      due_reminders: {
+        Args: { p_now?: string; p_offset: number };
+        Returns: {
+          booking_id: string;
+          profile_id: string;
+          session_id: string;
+          starts_at: string;
+        }[];
+      };
+      enforce_retention: { Args: { p_now?: string }; Returns: Json };
+      erase_profile: { Args: { p_profile: string; p_rate_keys?: string[] }; Returns: Json };
       expire_credits: { Args: Record<PropertyKey, never>; Returns: number };
       expire_unpaid_requests: { Args: Record<PropertyKey, never>; Returns: string[] };
       extend_timetable: { Args: { p_days?: number }; Returns: number };
+      first_class_at: {
+        Args: { p_ids: string[] };
+        Returns: {
+          first_class: string;
+          profile_id: string;
+        }[];
+      };
       generate_sessions: { Args: { p_template: string }; Returns: number };
       generate_sessions_range: { Args: { p_from: string; p_template: string; p_to: string }; Returns: number };
       grant_lot: {
@@ -1722,6 +1951,7 @@ export type Database = {
         Returns: string;
       };
       grant_membership_period: { Args: { p_membership: string; p_payment?: string; p_start: string }; Returns: string };
+      health_consent_standing: { Args: { p_profile: string; p_version: string }; Returns: boolean };
       install_baseline: { Args: Record<PropertyKey, never>; Returns: undefined };
       install_catalogue: { Args: Record<PropertyKey, never>; Returns: undefined };
       is_admin: { Args: Record<PropertyKey, never>; Returns: boolean };
@@ -1736,6 +1966,7 @@ export type Database = {
           profile_id: string;
         }[];
       };
+      locked_events: { Args: { p_ids: string[]; p_profile: string }; Returns: string[] };
       lot_class_range: { Args: { p_lot: string }; Returns: Record<string, unknown> };
       lot_usable_for: {
         Args: {
@@ -1747,8 +1978,84 @@ export type Database = {
         };
         Returns: boolean;
       };
+      low_credit_groups: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          credit_kind: string;
+          lot_ids: string;
+          profile_id: string;
+        }[];
+      };
       my_profile_id: { Args: Record<PropertyKey, never>; Returns: string };
+      notification_reclaim: {
+        Args: { p_body: string; p_key: string; p_subject: string };
+        Returns: {
+          attempts: number;
+          id: string;
+        }[];
+      };
+      notification_retry_claim: {
+        Args: { p_id?: string; p_limit?: number };
+        Returns: {
+          about_profile_id: string | null;
+          attempts: number;
+          body: string;
+          booking_id: string | null;
+          channel: Database["public"]["Enums"]["notification_channel"];
+          created_at: string;
+          dedupe_key: string | null;
+          error: string | null;
+          id: string;
+          next_attempt_at: string | null;
+          profile_id: string | null;
+          provider_ref: string | null;
+          recipient: string;
+          session_id: string | null;
+          status: Database["public"]["Enums"]["notification_status"];
+          subject: string | null;
+          template: string;
+        }[];
+        SetofOptions: {
+          from: "*";
+          to: "notifications";
+          isOneToOne: false;
+          isSetofReturn: true;
+        };
+      };
+      notification_stale: {
+        Args: {
+          n: Omit<
+            Database["public"]["Tables"]["notifications"]["Row"],
+            Database["public"]["Tables"]["notifications"]["ComputedFields"]
+          >;
+        };
+        Returns: boolean;
+      };
+      onboard_profile: {
+        Args: {
+          p_dob: string;
+          p_docs: Json;
+          p_email: string;
+          p_first: string;
+          p_full: string;
+          p_last: string;
+          p_marketing: boolean;
+          p_phone: string;
+          p_photo: string;
+          p_profile: string;
+          p_version: string;
+        };
+        Returns: undefined;
+      };
       pause_membership: { Args: { p_membership: string }; Returns: undefined };
+      payments_by_method: {
+        Args: { p_year: number };
+        Returns: {
+          method: string;
+          month: string;
+          total_cents: number;
+        }[];
+      };
       period_end: { Args: { p_days: number; p_start: string }; Returns: string };
       phone_key: { Args: { p: string }; Returns: string };
       process_waitlist: {
@@ -1764,14 +2071,22 @@ export type Database = {
         Returns: boolean;
       };
       recalc_lot_expiry: { Args: { p_lot: string }; Returns: undefined };
+      record_policy_version: { Args: { p_body: string; p_doc: string }; Returns: Json };
+      replace_recurring_rules: { Args: { p_profile: string; p_slots: Json }; Returns: number };
       replace_timetable_from: { Args: { p_template: string }; Returns: number };
       reset_demo_data: { Args: Record<PropertyKey, never>; Returns: undefined };
       resume_membership: { Args: { p_membership: string }; Returns: string };
       return_credit: { Args: { p_booking: string; p_reason: string }; Returns: undefined };
+      save_health_answers: {
+        Args: { p_answers: Json; p_consent: boolean; p_mode: string; p_profile: string; p_version: string };
+        Returns: Json;
+      };
+      save_timetable: { Args: { p_from: string; p_name: string; p_slots: Json }; Returns: number };
       seed_demo: { Args: Record<PropertyKey, never>; Returns: undefined };
+      seed_demo_base: { Args: Record<PropertyKey, never>; Returns: undefined };
       seed_demo_profiles: { Args: Record<PropertyKey, never>; Returns: undefined };
       session_availability: {
-        Args: { p_from: string; p_to: string };
+        Args: { p_events_only?: boolean; p_from: string; p_id?: string; p_to: string };
         Returns: {
           capacity: number;
           class_type_id: string;
@@ -1782,6 +2097,7 @@ export type Database = {
           kind: Database["public"]["Enums"]["class_kind"];
           location: string;
           price_cents: number;
+          private: boolean;
           spots_left: number;
           starts_at: string;
           status: Database["public"]["Enums"]["session_status"];
@@ -1815,7 +2131,10 @@ export type Database = {
           instagram_handle: string;
           intro_line: string;
           last_cron_tick_at: string | null;
+          last_retention_at: string | null;
           last_tick_at: string | null;
+          last_tick_error: string | null;
+          last_tick_ok_at: string | null;
           legal_name: string;
           map_url: string;
           membership_period_mode: string;
@@ -1824,6 +2143,16 @@ export type Database = {
           refund_late_cancel_if_filled: boolean;
           registration_number: string;
           reminder_offsets_minutes: number[];
+          retention_audit_months: number | null;
+          retention_auth_log_days: number | null;
+          retention_codes_months: number | null;
+          retention_consents_years: number | null;
+          retention_event_extras_months: number | null;
+          retention_health_months: number | null;
+          retention_inactive_months: number | null;
+          retention_messages_months: number | null;
+          retention_notice_days: number;
+          retention_payments_years: number | null;
           revolut_link: string;
           rollover_max: number;
           status_banner: string;
@@ -1889,6 +2218,7 @@ export type Database = {
         Args: { p_kind: Database["public"]["Enums"]["credit_kind"]; p_profile: string };
         Returns: boolean;
       };
+      update_session: { Args: { p_patch: Json; p_session: string }; Returns: Json };
       usable_credits: {
         Args: { p_class: string; p_kind: Database["public"]["Enums"]["credit_kind"]; p_profile: string };
         Returns: {
@@ -1897,6 +2227,7 @@ export type Database = {
           usable: number;
         }[];
       };
+      withdraw_health_consent: { Args: { p_profile: string; p_version: string }; Returns: boolean };
     };
     Enums: {
       booking_source: "online" | "manual";
@@ -1916,7 +2247,12 @@ export type Database = {
         | "fitness_declaration"
         | "marketing_email"
         | "marketing_sms"
-        | "photos";
+        | "photos"
+        | "health_declaration_offline"
+        | "waiver"
+        | "studio_rules"
+        | "payments_policy"
+        | "early_start";
       credit_kind: "reformer" | "mat" | (string & {});
       ledger_entry:
         | "grant"
@@ -2058,6 +2394,11 @@ export const Constants = {
         "marketing_email",
         "marketing_sms",
         "photos",
+        "health_declaration_offline",
+        "waiver",
+        "studio_rules",
+        "payments_policy",
+        "early_start",
       ],
       credit_kind: [
         "reformer",

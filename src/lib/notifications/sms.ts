@@ -1,5 +1,7 @@
 import "server-only";
+import { redact } from "@/lib/log-safe";
 import { env } from "@/lib/env";
+import { PROVIDER_TIMEOUT_MS } from "./timeout";
 
 // Twilio Programmable SMS. Swap this file to change SMS provider.
 export async function sendSms(to: string, body: string): Promise<string> {
@@ -8,7 +10,8 @@ export async function sendSms(to: string, body: string): Promise<string> {
     method: "POST",
     headers: { Authorization: `Basic ${auth}`, "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ To: to.replace(/\s+/g, ""), From: env.twilioFrom!, Body: body }),
+    signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS), // a hanging provider must not hold up a tap or the tick (A-017)
   });
-  if (!res.ok) throw new Error(`Twilio ${res.status}: ${await res.text()}`);
+  if (!res.ok) throw new Error(`Twilio ${res.status}: ${redact(await res.text())}`);
   return ((await res.json()) as { sid: string }).sid;
 }

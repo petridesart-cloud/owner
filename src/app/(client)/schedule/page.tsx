@@ -19,8 +19,10 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const [viewer, settings] = await Promise.all([getViewer(), getSettings()]);
   const DAYS = settings.booking_window_days;
   const keys = Array.from({ length: DAYS }, (_, i) => addDaysKey(today, i));
-  const classes = await availability(now, new Date(now.getTime() + DAYS * 86_400_000));
-  const state = await viewerSessionState(viewer?.profile.id);
+  const [classes, state] = await Promise.all([
+    availability(now, new Date(now.getTime() + DAYS * 86_400_000)),
+    viewerSessionState(viewer?.profile.id),
+  ]);
   const locked = await lockedEvents(classes, viewer?.profile.id);
 
   const byDay = new Map<string, typeof classes>();

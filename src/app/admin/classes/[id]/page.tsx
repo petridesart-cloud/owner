@@ -4,6 +4,7 @@ import { HealthInfo } from "../../HealthInfo";
 import { ActionForm } from "@/components/ActionForm";
 import { Badge, Checkbox, Field, inputClass } from "@/components/ui";
 import { db } from "@/lib/supabase/admin";
+import { canViewHealth, getSettings } from "@/lib/auth";
 import { dayKey, longDate, time } from "@/lib/time";
 import { allowEventAccess, cancelSessionAction, manualBook, updateSession } from "../../actions";
 import { AccessRemove } from "./AccessRemove";
@@ -21,9 +22,10 @@ export const dynamic = "force-dynamic";
 export default async function SessionAdmin({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { data: s } = await db().from("class_sessions")
-    .select("*, class_types(*), bookings!bookings_session_id_fkey(id, status, paid_with, source, checked_in_at, answer, note, created_at, payment_id, profiles(id, full_name, email, phone, photo_consent, health_notes(note, injuries, medication, parq_yes, conditions, details, pregnancy, pregnancy_weeks, postpartum_months, bp_meds, clearance_needed, clearance_received_at))), waitlist_entries(id, status, created_at, offer_expires_at, profiles(id, full_name))")
+    .select("*, class_types(*), bookings!bookings_session_id_fkey(id, status, paid_with, source, checked_in_at, answer, note, created_at, payment_id, profiles(id, full_name, email, phone, photo_consent, parq_completed_at, health_mode, health_notes(note, injuries, medication, parq_yes, conditions, details, pregnancy, pregnancy_weeks, postpartum_months, bp_meds, clearance_needed, clearance_received_at))), waitlist_entries(id, status, created_at, offer_expires_at, profiles(id, full_name))")
     .eq("id", id).maybeSingle();
   if (!s) notFound();
+  const [seeHealth, cfg] = await Promise.all([canViewHealth(), getSettings()]);
   const [{ data: types }, { data: clients }] = await Promise.all([
     db().from("class_types").select("*").order("sort_order"),
     db().from("profiles").select("id, full_name, email").is("deleted_at", null).eq("role", "client").order("full_name").limit(1000),
@@ -36,6 +38,8 @@ export default async function SessionAdmin({ params }: { params: Promise<{ id: s
   const other = s.bookings.filter((b) => ["cancelled", "late_cancelled", "studio_cancelled"].includes(b.status));
   const waitlist = s.waitlist_entries.filter((w) => ["waiting", "offered"].includes(w.status)).sort((a, b) => a.created_at.localeCompare(b.created_at));
   const past = new Date(s.starts_at) < new Date();
+  // A-085: inside the cancellation cutoff, "Remove" is a late cancel unless she chooses to return the class.
+  const insideCutoff = new Date(s.starts_at).getTime() - cfg.cancellation_cutoff_hours * 3_600_000 < new Date().getTime();
   const name = s.title ?? s.class_types?.name;
   const mins = Math.round((new Date(s.ends_at).getTime() - new Date(s.starts_at).getTime()) / 60000);
 
@@ -53,20 +57,21 @@ export default async function SessionAdmin({ params }: { params: Promise<{ id: s
               <div className="min-w-0 flex-1">
                 <Link href={`/admin/clients/${b.profiles?.id}`} className="block truncate font-medium text-ink hover:underline">{b.profiles?.full_name ?? "Client"}</Link>
                 <p className="text-xs text-ink-soft">
-                  {b.status === "no_show" ? "No-show · " : ""}{b.paid_with === "credit" ? "Class credit" : b.paid_with === "payment" ? "Paid" : b.paid_with === "pay_at_studio" ? "Pay at studio" : "Manual"}{b.source === "manual" ? " · added by studio" : ""}
+                  {b.status === "no_show" ? "No-show · " : ""}{b.paid_with === "credit" ? "Package class" : b.paid_with === "payment" ? "Paid" : b.paid_with === "pay_at_studio" ? "Pay at studio" : "Manual"}{b.source === "manual" ? " · added by studio" : ""}
                   {b.paid_with === "pay_at_studio" && <span className="ml-1 rounded-full bg-burgundy-soft px-2 py-0.5 font-medium text-burgundy">Unpaid</span>}
                   {b.profiles?.photo_consent === "none" && <span className="ml-1 rounded-full bg-ink px-2 py-0.5 font-medium text-paper">No photos</span>}
                   {b.profiles?.photo_consent === "no_face" && <span className="ml-1 rounded-full bg-ink/80 px-2 py-0.5 font-medium text-paper">No face</span>}
+                  {b.profiles?.parq_completed_at && b.profiles.health_mode === "in_person" && <span className="ml-1 rounded-full bg-white px-2 py-0.5 font-medium text-ink-soft ring-1 ring-line">Health: tell in person</span>}
                 </p>
                 {b.paid_with === "pay_at_studio" && b.payment_id && <div className="mt-1.5"><MarkPaid paymentId={b.payment_id} label={b.profiles?.full_name ?? "booking"} /></div>}
                 {b.answer && <p className="mt-1 text-xs text-ink"><span className="text-ink-soft">{s.signup_question ?? "Answer"}:</span> {b.answer}</p>}
                 {b.note && <p className="mt-1 text-xs text-ink"><span className="text-ink-soft">Note:</span> {b.note}</p>}
-                <HealthInfo h={b.profiles?.health_notes} />
+                <HealthInfo h={b.profiles?.health_notes} canView={seeHealth} />
                 {past && s.status === "scheduled" && (
                   <Attendance bookingId={b.id} name={b.profiles?.full_name ?? "client"} state={b.status === "no_show" ? "no_show" : b.checked_in_at ? "attended" : "unmarked"} />
                 )}
               </div>
-              {!past && b.status === "confirmed" && s.status === "scheduled" && <RosterActions bookingId={b.id} sessionId={s.id} name={b.profiles?.full_name ?? "client"} past={past} />}
+              {!past && b.status === "confirmed" && s.status === "scheduled" && <RosterActions bookingId={b.id} sessionId={s.id} name={b.profiles?.full_name ?? "client"} past={past} insideCutoff={insideCutoff} cutoffHours={cfg.cancellation_cutoff_hours} />}
             </li>
           ))}
           {roster.length === 0 && <li className="px-4 py-4 text-sm text-ink-soft">Nobody booked yet.</li>}
@@ -94,7 +99,7 @@ export default async function SessionAdmin({ params }: { params: Promise<{ id: s
               </select>
             </Field>
             <details className="rounded-2xl border border-line px-4 py-2">
-              <summary className="min-h-10 cursor-pointer content-center text-sm font-medium">…or someone new</summary>
+              <summary className="min-h-11 cursor-pointer content-center text-sm font-medium">…or someone new</summary>
               <div className="mt-2 space-y-3 pb-2">
                 <div className="grid grid-cols-2 gap-3">
                   <Field id="first_name" label="Name"><input id="first_name" name="first_name" autoComplete="off" className={inputClass} /></Field>
@@ -102,6 +107,7 @@ export default async function SessionAdmin({ params }: { params: Promise<{ id: s
                 </div>
                 <Field id="phone" label="Phone"><input id="phone" name="phone" type="tel" className={inputClass} /></Field>
                 <Field id="email" label="Email" hint="So they get the confirmation and can sign in later with this email."><input id="email" name="email" type="email" className={inputClass} /></Field>
+                <label className="flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" name="adult" className="size-4 accent-ink" /> This person is 18 or over</label>
               </div>
             </details>
             <Field id="note" label="Note (optional)" hint={s.signup_question ? `e.g. their answer to: ${s.signup_question}` : "Anything you need to remember for this booking."}>
@@ -109,10 +115,10 @@ export default async function SessionAdmin({ params }: { params: Promise<{ id: s
             </Field>
             <fieldset className="space-y-1">
               <legend className="mb-1 text-sm font-medium">Payment</legend>
-              <label className="flex min-h-10 items-center gap-2 text-sm"><input type="radio" name="mode" value="manual" defaultChecked className="size-4 accent-ink" /> Paid / settled outside the app</label>
-              {s.class_types?.credit_kind && <label className="flex min-h-10 items-center gap-2 text-sm"><input type="radio" name="mode" value="credit" className="size-4 accent-ink" /> Use one of their package classes</label>}
-              <label className="flex min-h-10 items-center gap-2 text-sm"><input type="radio" name="mode" value="unpaid" className="size-4 accent-ink" /> Not paid yet (shows under Awaiting payment)</label>
-              <label className="flex min-h-10 items-center gap-2 text-sm"><input type="radio" name="mode" value="free" className="size-4 accent-ink" /> Free</label>
+              <label className="flex min-h-11 items-center gap-2 text-sm"><input type="radio" name="mode" value="manual" defaultChecked={!s.class_types?.credit_kind} className="size-4 accent-ink" /> Already paid (outside the app)</label>
+              {s.class_types?.credit_kind && <label className="flex min-h-11 items-center gap-2 text-sm"><input type="radio" name="mode" value="credit" defaultChecked className="size-4 accent-ink" /> Use one of their package classes</label>}
+              <label className="flex min-h-11 items-center gap-2 text-sm"><input type="radio" name="mode" value="unpaid" className="size-4 accent-ink" /> Not paid yet (shows under Awaiting payment)</label>
+              <label className="flex min-h-11 items-center gap-2 text-sm"><input type="radio" name="mode" value="free" className="size-4 accent-ink" /> Free</label>
             </fieldset>
             <Checkbox id="notify" name="notify">Email them a booking confirmation</Checkbox>
           </ActionForm>
@@ -165,7 +171,7 @@ export default async function SessionAdmin({ params }: { params: Promise<{ id: s
       {s.status === "scheduled" && !past && (
         <section className="card border-burgundy/25 px-5 py-5">
           <h2 className="display mb-1 text-[0.95rem] text-burgundy">Cancel class</h2>
-          <p className="mb-4 text-sm text-ink-soft">Everyone booked is notified by email and SMS, and gets their credit back (card-paid events are flagged for refund).</p>
+          <p className="mb-4 text-sm text-ink-soft">Everyone booked is notified by email and SMS, and gets their class back (card-paid events are flagged for refund).</p>
           <ActionForm action={cancelSessionAction.bind(null, s.id)} submit="Cancel this class" variant="danger" confirm="Cancel this class and notify everyone booked?">
             <Field id="reason" label="Message to clients (optional)"><input id="reason" name="reason" placeholder="e.g. Instructor unwell. So sorry!" className={inputClass} /></Field>
           </ActionForm>

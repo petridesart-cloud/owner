@@ -6,6 +6,25 @@ import fs from "node:fs";
 import path from "node:path";
 import postgres from "postgres";
 
+// Preview deployments never touch a database: their environment variables may point at a real one.
+if (process.env.VERCEL_ENV && process.env.VERCEL_ENV !== "production") {
+  console.log(`[migrate] VERCEL_ENV=${process.env.VERCEL_ENV}; migrations only run on production deployments; skipping`);
+  process.exit(0);
+}
+
+// A-057: on the real app a missing setting is a failed deploy now, not a 500 later (same rules as src/lib/env-check.ts).
+if (process.env.APP_ENV === "production") {
+  const e = process.env;
+  const problems = [];
+  if (!/^https:\/\/[^/\s]+/.test(e.NEXT_PUBLIC_SITE_URL ?? "")) problems.push("NEXT_PUBLIC_SITE_URL must be the https address of the app");
+  if ((e.CRON_SECRET ?? "").length < 32) problems.push("CRON_SECRET must be at least 32 characters");
+  for (const k of ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY", "RESEND_API_KEY", "EMAIL_FROM"]) if (!e[k]) problems.push(`${k} is missing`);
+  if (problems.length) {
+    console.error(`[migrate] APP_ENV=production but the settings are incomplete:\n - ${problems.join("\n - ")}`);
+    process.exit(1);
+  }
+}
+
 const url = process.env.POSTGRES_URL_NON_POOLING || process.env.DATABASE_URL;
 if (!url) {
   console.log("[migrate] no POSTGRES_URL_NON_POOLING; skipping");
@@ -17,6 +36,8 @@ const sql = postgres(url, { ssl: local ? false : "require", max: 1, onnotice: ()
 const dir = path.join(process.cwd(), "supabase/migrations");
 
 try {
+  // A-058: two deploys at once take turns (the lock is held by this connection until it ends).
+  await sql`select pg_advisory_lock(hashtext('app_migrations'))`;
   await sql`create table if not exists public._app_migrations (name text primary key, applied_at timestamptz not null default now())`;
   await sql`alter table public._app_migrations enable row level security`;
   const done = new Set((await sql`select name from public._app_migrations`).map((r) => r.name));

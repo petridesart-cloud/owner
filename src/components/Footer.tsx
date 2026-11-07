@@ -1,3 +1,4 @@
+import { todayKey } from "@/lib/time";
 import Link from "next/link";
 import { getSettings } from "@/lib/auth";
 import { business } from "@/lib/business";
@@ -7,6 +8,9 @@ const legal = [
   { href: "/policy/payments", label: "Payments & Cancellation" },
   { href: "/legal/terms", label: "Terms" },
   { href: "/legal/privacy", label: "Privacy" },
+  { href: "/legal/cookies", label: "Cookies" },
+  { href: "/legal/health", label: "Health & Safety" },
+  { href: "/legal/accessibility", label: "Accessibility" },
 ];
 
 export async function Footer() {
@@ -18,7 +22,7 @@ export async function Footer() {
         <ul className="flex flex-wrap gap-x-4 gap-y-1">
           {legal.map((l) => (
             <li key={l.href}>
-              <Link href={l.href} className="inline-block py-1.5 underline-offset-4 hover:underline">{l.label}</Link>
+              <Link href={l.href} prefetch={false} className="inline-flex min-h-11 items-center underline-offset-4 hover:underline">{l.label}</Link>
             </li>
           ))}
         </ul>
@@ -32,7 +36,7 @@ export async function Footer() {
           <><br />{b.email && <a className="underline underline-offset-4" href={`mailto:${b.email}`}>{b.email}</a>}{b.email && b.phone && " · "}{b.phone && <a className="underline underline-offset-4" href={`tel:${b.phone.replace(/\s/g, "")}`}>{b.phone}</a>}</>
         )}
       </address>
-      <p className="mt-4">© {new Date().getFullYear()} Re·Form Pilates Studio · Essential cookies only · <Link href="/contact" className="underline underline-offset-4">Contact</Link> · <Link href="/login?next=/admin" className="underline underline-offset-4">Studio sign-in</Link></p>
+      <p className="mt-4">© {todayKey().slice(0, 4)} Re·Form Pilates Studio · Essential cookies only · <Link href="/contact" prefetch={false} className="inline-flex min-h-11 items-center underline underline-offset-4">Contact</Link> · <Link href="/login?next=/admin" prefetch={false} className="inline-flex min-h-11 items-center underline underline-offset-4">Studio sign-in</Link></p>
     </footer>
   );
 }

@@ -14,7 +14,7 @@ export function BottomNav() {
   const path = usePathname();
   const activeIndex = tabs.findIndex(({ href }) => (href === "/" ? path === "/" : path.startsWith(href)));
   return (
-    <nav aria-label="Main" className="glass pb-safe print:hidden fixed inset-x-0 bottom-0 z-40 border-t border-line/80">
+    <nav aria-label="Main" className="glass bg-paper/95 pb-safe print:hidden fixed inset-x-0 bottom-0 z-40 border-t border-line/80">
       <ul className="relative mx-auto grid max-w-xl grid-cols-4">
         {/* Indicator glides between tabs */}
         {activeIndex >= 0 && (
@@ -33,7 +33,7 @@ export function BottomNav() {
               <Link
                 href={href}
                 aria-current={active ? "page" : undefined}
-                className={`flex min-h-14 flex-col items-center justify-center gap-0.5 px-2 text-[0.7rem] font-medium tracking-wide transition-colors ${active ? "text-ink" : "text-ink-soft"}`}
+                className={`flex min-h-14 flex-col items-center justify-center gap-0.5 whitespace-nowrap px-0.5 text-xs font-medium tracking-wide text-ink transition-colors`}
               >
                 <span className={`grid h-8 w-12 place-items-center transition-transform duration-300 [transition-timing-function:var(--ease-spring)] ${active ? "scale-110" : "scale-100"}`}>
                   <Icon aria-hidden size={20} strokeWidth={active ? 2.1 : 1.6} fill={active ? "currentColor" : "none"} fillOpacity={active ? 0.12 : 0} />

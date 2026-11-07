@@ -18,7 +18,7 @@ test("a discount code and a personal reward: right price, noted on the request, 
   const name = `Reward Tester ${Date.now() % 10000}`;
   const client = await (await browser.newContext()).newPage();
   await signUp(client, uniqueEmail("reward"), "/packs?type=reformer", name);
-  const fourClasses = client.getByRole("group", { name: "Reformer packages, valid 30 days" }).getByText("4 classes", { exact: true });
+  const fourClasses = client.getByRole("group", { name: "Reformer packages, 1 month" }).getByText("4 classes", { exact: true });
   await fourClasses.click();
   await client.getByRole("button", { name: "Have a code?" }).click();
   await client.getByLabel("Discount code").fill(code.toLowerCase());
@@ -33,7 +33,8 @@ test("a discount code and a personal reward: right price, noted on the request, 
   await admin.goto("/admin");
   const row = admin.getByRole("listitem").filter({ hasText: name });
   await expect(row).toContainText("€59.50");
-  await row.getByRole("button", { name: "Cash" }).click();
+  await row.getByRole("button", { name: /^Paid · Cash/ }).click();
+  await admin.getByRole("button", { name: "Yes, mark as paid" }).click();
   await expect(row).toHaveCount(0);
 
   // A personal reward: 1 free class, applied by itself on the next package.
@@ -52,7 +53,8 @@ test("a discount code and a personal reward: right price, noted on the request, 
   await expect(client.getByText(/Request sent/)).toBeVisible();
 
   await admin.goto("/admin");
-  await admin.getByRole("listitem").filter({ hasText: name }).getByRole("button", { name: "Cash" }).click();
+  await admin.getByRole("listitem").filter({ hasText: name }).getByRole("button", { name: /^Paid · Cash/ }).click();
+  await admin.getByRole("button", { name: "Yes, mark as paid" }).click();
   await expect(admin.getByRole("listitem").filter({ hasText: name })).toHaveCount(0);
   await client.goto("/bookings");
   await expect(client.locator('a[href^="/bookings/package/"] [data-left]').filter({ hasText: /^5$/ })).toHaveCount(1);

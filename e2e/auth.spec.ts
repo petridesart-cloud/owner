@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { signIn, signUp, uniqueEmail } from "./helpers";
+import { serviceDb, signIn, signUp, startSignUp, uniqueEmail } from "./helpers";
 
 test("create an account, sign in with the password, reset a forgotten password", async ({ page }) => {
   const email = uniqueEmail("auth");
@@ -39,4 +39,15 @@ test("under-18s can't create an account", async ({ page }) => {
   await page.getByLabel("Date of birth").fill(`${new Date().getFullYear() - 16}-01-01`);
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(page.getByText(/18 or over/)).toBeVisible();
+});
+
+test("asking for a new code for an address with no account creates nothing and emails nothing (A-044)", async ({ page }) => {
+  await startSignUp(page, uniqueEmail("resend"), "Resend", "test-pass-123");
+  const stranger = uniqueEmail("stranger");
+  await page.locator('input[type="hidden"][name="email"]').evaluate((el, v) => ((el as HTMLInputElement).value = v), stranger);
+  await page.getByRole("button", { name: "Send a new code" }).click();
+  await expect(page.getByRole("button", { name: "New code sent" })).toBeVisible(); // same reply either way
+  const db = serviceDb();
+  expect((await db.rpc("auth_user_by_email", { p_email: stranger })).data ?? []).toHaveLength(0);
+  expect((await db.from("notifications").select("id").eq("recipient", stranger)).data ?? []).toHaveLength(0);
 });

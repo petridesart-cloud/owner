@@ -22,6 +22,7 @@ export function Importer({ kind, defaults }: { kind: "clients" | "timetable"; de
   const [rows, setRows] = useState<Row[]>([]);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [meta, setMeta] = useState(defaults ?? { name: "", from: "", to: "" });
+  const [adults, setAdults] = useState(false);
   const [pending, start] = useTransition();
   const id = `file-${kind}`;
 
@@ -48,11 +49,16 @@ export function Importer({ kind, defaults }: { kind: "clients" | "timetable"; de
           </table>
         </div>
       )}
+      {kind === "clients" && rows.length > 0 && (
+        <label className="flex min-h-11 items-center gap-2 text-sm text-ink">
+          <input type="checkbox" checked={adults} onChange={(e) => setAdults(e.target.checked)} className="size-4 accent-ink" /> Everyone in this file is 18 or over
+        </label>
+      )}
       {msg && <Notice tone={msg.ok ? "success" : "error"}>{msg.text}</Notice>}
       <Button className="w-full" variant="soft" disabled={!rows.length || pending} onClick={() => start(async () => {
         if (kind === "clients") {
-          const r = await importClients(rows);
-          setMsg(r.ok ? { ok: true, text: `Imported: ${r.data!.created} new, ${r.data!.updated} updated, ${r.data!.skipped} skipped (missing name or bad email).` } : { ok: false, text: r.error });
+          const r = await importClients(rows, adults);
+          setMsg(r.ok ? { ok: true, text: `Imported: ${r.data!.created} new, ${r.data!.updated} updated, ${r.data!.skipped} skipped (missing name or bad email${r.data!.badDates ? `; ${r.data!.badDates} with an end date I couldn't read: use 31.12.2026 or 2026-12-31` : ""}).` } : { ok: false, text: r.error });
         } else {
           const r = await importTimetable(rows, meta.name, meta.from, meta.to);
           setMsg(r.ok ? { ok: true, text: r.message ?? "Imported." } : { ok: false, text: r.error });

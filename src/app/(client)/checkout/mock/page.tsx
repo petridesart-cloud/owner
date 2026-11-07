@@ -4,6 +4,7 @@ import { CreditCard, Lock } from "lucide-react";
 import { Button, Eyebrow } from "@/components/ui";
 import { getSettings, requireViewer } from "@/lib/auth";
 import { db } from "@/lib/supabase/admin";
+import { env } from "@/lib/env";
 import { eur, vatLine } from "@/lib/money";
 import { abandonMockPayment, completeMockPayment } from "./actions";
 
@@ -12,7 +13,7 @@ export const metadata: Metadata = { title: "Test checkout" };
 export default async function MockCheckout({ searchParams }: { searchParams: Promise<{ payment?: string }> }) {
   const { payment } = await searchParams;
   const viewer = await requireViewer("/");
-  if (!payment) notFound();
+  if (!payment || !env.demoMode) notFound(); // the test checkout exists only in demo mode
   const { data: pay } = await db().from("payments").select("*").eq("id", payment).eq("profile_id", viewer.profile.id).maybeSingle();
   if (!pay || pay.status !== "pending") notFound();
   const settings = await getSettings();

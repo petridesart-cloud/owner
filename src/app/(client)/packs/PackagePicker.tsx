@@ -1,7 +1,9 @@
 "use client";
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Checkbox, inputClass } from "@/components/ui";
+import Link from "next/link";
+import { Button, ButtonLink, Checkbox, inputClass } from "@/components/ui";
+import { eur } from "@/lib/money";
 import { withDiscount, type Discount } from "@/lib/discount";
 import { buyPackAction, checkCodeAction, type PayMethod } from "./actions";
 
@@ -9,15 +11,29 @@ export type Option = { id: string; perWeek: number; credits: number; cents: numb
 /** One card per class type and length; `heading`/`description` open a class type inside a tab with several (e.g. Private → Mat). */
 export type Group = { key: string; months: number; title: string; heading?: string; description?: string | null; options: Option[] };
 
-const eur = (c: number) => `€${(c / 100).toFixed(c % 100 ? 2 : 0)}`;
 const METHOD_LABEL: Record<PayMethod, string> = { cash: "Cash", revolut: "Revolut", bank_transfer: "Bank transfer" };
 
 /** Pick a package (per week × months), choose cash or Revolut, accept the terms, request it. */
-export function PackagePicker({ groups, methods, online, cutoff, rewards = [], signedIn = false }: {
+export function PackagePicker({ groups, methods, online, cutoff, rewards = [], signedIn = false, seller = null, vatNote = null, tab = "", pick = null }: {
   groups: Group[]; methods: PayMethod[]; online: boolean; cutoff: number; rewards?: Discount[]; signedIn?: boolean;
+  /** The Packages tab, and a package to pre-select (coming back from Create account), kept in the return link (A-026). */
+  tab?: string; pick?: string | null;
+  /** Who sells it (name, address) and "no VAT charged": shown before the request (A-012). */
+  seller?: string | null; vatNote?: string | null;
 }) {
   const router = useRouter();
-  const [selected, setSelected] = useState<Option | null>(null);
+  const [selected, setSelected] = useState<Option | null>(() => groups.flatMap((g) => g.options).find((o) => o.id === pick) ?? null);
+  // Where "Create a free account" and "Sign in" bring them back to: this tab with the same package chosen (A-026).
+  const back = selected ? `/packs?type=${tab}&pick=${selected.id}` : `/packs?type=${tab}`;
+  const summary = useRef<HTMLHeadingElement>(null);
+  const acceptBox = useRef<HTMLInputElement>(null);
+  // A-027: choosing a package brings its summary into view and moves focus to it.
+  useEffect(() => {
+    if (!selected || !summary.current) return;
+    const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    summary.current.scrollIntoView({ behavior: calm ? "auto" : "smooth", block: "start" });
+    summary.current.focus({ preventScroll: true });
+  }, [selected?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const [discount, setDiscount] = useState<Discount | null>(rewards[0] ?? null);
   const [codeOpen, setCodeOpen] = useState(false);
   const [code, setCode] = useState("");
@@ -29,8 +45,11 @@ export function PackagePicker({ groups, methods, online, cutoff, rewards = [], s
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
+  const selectedLine = selected ? `${selected.credits} ${selected.kindLabel} ${selected.credits === 1 ? "class" : "classes"}, ${eur(price(selected).cents)} selected` : "";
   return (
     <div className="space-y-5">
+      {/* Always mounted, so a screen reader announces the choice (A-027). */}
+      <p role="status" aria-live="polite" className="sr-only">{selectedLine}</p>
       {groups.map((g) => (
         <div key={g.key} className="space-y-3">
         {g.heading && (
@@ -40,10 +59,9 @@ export function PackagePicker({ groups, methods, online, cutoff, rewards = [], s
           </div>
         )}
         <fieldset className="card px-4 py-4">
-          <legend className="sr-only">{g.title}, valid {g.options[0]?.validityDays} days</legend>
+          <legend className="sr-only">{g.options[0]?.kindLabel} packages, {g.title}, valid {g.options[0]?.validityDays} days</legend>
           <div className="px-1">
-            <p className="display text-[1.05rem] text-ink">{g.title}</p>
-            <p className="text-sm text-ink-soft">Valid {g.options[0]?.validityDays} days from your first class</p>
+            <p className="display text-[1.05rem] text-ink">{g.title} <span className="text-ink-soft">· valid {g.options[0]?.validityDays} days from your first class</span></p>
           </div>
           <div className="mt-3 space-y-2">
             {g.options.map((o) => {
@@ -54,7 +72,6 @@ export function PackagePicker({ groups, methods, online, cutoff, rewards = [], s
                   <span className="flex min-h-16 items-center justify-between gap-3 rounded-2xl border border-line bg-white px-4 py-3 text-ink transition peer-checked:border-plum-700 peer-checked:bg-lilac-100 peer-focus-visible:ring-2 peer-focus-visible:ring-lilac-300">
                     <span>
                       <span className="block text-base font-medium">{o.credits} {o.credits === 1 ? "class" : "classes"}</span>
-                      <span className="block text-xs text-ink-soft">{o.credits} {o.credits === 1 ? "credit" : "credits"}</span>
                     </span>
                     <span className="text-right">
                       {(o.student || price(o).cents < o.cents) && <span className="block text-[0.7rem] text-ink-soft line-through">{eur(o.listCents)}</span>}
@@ -71,9 +88,9 @@ export function PackagePicker({ groups, methods, online, cutoff, rewards = [], s
       ))}
 
       {selected && (
-        <div className="card animate-rise space-y-4 px-5 py-5" aria-live="polite">
+        <div className="card animate-rise scroll-mt-20 space-y-4 px-5 py-5">
           <div className="flex items-baseline justify-between gap-3">
-            <p className="font-medium text-ink">{selected.kindLabel} · {selected.credits} {selected.credits === 1 ? "class" : "classes"} · valid {selected.validityDays} days</p>
+            <h2 ref={summary} tabIndex={-1} className="font-medium text-ink outline-none">{selected.kindLabel} · {selected.credits} {selected.credits === 1 ? "class" : "classes"} · valid {selected.validityDays} days</h2>
             <p className="font-serif text-2xl text-ink">{eur(price(selected).cents)}</p>
           </div>
           {selected.student && !(discount && price(selected).applies && discount.kind !== "free_classes") && <p className="-mt-2 text-xs font-medium text-plum-700">Student price</p>}
@@ -120,22 +137,39 @@ export function PackagePicker({ groups, methods, online, cutoff, rewards = [], s
             </fieldset>
           )}
           <ul className="list-disc space-y-1 rounded-2xl bg-lilac-50 py-3 pl-8 pr-4 text-sm leading-relaxed text-ink">
-            <li>{selected.credits + price(selected).extraClasses} {selected.kindLabel} {selected.credits + price(selected).extraClasses === 1 ? "class" : "classes"} ({selected.credits + price(selected).extraClasses} credits), valid {selected.validityDays} days from the date of your first class. Use them whenever you like within that time.</li>
-            <li>Cancel at least {cutoff} hours before class and the credit goes straight back into your package. Cancellations within {cutoff} hours, and missed classes, use the credit and can&apos;t be refunded.</li>
+            <li>{selected.credits + price(selected).extraClasses} {selected.kindLabel} {selected.credits + price(selected).extraClasses === 1 ? "class" : "classes"} valid {selected.validityDays} days from the date of your first class. Use them whenever you like within that time.</li>
+            <li>Cancel at least {cutoff} hours before class and the class goes straight back into your package. Cancellations within {cutoff} hours, and missed classes, use the class and can&apos;t be refunded.</li>
             <li>Classes can&apos;t be booked after the expiry date; unused classes expire and are non-refundable.</li>
             <li>{online ? "Paid now by secure checkout." : "Paid in advance. Your classes appear as soon as your instructor confirms the payment."}</li>
             <li>Personal: packages can&apos;t be shared or transferred.</li>
+            <li>You can withdraw within 14 days of payment: a full refund if you haven&apos;t used a class, otherwise minus the classes used (see the Terms).</li>
+            <li>Total {eur(price(selected).cents)}{vatNote ? ` (${vatNote})` : ""}.{seller ? ` Sold by ${seller}.` : ""}</li>
           </ul>
-          <Checkbox id="accept" checked={accepted} onChange={(e) => setAccepted(e.target.checked)}>
-            I accept these package terms and the <a href="/legal/terms" target="_blank" className="font-medium underline underline-offset-4">Terms</a>.
-          </Checkbox>
-          <Button className="w-full" disabled={pending || !accepted} onClick={() => start(async () => {
-            const res = await buyPackAction(selected.id, accepted, method, discount && price(selected).applies ? discount.code : null);
-            if (!res.ok) return setError(res.error);
-            const url = res.data!.redirect;
-            if (url.startsWith("http")) window.location.assign(url); else router.push(url);
-          })}>{pending ? "One moment…" : online ? "Buy package" : "Request package"}</Button>
-          {error && <p role="alert" className="text-sm text-burgundy">{error}</p>}
+          {signedIn ? (
+            <>
+              <Checkbox id="accept" ref={acceptBox} checked={accepted} onChange={(e) => { setAccepted(e.target.checked); setError(null); }}
+                aria-describedby={error ? "pack-error" : undefined}>
+                I accept these package terms and the <a href="/legal/terms" target="_blank" className="inline-flex min-h-11 items-center font-medium underline underline-offset-4">Terms</a>.
+              </Checkbox>
+              <Button className="w-full" disabled={pending} onClick={() => {
+                // A-109: the button stays enabled; if the terms aren't ticked we say so and move focus there.
+                if (!accepted) { setError("Please accept the package terms to continue."); acceptBox.current?.focus(); return; }
+                start(async () => {
+                  const res = await buyPackAction(selected.id, accepted, method, discount && price(selected).applies ? discount.code : null, back);
+                  if (!res.ok) return setError(res.error);
+                  const url = res.data!.redirect;
+                  if (url.startsWith("http")) window.location.assign(url); else router.push(url);
+                });
+              }}>{pending ? (online ? "Opening checkout…" : "Sending your request…") : online ? "Buy package" : "Request package"}</Button>
+              {error && <p id="pack-error" role="alert" className="text-sm text-burgundy">{error}</p>}
+            </>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm leading-relaxed text-ink-soft">Sign in or create an account to request your package. Your choice is kept.</p>
+              <ButtonLink href={`/signup?next=${encodeURIComponent(back)}&why=package`} className="w-full">Create a free account to request this package</ButtonLink>
+              <p className="text-center text-sm text-ink-soft">Already a client? <Link href={`/login?next=${encodeURIComponent(back)}&why=package`} className="inline-flex min-h-11 items-center font-medium text-ink underline underline-offset-4">Sign in</Link></p>
+            </div>
+          )}
         </div>
       )}
     </div>

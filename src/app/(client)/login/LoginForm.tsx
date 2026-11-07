@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
-import { useActionState, useState } from "react";
+import { startTransition, useActionState, useRef, useState } from "react";
+import { useFocusOnError } from "@/lib/focus-error";
 import { Button, ButtonLink, Field, Notice, inputClass } from "@/components/ui";
 import { keepValues } from "@/lib/keep-form";
 import { confirmEmail, requestReset, resendCode, resetPassword, signIn, type AuthState } from "./actions";
@@ -12,8 +13,10 @@ export function CodeStep({ email, demoCode, next, onChange }: { email: string; d
   const [state, action, pending] = useActionState<AuthState, FormData>(confirmEmail, { ok: false });
   const [resent, resend, resending] = useActionState<AuthState, FormData>(resendCode, { ok: false });
   const code = resent.demoCode ?? demoCode;
+  const form = useRef<HTMLFormElement>(null);
+  useFocusOnError(form, resent.error ? resent : state, !!(state.error || resent.error));
   return (
-    <form onSubmit={keepValues(action)} className="space-y-4" noValidate>
+    <form ref={form} onSubmit={keepValues(action)} className="space-y-4" noValidate>
       <input type="hidden" name="email" value={email} />
       <input type="hidden" name="next" value={next} />
       <p className="text-sm leading-relaxed text-ink-soft" aria-live="polite">
@@ -26,7 +29,8 @@ export function CodeStep({ email, demoCode, next, onChange }: { email: string; d
           defaultValue={code} key={code ?? "code"} placeholder="••••••" className={codeClass} />
       </Field>
       <Button type="submit" disabled={pending} className="w-full">{pending ? "Checking…" : "Confirm"}</Button>
-      <button type="submit" formAction={resend} formNoValidate disabled={resending} className="mx-auto block min-h-11 text-sm font-medium text-ink underline underline-offset-4">
+      {/* Not a submit button: the form's onSubmit (keepValues) would send it to confirmEmail instead. */}
+      <button type="button" disabled={resending} onClick={(e) => { const f = new FormData(e.currentTarget.form!); startTransition(() => resend(f)); }} className="mx-auto block min-h-11 text-sm font-medium text-ink underline underline-offset-4">
         {resent.ok ? "New code sent" : "Send a new code"}
       </button>
     </form>
@@ -36,9 +40,11 @@ export function CodeStep({ email, demoCode, next, onChange }: { email: string; d
 function ForgotPassword({ next, email, onBack }: { next: string; email?: string; onBack: () => void }) {
   const [req, request, requesting] = useActionState<AuthState, FormData>(requestReset, { ok: false });
   const [res, reset, resetting] = useActionState<AuthState, FormData>(resetPassword, { ok: false });
+  const form = useRef<HTMLFormElement>(null);
+  useFocusOnError(form, req.error ? req : res, !!(req.error || res.error || Object.keys(res.errors ?? {}).length));
   if (!(req.ok && req.step === "code")) {
     return (
-      <form onSubmit={keepValues(request)} className="space-y-4" noValidate>
+      <form ref={form} onSubmit={keepValues(request)} className="space-y-4" noValidate>
         <h2 className="text-center font-medium text-ink">Reset your password</h2>
         <Field id="reset-email" label="Email" error={req.error} hint="We'll email you a code to choose a new password.">
           <input id="reset-email" name="email" type="email" inputMode="email" autoComplete="email" required defaultValue={email} className={inputClass} />
@@ -50,7 +56,7 @@ function ForgotPassword({ next, email, onBack }: { next: string; email?: string;
   }
   const e = res.errors ?? {};
   return (
-    <form onSubmit={keepValues(reset)} className="space-y-4" noValidate>
+    <form ref={form} onSubmit={keepValues(reset)} className="space-y-4" noValidate>
       <input type="hidden" name="email" value={req.email} />
       <input type="hidden" name="next" value={next} />
       <p className="text-sm leading-relaxed text-ink-soft" aria-live="polite">
@@ -77,21 +83,23 @@ export function LoginForm({ next, demo }: { next: string; demo: boolean }) {
   const [state, action, pending] = useActionState<AuthState, FormData>(signIn, { ok: false });
   const [mode, setMode] = useState<"signin" | "forgot">("signin");
   const [email, setEmail] = useState("");
+  const form = useRef<HTMLFormElement>(null);
+  useFocusOnError(form, state, !!state.error);
 
   if (mode === "forgot") return <ForgotPassword next={next} email={email} onBack={() => setMode("signin")} />;
   if (state.ok && state.step === "code" && state.email) return <CodeStep email={state.email} demoCode={state.demoCode} next={next} />;
 
   return (
     <div className="space-y-5">
-      <form onSubmit={keepValues(action)} className="space-y-4" noValidate>
+      <form ref={form} onSubmit={keepValues(action)} className="space-y-4" noValidate>
         <input type="hidden" name="next" value={next} />
         {state.error && <Notice tone="error">{state.error}</Notice>}
         <Field id="email" label="Email">
-          <input id="email" name="email" type="email" inputMode="email" autoComplete="username" required
+          <input id="email" name="email" type="email" inputMode="email" autoComplete="username" required aria-invalid={state.error ? true : undefined}
             onChange={(ev) => setEmail(ev.target.value)} placeholder="you@example.com" className={inputClass} />
         </Field>
         <Field id="password" label="Password">
-          <input id="password" name="password" type="password" autoComplete="current-password" required className={inputClass} />
+          <input id="password" name="password" type="password" autoComplete="current-password" required aria-invalid={state.error ? true : undefined} className={inputClass} />
         </Field>
         <Button type="submit" disabled={pending} className="w-full">{pending ? "Signing in…" : "Sign in"}</Button>
         <button type="button" onClick={() => setMode("forgot")} className="mx-auto block min-h-11 text-sm font-medium text-ink underline underline-offset-4">Forgot password?</button>

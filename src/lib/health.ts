@@ -38,3 +38,14 @@ export function needsClearance(h: { conditions?: string[] | null; pregnancy?: st
   const c = h.conditions ?? [];
   return c.includes("surgery") || (c.includes("pregnancy") && (h.pregnancy === "current" || (h.pregnancy === "past" && (h.postpartum_months ?? 99) <= 3)));
 }
+
+/** Version of the health-data consent wording, stored on each consent row (A-001). Bump when the text changes. */
+export const HEALTH_CONSENT_VERSION = "health-2026-11-v1";
+
+/**
+ * Is there anything to store (so explicit consent is needed)? One rule for the form and the server (A-105).
+ * "No injuries" with only "other medication" filled in still stores the medication, so it needs consent too.
+ */
+export function needsHealthConsent(a: { conditions?: string[] | null; bpMeds?: boolean | null; medication?: string | null; details?: string | null }) {
+  return (a.conditions?.length ?? 0) > 0 || !!a.bpMeds || !!a.medication?.trim() || !!a.details?.trim();
+}

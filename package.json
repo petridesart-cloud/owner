@@ -12,38 +12,45 @@
     "db:reset": "supabase db reset",
     "db:types": "npx supabase@2 gen types typescript --local > src/lib/supabase/types.ts && node scripts/widen-types.mjs && npx -y prettier@3.3.3 --log-level warn --print-width 120 --write src/lib/supabase/types.ts",
     "db:bundle": "node scripts/bundle-sql.mjs",
+    "legal:docs": "tsx scripts/legal-docs.ts",
     "test:engine": "node --test --import tsx tests/engine.test.ts",
     "test:webhook": "node --test --import tsx tests/webhook.test.ts",
+    "test:notify": "node --test --test-concurrency=1 --import ./tests/server-only-hook.mjs --import tsx tests/notify.test.ts",
+    "test:migrate": "node --test --import tsx tests/migrate.test.ts",
+    "test:unit": "node --test --import tsx tests/unit.test.ts",
     "vercel-build": "node scripts/migrate.mjs && next build",
-    "db:migrate": "node scripts/migrate.mjs"
+    "db:migrate": "node scripts/migrate.mjs",
+    "check:dead": "npx -y knip@5 --no-progress --include exports,files"
   },
   "dependencies": {
-    "@supabase/ssr": "^0.12.7",
+    "@supabase/ssr": "0.12.7",
     "@supabase/supabase-js": "^2.117.3",
     "lucide-react": "^1.55.0",
-    "next": "16.4.3",
+    "next": "16.4.5",
     "papaparse": "^5.7.0",
     "postgres": "^3.4.9",
-    "react": "19.3.0",
-    "react-dom": "19.3.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
     "read-excel-file": "^9.3.12",
     "server-only": "^0.0.1",
     "stripe": "^23.0.0",
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@fontsource/cormorant-garamond": "^5.3.0",
-    "@fontsource/pinyon-script": "^5.3.0",
     "@playwright/test": "^1.64.0",
     "@tailwindcss/turbopack": "^4",
-    "@types/node": "^20",
+    "@types/node": "22.20.5",
     "@types/papaparse": "^5.5.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "axe-core": "^4.14.0",
     "eslint": "^9",
-    "eslint-config-next": "16.4.3",
+    "eslint-config-next": "16.4.5",
     "tailwindcss": "^4",
     "tsx": "^4.23.15",
     "typescript": "^5"
+  },
+  "engines": {
+    "node": "22.x"
   }
 }

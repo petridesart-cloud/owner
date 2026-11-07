@@ -5,18 +5,18 @@ import { db } from "@/lib/supabase/admin";
 import { addDaysKey, localToUtc, longDate, time, todayKey } from "@/lib/time";
 import { scheduleTick } from "@/lib/tick";
 import { CheckInToggle } from "./RosterControls";
-import { MarkPaid, RemoveRequest, RenewButtons } from "./PaymentButtons";
+import { MarkPaid, MarkRefunded, RemoveRequest, RenewButtons } from "./PaymentButtons";
 import { ActionForm } from "@/components/ActionForm";
 import { Field, inputClass } from "@/components/ui";
 import { cancelToday } from "./actions";
 import { eur } from "@/lib/money";
 import { dayMonth, nowMs } from "@/lib/time";
 import { AdminTitle, Stat } from "./ui";
-import { getSettings } from "@/lib/auth";
+import { canViewHealth, getSettings } from "@/lib/auth";
 import { launchReadiness } from "@/lib/business";
-import { env } from "@/lib/env";
+import { env, smsLive } from "@/lib/env";
 import { Readiness } from "./Readiness";
-import { ago, schedulerHealthy } from "@/lib/scheduler";
+import { ago, schedulerWarning } from "@/lib/scheduler";
 import { HealthInfo } from "./HealthInfo";
 
 export const dynamic = "force-dynamic";
@@ -28,19 +28,20 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   scheduleTick();
   const { day } = await searchParams;
   const key = day && /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : todayKey();
-  const settings = await getSettings();
-  const sessions = await sessionsWithRoster(localToUtc(key, "00:00"), localToUtc(addDaysKey(key, 1), "00:00"));
-  const live = sessions.filter((s) => s.status === "scheduled");
-  const booked = live.reduce((n, s) => n + s.roster.length, 0);
-  const cap = live.reduce((n, s) => n + s.capacity, 0);
-  const isToday = key === todayKey();
-  const [{ count: pendingRefunds }, { data: awaiting }, { data: renewals }] = await Promise.all([
-    db().from("payments").select("id", { count: "exact", head: true }).eq("status", "needs_refund"),
+  // A-100: one stage for everything the page reads.
+  const [settings, seeHealth, sessions, { data: refunds }, { data: awaiting }, { data: renewals }] = await Promise.all([
+    getSettings(), canViewHealth(),
+    sessionsWithRoster(localToUtc(key, "00:00"), localToUtc(addDaysKey(key, 1), "00:00")),
+    db().from("payments").select("id, description, amount_cents, method, profiles(id, full_name)").eq("status", "needs_refund").order("created_at"),
     db().from("payments").select("id, description, amount_cents, created_at, purpose, intended_method, discount_note, profiles(id, full_name)").eq("status", "pending").eq("provider", "offline").order("created_at"),
     db().from("memberships").select("id, current_period_end, status, profiles(id, full_name), products!memberships_product_id_fkey(name, price_cents)")
       .eq("provider", "offline").eq("cancel_at_period_end", false).in("status", ["active", "past_due"])
       .lte("current_period_end", new Date(nowMs() + 7 * 86_400_000).toISOString()).order("current_period_end"),
   ]);
+  const live = sessions.filter((s) => s.status === "scheduled");
+  const booked = live.reduce((n, s) => n + s.roster.length, 0);
+  const cap = live.reduce((n, s) => n + s.capacity, 0);
+  const isToday = key === todayKey();
 
   return (
     <div>
@@ -60,15 +61,31 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
         <Stat label="Waitlist" value={live.reduce((n, s) => n + s.waitlist.length, 0)} />
       </div>
       {isToday && env.isProduction && <Readiness items={await launchReadiness(settings)} compact />}
-      {settings.last_cron_tick_at && !schedulerHealthy(settings.last_cron_tick_at) && (
+      {schedulerWarning(settings.last_cron_tick_at, env.demoMode) ? (
         <p role="alert" className="mb-5 rounded-2xl border border-burgundy/25 bg-burgundy-soft px-4 py-3 text-sm text-burgundy">
-          Automatic reminders last ran {ago(settings.last_cron_tick_at)}. Open <Link href="/admin/outbox" className="font-medium underline underline-offset-4">Settings → Messages</Link> and tap &ldquo;Send due reminders now&rdquo;, then let your developer know.
+          {settings.last_cron_tick_at ? <>Automatic reminders last ran {ago(settings.last_cron_tick_at)}.</> : <>Automatic reminders haven&apos;t run yet.</>} Open <Link href="/admin/outbox" className="font-medium underline underline-offset-4">Settings → Messages</Link> and tap &ldquo;Send due reminders now&rdquo;, then let your developer know.
         </p>
-      )}
-      {(pendingRefunds ?? 0) > 0 && (
-        <p role="status" className="mb-5 rounded-2xl border border-burgundy/25 bg-burgundy-soft px-4 py-3 text-sm text-burgundy">
-          {pendingRefunds} payment{pendingRefunds === 1 ? "" : "s"} need a manual refund in Stripe (paid after the spot was gone, or a cancelled event).
+      ) : settings.last_tick_error ? (
+        <p role="alert" className="mb-5 rounded-2xl border border-burgundy/25 bg-burgundy-soft px-4 py-3 text-sm text-burgundy">
+          Part of the automatic work didn&apos;t run last time ({settings.last_tick_error}). Open <Link href="/admin/outbox" className="font-medium underline underline-offset-4">Settings → Messages</Link> and tap &ldquo;Send due reminders now&rdquo;; if it keeps showing, let your developer know.
         </p>
+      ) : null}
+      {(refunds ?? []).length > 0 && (
+        <section className="card mb-5 overflow-hidden border-burgundy/25" aria-labelledby="refunds">
+          <h2 id="refunds" className="display border-b border-line px-4 py-3 text-[0.95rem] text-burgundy">Refunds to pay back</h2>
+          <p className="px-4 pt-3 text-xs text-ink-soft">A full refund by hand, the way they paid (an event you cancelled, or paid after the spot was gone). Tap Refunded once you&apos;ve paid it back.</p>
+          <ul className="divide-y divide-line">
+            {refunds!.map((p) => (
+              <li key={p.id} className="flex items-center gap-3 px-4 py-3">
+                <div className="min-w-0 flex-1">
+                  <Link href={`/admin/clients/${p.profiles?.id}`} className="block truncate text-sm font-medium text-ink hover:underline">{p.profiles?.full_name ?? "Client"}</Link>
+                  <p className="truncate text-xs text-ink-soft">{p.description} · {eur(p.amount_cents)}{p.method ? ` · paid by ${METHOD[p.method] ?? p.method}` : ""}</p>
+                </div>
+                <MarkRefunded paymentId={p.id} label={`${p.profiles?.full_name ?? "Client"}: ${p.description}`} />
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       {isToday && (awaiting ?? []).length > 0 && (
@@ -83,7 +100,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
                   {p.intended_method && <p className="text-xs font-medium text-plum-700">Will pay: {METHOD[p.intended_method] ?? p.intended_method}</p>}
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <MarkPaid paymentId={p.id} prefer={p.intended_method} label={`${p.profiles?.full_name}: ${p.description}`} />
+                  <MarkPaid paymentId={p.id} prefer={p.intended_method} amountCents={p.amount_cents} label={`${p.profiles?.full_name}: ${p.description}`} />
                   <RemoveRequest paymentId={p.id} label={`${p.profiles?.full_name}: ${p.description}`} />
                 </div>
               </li>
@@ -135,15 +152,16 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
                       {b.firstClass && <span className={`${flag} bg-lilac-300 text-ink`}>First class</span>}
                       {b.minor && <span className={`${flag} bg-burgundy-soft text-burgundy`}>Under 18</span>}
                       {b.profiles?.health_notes?.clearance_needed && !b.profiles.health_notes.clearance_received_at && <span className={`${flag} bg-burgundy text-paper`}>Doctor&apos;s note needed</span>}
+                      {b.profiles?.parq_completed_at && b.profiles.health_mode === "in_person" && <span className={`${flag} bg-white text-ink-soft ring-1 ring-line`}>Health: tell in person</span>}
                       {b.profiles && !b.profiles.parq_completed_at && <span className={`${flag} bg-white text-ink-soft ring-1 ring-line`}>No health answers</span>}
                       {b.tag === "trial" && <span className={`${flag} bg-mauve text-ink`}>Trial</span>}
                       {b.tag === "drop_in" && <span className={`${flag} bg-lilac-100 text-ink`}>Drop-in</span>}
                       {b.profiles?.photo_consent === "none" && <span className={`${flag} bg-ink text-paper`}>No photos</span>}
                       {b.profiles?.photo_consent === "no_face" && <span className={`${flag} bg-ink/80 text-paper`}>No face</span>}
                       {b.paid_with === "pay_at_studio" && b.payment?.status !== "paid" && <span className={`${flag} bg-burgundy-soft text-burgundy`}>Unpaid{b.payment?.intended_method ? ` · ${METHOD[b.payment.intended_method]}` : ""}</span>}
-                      {b.status === "no_show" ? "No-show" : b.paid_with === "credit" ? "Class credit" : b.paid_with === "payment" ? "Paid" : b.paid_with === "pay_at_studio" ? "Pay at studio" : "Manual / DM"}{b.profiles?.phone ? ` · ${b.profiles.phone}` : ""}
+                      {b.status === "no_show" ? "No-show" : b.paid_with === "credit" ? "Package class" : b.paid_with === "payment" ? "Paid" : b.paid_with === "pay_at_studio" ? "Pay at studio" : "Manual / DM"}{b.profiles?.phone ? ` · ${b.profiles.phone}` : ""}
                     </p>
-                    <HealthInfo h={b.profiles?.health_notes} />
+                    {seeHealth && <HealthInfo h={b.profiles?.health_notes} canView />}
                   </div>
                 </li>
               ))}
@@ -159,7 +177,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
       {isToday && live.some((x) => new Date(x.starts_at) > new Date()) && (
         <details className="card mt-6 px-5 py-3">
           <summary className="min-h-11 cursor-pointer content-center text-sm font-medium text-burgundy">Cancel the rest of today</summary>
-          <p className="mt-1 text-sm text-ink-soft">Unwell or need a break? Cancels every remaining class today, tells everyone booked (email + SMS) and returns their classes. The waitlist isn&apos;t offered anything.</p>
+          <p className="mt-1 text-sm text-ink-soft">Unwell or need a break? Cancels every remaining class today, tells everyone booked by email{smsLive() ? " and SMS" : ""} and returns their package classes. The waitlist isn&apos;t offered anything.</p>
           <div className="mt-3 pb-2">
             <ActionForm action={cancelToday} submit="Cancel today's remaining classes" variant="danger" confirm="Cancel all remaining classes today and notify everyone?">
               <Field id="reason" label="Message to clients"><input id="reason" name="reason" placeholder="So sorry, I'm unwell today. Your class is back in your account." className={inputClass} /></Field>

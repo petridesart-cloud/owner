@@ -8,7 +8,7 @@ export const DEFAULT_LOGO = "/logo-instagram.png";
 /** New studio photos go here; the Studio page shows every 'studio:*' slot (older uploads had one per section). */
 export const STUDIO_SLOT = "studio:space";
 
-export function publicUrl(path: string) {
+function publicUrl(path: string) {
   return db().storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
 }
 
@@ -23,4 +23,11 @@ export async function getMedia(slotOrPrefix: string): Promise<MediaItem[]> {
 export async function logoSrc() {
   const [logo] = await getMedia("logo").catch(() => []);
   return logo?.url ?? DEFAULT_LOGO;
+}
+
+/** Photos for an exact list of slots (e.g. the covers of the events on a page), in one query. */
+export async function getMediaIn(slots: string[]): Promise<MediaItem[]> {
+  if (!slots.length) return [];
+  const { data } = await db().from("media").select("id, slot, path, caption, sort").in("slot", slots).order("sort").order("created_at");
+  return (data ?? []).map((m) => ({ ...m, url: publicUrl(m.path) }));
 }

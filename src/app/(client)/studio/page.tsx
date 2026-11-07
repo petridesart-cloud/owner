@@ -17,7 +17,7 @@ export default async function StudioPage() {
       <div className="px-5 pt-3"><BackButton href="/" /></div>
       <PageTitle title="Studio" script="The" />
       <section aria-label="Photos of the studio">
-        <PhotoStrip photos={photos} label="The studio" slides />
+        <PhotoStrip photos={photos} label="The studio" slides priority />
       </section>
       {t.studio_text && <div className="mt-4"><Prose>{t.studio_text.split(/\n\s*\n/).map((para, i) => <p key={i}>{para}</p>)}</Prose></div>}
     </div>

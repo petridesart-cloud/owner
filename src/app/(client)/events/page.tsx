@@ -8,7 +8,7 @@ import { EventCard, LockedEvent } from "@/components/EventCard";
 import { getViewer } from "@/lib/auth";
 import { getTexts } from "@/lib/content";
 import { availability, eventExtras, lockedEventIds, viewerSessionState } from "@/lib/data";
-import { getMedia } from "@/lib/media";
+import { getMediaIn } from "@/lib/media";
 import { db } from "@/lib/supabase/admin";
 import { longDate } from "@/lib/time";
 
@@ -17,24 +17,24 @@ export const dynamic = "force-dynamic";
 
 export default async function EventsPage() {
   const now = new Date();
-  const [viewer, texts, upcomingAll, photos, covers, { data: past }] = await Promise.all([
+  const [viewer, texts, upcomingAll, { data: past }] = await Promise.all([
     getViewer(),
     getTexts(),
-    availability(now, new Date(now.getTime() + 365 * 86_400_000)),
-    getMedia("event:"),
-    getMedia("event-cover:"),
+    // A-050: events only, so the 1,000-row cap on a year of classes can't hide the later ones.
+    availability(now, new Date(now.getTime() + 730 * 86_400_000), { eventsOnly: true }),
     db().from("class_sessions").select("id, title, recap, starts_at, location, class_types!inner(kind)")
       .eq("class_types.kind", "event").eq("status", "scheduled").lt("starts_at", now.toISOString())
       .order("starts_at", { ascending: false }).limit(12),
   ]);
   const upcoming = upcomingAll.filter((c) => c.kind === "event" && c.status === "scheduled");
-  const [state, extras, lockedIds] = await Promise.all([
+  const archive = past ?? [];
+  const [state, extras, lockedIds, photos, covers] = await Promise.all([
     viewerSessionState(viewer?.profile.id),
     eventExtras(upcoming.map((e) => e.id)),
     lockedEventIds(upcoming.map((e) => e.id), viewer?.profile.id),
+    getMediaIn(archive.map((e) => `event:${e.id}`)),
+    getMediaIn(upcoming.map((e) => `event-cover:${e.id}`)),
   ]);
-  // Every past event she held (not cancelled), newest first; her photos and a few words are optional extras.
-  const archive = past ?? [];
 
   return (
     <div>
@@ -51,7 +51,7 @@ export default async function EventsPage() {
                 <li key={e.id}>
                   {locked ? <LockedEvent cover={cover} signedIn={!!viewer} /> : (
                     <Link href={`/book/${e.id}`} className="block rounded-[var(--radius-card)] shadow-[var(--shadow-soft)] transition hover:shadow-[var(--shadow-lift)]">
-                      <EventCard e={e} cover={cover} clientsOnly={!!extras.get(e.id)?.clients_only} booked={state.booked.has(e.id)} font={extras.get(e.id)?.title_font} />
+                      <EventCard e={e} cover={cover} clientsOnly={!!extras.get(e.id)?.clients_only} booked={state.booked.has(e.id)} font={extras.get(e.id)?.title_font} priority={e.id === upcoming[0]?.id} />
                     </Link>
                   )}
                 </li>
