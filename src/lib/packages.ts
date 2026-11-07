@@ -1,3 +1,4 @@
+import { monthsLabel } from "@/lib/copy";
 import "server-only";
 import { db } from "@/lib/supabase/admin";
 import { kindLabels } from "@/lib/kinds";
@@ -11,7 +12,7 @@ export type PackageView = {
   current: boolean; classes: PackageClass[];
 };
 
-const months = (m: number) => `${m} month${m === 1 ? "" : "s"}`;
+const months = monthsLabel;
 
 /**
  * The client's packages (credit lots) with what happened to each class, for My classes.

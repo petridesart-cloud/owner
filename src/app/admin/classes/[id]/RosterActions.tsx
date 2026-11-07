@@ -30,7 +30,7 @@ export function RosterActions({ bookingId, sessionId, name, past, insideCutoff =
         </>
       ) : (
         <button disabled={pending} className={remove} aria-label={`Remove, ${name}, and return their class`}
-          onClick={() => go(true, `Cancel ${name}'s booking? Their credit is returned and they're notified.`)}>
+          onClick={() => go(true, `Cancel ${name}'s booking? Their class is returned and they're notified.`)}>
           {pending ? "…" : "Remove"}
         </button>
       )}

@@ -57,7 +57,7 @@ export default async function SessionAdmin({ params }: { params: Promise<{ id: s
               <div className="min-w-0 flex-1">
                 <Link href={`/admin/clients/${b.profiles?.id}`} className="block truncate font-medium text-ink hover:underline">{b.profiles?.full_name ?? "Client"}</Link>
                 <p className="text-xs text-ink-soft">
-                  {b.status === "no_show" ? "No-show · " : ""}{b.paid_with === "credit" ? "Class credit" : b.paid_with === "payment" ? "Paid" : b.paid_with === "pay_at_studio" ? "Pay at studio" : "Manual"}{b.source === "manual" ? " · added by studio" : ""}
+                  {b.status === "no_show" ? "No-show · " : ""}{b.paid_with === "credit" ? "Package class" : b.paid_with === "payment" ? "Paid" : b.paid_with === "pay_at_studio" ? "Pay at studio" : "Manual"}{b.source === "manual" ? " · added by studio" : ""}
                   {b.paid_with === "pay_at_studio" && <span className="ml-1 rounded-full bg-burgundy-soft px-2 py-0.5 font-medium text-burgundy">Unpaid</span>}
                   {b.profiles?.photo_consent === "none" && <span className="ml-1 rounded-full bg-ink px-2 py-0.5 font-medium text-paper">No photos</span>}
                   {b.profiles?.photo_consent === "no_face" && <span className="ml-1 rounded-full bg-ink/80 px-2 py-0.5 font-medium text-paper">No face</span>}
@@ -171,7 +171,7 @@ export default async function SessionAdmin({ params }: { params: Promise<{ id: s
       {s.status === "scheduled" && !past && (
         <section className="card border-burgundy/25 px-5 py-5">
           <h2 className="display mb-1 text-[0.95rem] text-burgundy">Cancel class</h2>
-          <p className="mb-4 text-sm text-ink-soft">Everyone booked is notified by email and SMS, and gets their credit back (card-paid events are flagged for refund).</p>
+          <p className="mb-4 text-sm text-ink-soft">Everyone booked is notified by email and SMS, and gets their class back (card-paid events are flagged for refund).</p>
           <ActionForm action={cancelSessionAction.bind(null, s.id)} submit="Cancel this class" variant="danger" confirm="Cancel this class and notify everyone booked?">
             <Field id="reason" label="Message to clients (optional)"><input id="reason" name="reason" placeholder="e.g. Instructor unwell. So sorry!" className={inputClass} /></Field>
           </ActionForm>

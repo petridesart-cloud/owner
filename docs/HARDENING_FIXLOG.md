@@ -113,3 +113,4 @@
 | A-068 | Medium | engines 22.x, .nvmrc, @types/node 22, exact @supabase/ssr, next 16.4.5, react 19.3.1, fontsource removed. Not done: supabase devDependency, 8 moderate dev-only audit findings. Owner: set Node 22 on both Vercel projects | typecheck, lint, full suite | A-068 |
 | A-106 | Low | removed ClickToLoadMap, .live.mjs and unused exports; /magic notFound(); `npm run check:dead` (knip). Kept: viva.ts, membership code, guide.css (used by the guides) | typecheck, lint | A-106, A-107 |
 | A-107 | Low | widen-types marks nullable RPC args; casts removed in saveClassType, createClassType, adjustLot, health save. Not done: creditBalance shape, RPC string-array casts | typecheck | A-106, A-107 |
+| A-108 | Low | credit→class copy pass, `monthsLabel`, `eur` shared, `dotDate(keyToDate())`, imports ordered. Not done: tmpl export, parq alias | typecheck, unit | A-108 |

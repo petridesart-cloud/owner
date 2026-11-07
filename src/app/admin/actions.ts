@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { redirect, unstable_rethrow } from "next/navigation";
 import { z } from "zod";
 import { parse, payMethod, uuid } from "@/lib/validate";
+import { monthsLabel } from "@/lib/copy";
 import { parseSettingsNumbers } from "@/lib/settings-form";
 import { getSettings, requireAdmin } from "@/lib/auth";
 import { emailLive, env, paymentsLive } from "@/lib/env";
@@ -16,7 +17,7 @@ import { defaultTerms } from "@/lib/terms";
 import { getKinds, kindLabel } from "@/lib/kinds";
 import { discountLabel, normaliseCode, targetsLabel } from "@/lib/discount";
 import { ERROR_KEYS, friendlyError, must, type ActionResult } from "@/lib/errors";
-import { addDaysKey, importDateKey, localToUtc, spokenDateTime, todayKey } from "@/lib/time";
+import { addDaysKey, dotDate, importDateKey, keyToDate, localToUtc, spokenDateTime, todayKey } from "@/lib/time";
 import type { Json } from "@/lib/supabase/types";
 
 async function admin(action: string, details?: Record<string, unknown>) {
@@ -226,7 +227,7 @@ export async function cancelSessionAction(sessionId: string, _: ActionResult, fo
   const reason = String(form.get("reason") ?? "").trim().slice(0, 300);
   const n = await cancelSession(sessionId, reason);
   revalidatePath(`/admin/classes/${sessionId}`);
-  return { ok: true, message: `Class cancelled. ${n} client${n === 1 ? "" : "s"} notified and credited.` };
+  return { ok: true, message: `Class cancelled. ${n} client${n === 1 ? "" : "s"} notified and their classes returned.` };
 }
 
 /** Clients-only events: let someone without an active package see and book this event. */
@@ -375,7 +376,7 @@ export async function giveClasses(profileId: string, _: ActionResult, form: Form
   });
   if (error) return { ok: false, error: "Couldn't add the classes." };
   revalidatePath(`/admin/clients/${profileId}`);
-  return { ok: true, message: `Gave ${amount} ${await kindLabel(kind)} class${amount === 1 ? "" : "es"}, usable until ${until.split("-").reverse().join(".")}.` };
+  return { ok: true, message: `Gave ${amount} ${await kindLabel(kind)} class${amount === 1 ? "" : "es"}, usable until ${dotDate(keyToDate(until))}.` };
 }
 
 // ── Rewards and discount codes ─────────────────────────────────────────
@@ -409,7 +410,7 @@ export async function giveReward(profileId: string, _: ActionResult, form: FormD
   });
   if (error) return { ok: false, error: "Couldn't save the reward. Please try again." };
   const on = d.applies_to.length === 1 && d.applies_to[0] === "package" ? "your next package" : `your next ${targetsLabel(d.applies_to).replace(/s(?=,| and|$)/g, "").replace(/ and /g, " or ")}`;
-  const what = `${discountLabel(d.kind, d.value)}${d.kind === "free_classes" ? " added to" : " on"} ${on}${until ? `, until ${until.split("-").reverse().join(".")}` : ""}.`;
+  const what = `${discountLabel(d.kind, d.value)}${d.kind === "free_classes" ? " added to" : " on"} ${on}${until ? `, until ${dotDate(keyToDate(until))}` : ""}.`;
   const sent = p.email && form.get("tell") === "on"
     ? (await notify({ profileId: p.id, email: p.email }, "reward", { name: p.full_name ?? undefined, note: `You have ${what.charAt(0).toLowerCase()}${what.slice(1)}` })).email
     : null;
@@ -554,7 +555,7 @@ export async function cancelToday(_: ActionResult, form: FormData): Promise<Acti
     return { ok: false, error: friendlyError(e) };
   }
   revalidatePath("/admin", "layout");
-  return { ok: true, message: `Cancelled ${list?.length ?? 0} classes. ${people} client${people === 1 ? "" : "s"} notified and credited.` };
+  return { ok: true, message: `Cancelled ${list?.length ?? 0} classes. ${people} client${people === 1 ? "" : "s"} notified and their classes returned.` };
 }
 
 // ── Privacy: erase a client (A-059) ────────────────────────────────────
@@ -609,7 +610,7 @@ export async function confirmClosure(closureId: string): Promise<ActionResult> {
   const res = data as { classes: number; frozen: number; people: { session_id: string; booking_id: string; profile_id: string }[] };
   later("closure emails", () => notifyCancelled(res.people, `The studio is closed (${c.name}).`));
   revalidatePath("/admin/closures");
-  return { ok: true, message: `${c.name} confirmed: ${res.classes} classes cancelled (${res.people.length} clients credited), ${res.frozen} packages extended.` };
+  return { ok: true, message: `${c.name} confirmed: ${res.classes} classes cancelled (${res.people.length} clients get their classes back), ${res.frozen} packages extended.` };
 }
 
 export async function dismissClosure(closureId: string) {
@@ -685,7 +686,7 @@ export async function saveSettings(_: ActionResult, form: FormData): Promise<Act
 }
 
 // ── Class types, packages and single classes (she builds them herself) ──
-const months = (m: number) => `${m} month${m === 1 ? "" : "s"}`;
+const months = monthsLabel;
 const priceCents = (v: FormDataEntryValue | null) => {
   const c = Math.round(Number(String(v ?? "").replace(",", ".").trim()) * 100);
   return Number.isFinite(c) && c >= 0 && c <= 1_000_000 && String(v ?? "").trim() !== "" ? c : null;

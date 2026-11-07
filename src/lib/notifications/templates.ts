@@ -136,10 +136,10 @@ export function render(t: TemplateName, raw: TemplateData): Rendered {
     case "credits_added":
       return {
         subject: "Your class pack is ready",
-        heading: "Credits added",
+        heading: "Classes added",
         lines: [`Thank you ${first(d.name)}! ${d.note ?? ""}`],
         cta: { label: "Book a class", href: `${link}/schedule` },
-        sms: `Re·Form: ${d.note ?? "credits added"}`,
+        sms: `Re·Form: ${d.note ?? "classes added"}`,
       };
     case "payment_request":
       return {

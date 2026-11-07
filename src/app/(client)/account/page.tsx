@@ -119,7 +119,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
             <details className="rounded-2xl border border-burgundy/20 bg-burgundy-soft/40 px-4 py-3" open={del === "confirm" || del === "failed"}>
               <summary className="min-h-11 cursor-pointer content-center text-sm font-medium text-burgundy">Delete my account</summary>
               <form action={deleteAccount} className="mt-2 space-y-3">
-                <p className="text-xs leading-relaxed text-ink">This removes your name, contact details and health information, cancels your upcoming classes and signs you out. Unused credits are lost. We keep minimal anonymised booking and payment records where tax law requires it.</p>
+                <p className="text-xs leading-relaxed text-ink">This removes your name, contact details and health information, cancels your upcoming classes and signs you out. Unused classes are lost. We keep minimal anonymised booking and payment records where tax law requires it.</p>
                 {del === "confirm" && <Notice tone="error">Type DELETE to confirm.</Notice>}
                 {del === "failed" && <Notice tone="error">Your account couldn&apos;t be deleted just now, so nothing was removed. Please try again, or message the studio and we&apos;ll do it for you.</Notice>}
                 <label htmlFor="confirm" className="block text-sm font-medium text-ink">Type DELETE to confirm</label>

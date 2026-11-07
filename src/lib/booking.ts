@@ -10,6 +10,13 @@ import { dayWord, longDate, spokenDateTime, time, relativeHours, todayKey } from
 import { eur, vatPortion } from "@/lib/money";
 import { applyRecurring } from "@/lib/recurring";
 import { cancelledOutcome, classesUsedNote, expiringNote } from "@/lib/notifications/templates";
+import { paymentInstructions, paymentReference, productPrice } from "@/lib/pricing";
+import { withDiscount } from "@/lib/discount";
+import { findCode } from "@/lib/rewards";
+import { getKinds, getTabs, kindLabel, kindLabels } from "@/lib/kinds";
+import { labelOf } from "@/lib/kind-label";
+import { alertBooking, alertStudio } from "@/lib/studio-alerts";
+import { currentVersion } from "@/lib/policy-versions";
 
 /** Booking errors in her words; "beyond_window" names the real booking window from Settings (A-024). */
 async function bookErr(error: { message: string }) {
@@ -130,7 +137,7 @@ export async function bookAtStudio(profile: Profile, sessionId: string): Promise
   const { data, error } = await db().rpc("book_session", { p_profile: profile.id, p_session: sessionId, p_mode: "pay_at_studio" });
   if (error) {
     if (error.message === "unpaid_limit") return { ok: false, error: "You already have a class to pay for at the studio. Once it's settled you can reserve another, or get a package." };
-    if (error.message === "pay_later_off") return { ok: false, error: "Please get a package or class credits at the studio first." };
+    if (error.message === "pay_later_off") return { ok: false, error: "Please get a package first." };
     return { ok: false, error: await bookErr(error) };
   }
   const bookingId = (data as { booking_id: string }).booking_id;
@@ -312,13 +319,6 @@ async function startSubscription(profile: Profile, product: { id: string; name: 
   return { ok: true, data: { redirect: checkout.url } };
 }
 
-import { paymentInstructions, paymentReference, productPrice } from "@/lib/pricing";
-import { withDiscount } from "@/lib/discount";
-import { findCode } from "@/lib/rewards";
-import { getKinds, getTabs, kindLabel, kindLabels } from "@/lib/kinds";
-import { labelOf } from "@/lib/kind-label";
-import { alertBooking, alertStudio } from "@/lib/studio-alerts";
-import { currentVersion } from "@/lib/policy-versions";
 
 async function buyPack(profile: Profile, productId: string, code?: string | null): Promise<ActionResult<{ redirect: string }>> {
   const { data: product } = await db().from("products").select("*").eq("id", productId).eq("active", true).single();
@@ -471,10 +471,10 @@ async function cancelEmails(profile: Profile, bookingId: string, res: CancelResu
     const owner = await profileById(b.profile_id);
     const note = res.status === "cancelled"
       ? b.paid_with === "credit" || (b.paid_with === "payment" && s.type.credit_kind)
-        ? "Your credit is back in your account."
+        ? "Your class is back in your package."
         : b.paid_with === "payment" ? "We'll refund your payment." : ""
       : b.late_refund_pending
-        ? "This was inside the cancellation window. If your spot is re-booked, we'll return your credit."
+        ? "This was inside the cancellation window. If your spot is re-booked, we'll return your class."
         : asAdmin
           ? "The studio removed you from this class inside the cancellation window, so the class isn't returned."
           : "This was inside the cancellation window, so no credit is returned. Thank you for freeing the spot.";

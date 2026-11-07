@@ -11,3 +11,6 @@ export function reminderWhen(offsets: number[]) {
   const list = [...offsets].sort((a, b) => b - a).map(word);
   return list.length > 1 ? `${list.slice(0, -1).join(", ")} and ${list.at(-1)}` : list[0] ?? "";
 }
+
+/** "1 month" / "2 months". */
+export const monthsLabel = (m: number) => `${m} month${m === 1 ? "" : "s"}`;

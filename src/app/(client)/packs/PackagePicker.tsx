@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button, ButtonLink, Checkbox, inputClass } from "@/components/ui";
+import { eur } from "@/lib/money";
 import { withDiscount, type Discount } from "@/lib/discount";
 import { buyPackAction, checkCodeAction, type PayMethod } from "./actions";
 
@@ -10,7 +11,6 @@ export type Option = { id: string; perWeek: number; credits: number; cents: numb
 /** One card per class type and length; `heading`/`description` open a class type inside a tab with several (e.g. Private → Mat). */
 export type Group = { key: string; months: number; title: string; heading?: string; description?: string | null; options: Option[] };
 
-const eur = (c: number) => `€${(c / 100).toFixed(c % 100 ? 2 : 0)}`;
 const METHOD_LABEL: Record<PayMethod, string> = { cash: "Cash", revolut: "Revolut", bank_transfer: "Bank transfer" };
 
 /** Pick a package (per week × months), choose cash or Revolut, accept the terms, request it. */

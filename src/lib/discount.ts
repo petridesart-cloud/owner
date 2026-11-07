@@ -1,3 +1,4 @@
+import { eur } from "@/lib/money";
 /** Rewards and discount codes: the maths shared by the Packages page (display) and the server (the real price). */
 export type DiscountKind = "percent" | "amount" | "free_classes";
 export type DiscountTarget = "package" | "trial" | "drop_in" | "event";
@@ -12,12 +13,11 @@ export const targetsLabel = (t: string[]) => {
   return names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names[0] ?? "packages";
 };
 
-const euro = (c: number) => `€${(c / 100).toFixed(c % 100 ? 2 : 0)}`;
 
 /** "10% off", "€15 off", "1 free class". Amounts are in cents. */
 export function discountLabel(kind: DiscountKind, value: number) {
   if (kind === "percent") return `${value}% off`;
-  if (kind === "amount") return `${euro(value)} off`;
+  if (kind === "amount") return `${eur(value)} off`;
   return `${value} free class${value === 1 ? "" : "es"}`;
 }
 
