@@ -14,7 +14,7 @@ import { defaultTerms } from "@/lib/terms";
 import { getKinds, kindLabel } from "@/lib/kinds";
 import { discountLabel, normaliseCode, targetsLabel } from "@/lib/discount";
 import { ERROR_KEYS, friendlyError, must, type ActionResult } from "@/lib/errors";
-import { addDaysKey, localToUtc, spokenDateTime, todayKey } from "@/lib/time";
+import { addDaysKey, importDateKey, localToUtc, spokenDateTime, todayKey } from "@/lib/time";
 import type { Json } from "@/lib/supabase/types";
 
 async function admin(action: string, details?: Record<string, unknown>) {
@@ -806,6 +806,9 @@ export async function saveProduct(id: string, _: ActionResult, form: FormData): 
   const credits = Number(form.get("credits"));
   const m = Number(form.get("months")) || null;
   if (cur?.tag === "package" && (!Number.isInteger(credits) || credits < 1 || credits > 200 || !m || m > 12)) return { ok: false, error: "Please check the classes and months." };
+  // A-036: more than 366 days can't be granted (credit_lots_validity_days_check), so Mark as paid would fail.
+  const validDays = Number(form.get("validity_days")) || null;
+  if (cur?.tag === "package" && validDays != null && (!Number.isInteger(validDays) || validDays < 1 || validDays > 366)) return { ok: false, error: "Days valid must be between 1 and 366." };
   const name = String(form.get("name") ?? "").trim();
   if (cur?.tag !== "package" && !name) return { ok: false, error: "Give it a name." };
   const { error } = await db().from("products").update({
@@ -813,7 +816,7 @@ export async function saveProduct(id: string, _: ActionResult, form: FormData): 
     description: String(form.get("description") ?? "").trim() || null,
     active: form.get("active") === "on",
     ...(cur?.tag === "package" ? {
-      credits, months: m, validity_days: Number(form.get("validity_days")) || null,
+      credits, months: m, validity_days: validDays,
       per_week: m ? Math.max(1, Math.min(7, Math.round(credits / (4 * m)))) : null,
       // The name follows the details: "Reformer · 8 classes · 1 month".
       name: `${await kindLabel(cur.credit_kind)} · ${credits} classes · ${months(m!)}`,
@@ -847,7 +850,7 @@ export async function addProduct(_: ActionResult, form: FormData): Promise<Actio
     }));
   } else {
     const credits = Number(form.get("credits")), m = Number(form.get("months")), valid = Number(form.get("validity_days"));
-    if (!Number.isInteger(credits) || credits < 1 || credits > 200 || !Number.isInteger(m) || m < 1 || m > 12 || !Number.isInteger(valid) || valid < 1 || valid > 400)
+    if (!Number.isInteger(credits) || credits < 1 || credits > 200 || !Number.isInteger(m) || m < 1 || m > 12 || !Number.isInteger(valid) || valid < 1 || valid > 366)
       return { ok: false, error: "Please check the classes, months and days valid." };
     ({ error } = await db().from("products").insert({
       kind: "pack", tag: "package", credit_kind: creditKind, credits, months: m, validity_days: valid, is_group: true, active, description,
@@ -923,14 +926,16 @@ const ImportClient = z.object({
   credits_expire: z.string().trim().optional(),
 });
 
-export async function importClients(rows: Record<string, unknown>[], adults = false): Promise<ActionResult<{ created: number; updated: number; skipped: number }>> {
+export async function importClients(rows: Record<string, unknown>[], adults = false): Promise<ActionResult<{ created: number; updated: number; skipped: number; badDates: number }>> {
   await admin("import_clients", { count: rows.length });
   // A-062: classes are for adults; the file has no dates of birth, so she confirms it for everyone in it.
   if (adults !== true) return { ok: false, error: "Please confirm everyone in the file is 18 or over: classes are for adults." };
-  let created = 0, updated = 0, skipped = 0, failedGrants = 0;
+  let created = 0, updated = 0, skipped = 0, failedGrants = 0, badDates = 0;
   const valid: z.infer<typeof ImportClient>[] = [];
   for (const raw of rows.slice(0, 2000)) {
     const r = ImportClient.safeParse(raw);
+    // A-048: the end date must be a real date (ISO, DD.MM.YYYY or DD/MM/YYYY); otherwise the row is skipped, never "never expires".
+    if (r.success && r.data.credits_expire && !importDateKey(r.data.credits_expire)) { badDates++; skipped++; continue; }
     if (r.success) valid.push(r.data); else skipped++;
   }
   // Existing clients looked up in chunks, not one query per row (A-049), so a big file fits in the time limit.
@@ -958,7 +963,9 @@ export async function importClients(rows: Record<string, unknown>[], adults = fa
         if (id && c.email) known.set(c.email, id);
       }
       if (!id) continue;
-      const expires = c.credits_expire && !Number.isNaN(Date.parse(c.credits_expire)) ? new Date(c.credits_expire).toISOString() : null;
+      // The last day is included: classes expire at the start of the next studio day.
+      const lastDayKey = c.credits_expire ? importDateKey(c.credits_expire) : null;
+      const expires = lastDayKey ? localToUtc(addDaysKey(lastDayKey, 1), "00:00") : null;
       for (const [kind, n] of [["reformer", c.reformer_credits], ["mat", c.mat_credits]] as const) {
         if (!n) continue;
         const { error } = await db().rpc("grant_lot", { p_profile: id, p_kind: kind, p_credits: n, p_expires: expires as string /* null = never expires */, p_note: "Imported balance" });
@@ -968,7 +975,7 @@ export async function importClients(rows: Record<string, unknown>[], adults = fa
   });
   revalidatePath("/admin/clients");
   if (failedGrants) return { ok: false, error: `${created} added and ${updated} updated, but ${failedGrants} class balance${failedGrants === 1 ? "" : "s"} couldn't be added. Check those clients' packages.` };
-  return { ok: true, data: { created, updated, skipped } };
+  return { ok: true, data: { created, updated, skipped, badDates } };
 }
 
 const DAY: Record<string, number> = { mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6, sun: 7 };

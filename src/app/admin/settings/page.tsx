@@ -279,7 +279,7 @@ export default async function SettingsPage() {
                         <div className="grid grid-cols-2 gap-3">
                           <Field id={`pc-${p.id}`} label="Classes"><input id={`pc-${p.id}`} name="credits" type="number" min={1} defaultValue={p.credits} className={inputClass} /></Field>
                           <Field id={`pm-${p.id}`} label="Months"><input id={`pm-${p.id}`} name="months" type="number" min={1} max={12} defaultValue={p.months ?? 1} className={inputClass} /></Field>
-                          <Field id={`pv-${p.id}`} label="Valid (days)" hint="From the first class"><input id={`pv-${p.id}`} name="validity_days" type="number" min={1} defaultValue={p.validity_days ?? ""} className={inputClass} /></Field>
+                          <Field id={`pv-${p.id}`} label="Valid (days)" hint="From the first class"><input id={`pv-${p.id}`} name="validity_days" type="number" min={1} max={366} defaultValue={p.validity_days ?? ""} className={inputClass} /></Field>
                           <Field id={`pp-${p.id}`} label="Price €"><input id={`pp-${p.id}`} name="price" inputMode="decimal" defaultValue={(p.price_cents / 100).toFixed(2)} className={inputClass} /></Field>
                         </div>
                       ) : (

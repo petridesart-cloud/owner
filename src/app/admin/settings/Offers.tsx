@@ -95,7 +95,7 @@ export function AddOffer({ kinds, addProduct, createClassType }: {
           <div className="grid grid-cols-2 gap-3">
             <Field id="offer-credits" label="Classes"><input id="offer-credits" name="credits" type="number" min={1} max={200} defaultValue={8} className={inputClass} /></Field>
             <Field id="offer-months" label="Months"><input id="offer-months" name="months" type="number" min={1} max={12} defaultValue={1} className={inputClass} /></Field>
-            <Field id="offer-valid" label="Valid (days)" hint="From the first class"><input id="offer-valid" name="validity_days" type="number" min={1} max={400} defaultValue={30} className={inputClass} /></Field>
+            <Field id="offer-valid" label="Valid (days)" hint="From the first class"><input id="offer-valid" name="validity_days" type="number" min={1} max={366} defaultValue={30} className={inputClass} /></Field>
             <Field id="offer-price" label="Price €"><input id="offer-price" name="price" inputMode="decimal" placeholder="e.g. 130" className={inputClass} /></Field>
           </div>
         ) : (

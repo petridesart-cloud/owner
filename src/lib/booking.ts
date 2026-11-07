@@ -6,10 +6,10 @@ import { getSettings, unavailable, type Profile, type Settings } from "@/lib/aut
 import { later, notify, pool, retryFailed } from "@/lib/notifications";
 import { paymentProvider } from "@/lib/payments";
 import { friendlyError, type ActionResult } from "@/lib/errors";
-import { longDate, spokenDateTime, time, relativeHours, todayKey } from "@/lib/time";
+import { dayWord, longDate, spokenDateTime, time, relativeHours, todayKey } from "@/lib/time";
 import { eur, vatPortion } from "@/lib/money";
 import { applyRecurring } from "@/lib/recurring";
-import { cancelledOutcome } from "@/lib/notifications/templates";
+import { cancelledOutcome, expiringNote } from "@/lib/notifications/templates";
 
 export type OfferRow = { entry_id: string; profile_id: string; offer_expires_at: string | null };
 
@@ -612,7 +612,7 @@ async function sendReminders(cfg: Settings) {
         if (!p) return;
         const s = await sessionInfo(b.session_id);
         await notify({ profileId: p.id, email: p.email, phone: p.phone }, template,
-          { name: p.full_name ?? undefined, ...tmpl(s), when: offset <= 180 ? time(s.starts_at) : spokenDateTime(s.starts_at),
+          { name: p.full_name ?? undefined, ...tmpl(s), day: dayWord(s.starts_at), when: offset <= 180 ? time(s.starts_at) : spokenDateTime(s.starts_at),
             note: s.type.kind === "event" ? undefined : "Remember your grip socks · arrive 5–10 minutes early." },
           { sms: offset <= 180, bookingId: b.booking_id, sessionId: s.id, dedupeKey: `reminder:${offset}:${b.booking_id}` });
         sent++;
@@ -675,7 +675,7 @@ async function creditAndRenewalNotices(cfg: Settings, step: Step) {
       .gt("remaining", 0).gt("expires_at", new Date(now).toISOString()).lte("expires_at", in7).is("membership_id", null); // membership credits renew; the renewal notice covers them
     if (error) throw error;
     for (const lot of expiring ?? []) notices.push({ profileId: lot.profile_id, key: `expiring:${lot.id}`, send: (p) => notify({ profileId: p.id, email: p.email }, "credits_expiring",
-      { name: p.full_name ?? undefined, note: `${lot.remaining} ${lot.credit_kind} class${lot.remaining === 1 ? "" : "es"} expire on ${spokenDateTime(lot.expires_at!).split(",")[0]}.` },
+      { name: p.full_name ?? undefined, note: expiringNote(lot.remaining, lot.credit_kind, lot.expires_at!) },
       { dedupeKey: `expiring:${lot.id}` }) });
   }, undefined);
 

@@ -1,4 +1,5 @@
 import { env } from "@/lib/env";
+import { lastDay, longDate } from "@/lib/time";
 
 export type TemplateName =
   | "login_code"
@@ -30,6 +31,7 @@ export type TemplateData = {
   name?: string;
   code?: string;
   className?: string;
+  day?: string;       // "Today", "Tomorrow" or a weekday (24h reminder)
   when?: string;      // "Monday 13 October, 08:00"
   location?: string | null;
   note?: string;      // extra sentence (refund info, offer expiry, ...)
@@ -94,11 +96,11 @@ export function render(t: TemplateName, raw: TemplateData): Rendered {
       };
     case "reminder_24h":
       return {
-        subject: `Tomorrow: ${d.className}, ${d.when}`,
-        heading: "See you tomorrow",
+        subject: `${d.day ?? "Tomorrow"}: ${d.className}, ${d.when}`,
+        heading: `See you ${dayPhrase(d.day)}`,
         lines: [`Hi ${first(d.name)}, a little reminder: <strong>${d.className}</strong>, ${d.when}.`, d.note ?? "Remember your grip socks · arrive 5–10 minutes early.", d.policy ?? ""],
         cta: { label: "Manage booking", href: `${link}/bookings` },
-        sms: `Re·Form reminder: ${d.className} tomorrow, ${d.when}.`,
+        sms: `Re·Form reminder: ${d.className} ${dayPhrase(d.day)}, ${d.when}.`,
       };
     case "reminder_2h":
       return {
@@ -276,4 +278,14 @@ export function emailHtml(r: Rendered) {
 ${body}${cta}
 <p style="margin:28px 0 0;font-size:12px;line-height:1.5;color:#5E5566">Re·Form Pilates Studio · Limassol, Cyprus<br>This is a service message about your booking. <a href="${env.siteUrl}/account#notifications" style="color:#5E5566">Notification settings</a> (turn class reminders off).</p>
 </td></tr></table></td></tr></table></body></html>`;
+}
+
+/** "today", "tomorrow" or "on Monday". */
+function dayPhrase(day = "Tomorrow") {
+  return day === "Today" || day === "Tomorrow" ? day.toLowerCase() : `on ${day}`;
+}
+
+/** The "classes expire" line: names the last day they can be used (the stored end is the start of the next day). */
+export function expiringNote(remaining: number, kind: string, expiresAt: string) {
+  return `${remaining} ${kind} class${remaining === 1 ? "" : "es"} can be used until ${longDate(lastDay(expiresAt))}.`;
 }

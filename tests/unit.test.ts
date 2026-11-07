@@ -14,6 +14,8 @@ import { ageOn, isAdult } from "../src/lib/age";
 import { DOC_SETTINGS, legalMarkdown } from "../src/lib/legal-docs";
 import { cookiesText, privacyText, waiverText } from "../src/lib/legal";
 import { defaultTerms } from "../src/lib/terms";
+import { addDaysKey, dayKey, dayWord, importDateKey, localToUtc, time } from "../src/lib/time";
+import { expiringNote } from "../src/lib/notifications/templates";
 
 describe("rate limits and email keys (A-045, A-092, A-103, A-008)", () => {
   test("sign-in and code limits fail closed when the check errors; booking limits fail open", () => {
@@ -288,5 +290,60 @@ describe("Content-Security-Policy (A-043)", () => {
     assert.ok(!csp.includes("frame-ancestors") && !csp.includes("upgrade-insecure-requests"), "ignored (with a console warning) in Report-Only");
     assert.ok(buildCsp("n", { supabaseUrl: "http://127.0.0.1:54321", dev: true }).includes("'unsafe-eval'"), "React needs eval in dev only");
     assert.ok(!/[\n\r]/.test(csp));
+  });
+});
+
+describe("studio time (WP12: A-095, A-097, A-046, A-048)", () => {
+  test("A-095: localToUtc round-trips every 30 minutes on the four clock-change days", () => {
+    for (const day of ["2026-03-29", "2026-10-25", "2027-03-28", "2027-10-31"]) {
+      for (let m = 0; m < 24 * 60; m += 30) {
+        const hhmm = `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+        const utc = localToUtc(day, hhmm);
+        const spring = day.includes("-03-");
+        const gap = spring && hhmm >= "03:00" && hhmm < "04:00"; // 03:00-03:59 doesn't exist
+        if (gap) { assert.equal(dayKey(utc), day); assert.ok(time(utc) >= "04:00", `${day} ${hhmm}`); continue; }
+        assert.equal(dayKey(utc), day, `${day} ${hhmm}`);
+        assert.equal(time(utc), hhmm, `${day} ${hhmm}`);
+      }
+    }
+    // the 03:30 that repeats on 25 Oct / 31 Oct means the first one (summer time, 00:30 UTC)
+    assert.equal(localToUtc("2026-10-25", "03:30"), "2026-10-25T00:30:00.000Z");
+    assert.equal(localToUtc("2026-03-29", "02:00"), "2026-03-29T00:00:00.000Z");
+    assert.equal(localToUtc("2026-03-29", "04:00"), "2026-03-29T01:00:00.000Z");
+  });
+
+  test("A-097: reminder wording follows the class day, not the clock offset", () => {
+    const now = (iso: string) => new Date(iso);
+    // 28 Mar 2027 18:00 local (UTC+2) is the evening before the clock change
+    const nowSat = now("2027-03-27T16:00:00Z");
+    assert.equal(dayWord(localToUtc("2027-03-28", "08:00"), nowSat), "Tomorrow");
+    assert.equal(dayWord(localToUtc("2027-03-27", "20:00"), nowSat), "Today");
+    assert.equal(dayWord(localToUtc("2027-03-29", "08:00"), nowSat), "Monday");
+    // 31 Oct 2027 08:00 seen 24h before (the day before, 07:00 UTC = 09:00... clock back that night)
+    assert.equal(dayWord(localToUtc("2027-10-31", "08:00"), now("2027-10-30T05:00:00Z")), "Tomorrow");
+    assert.equal(dayWord(localToUtc("2027-11-01", "08:00"), now("2027-10-30T05:00:00Z")), "Monday");
+    const r = render("reminder_24h", { name: "Ann", className: "Reformer", when: "Monday 29 March, 08:00", day: "Monday" });
+    assert.match(r.subject, /^Monday:/);
+    assert.doesNotMatch(r.subject + r.heading + (r.sms ?? ""), /omorrow/);
+    assert.match(render("reminder_24h", { name: "Ann", className: "Reformer", when: "x", day: "Today" }).heading, /today/i);
+    assert.match(render("reminder_24h", { name: "Ann", className: "Reformer", when: "x" }).subject, /^Tomorrow:/);
+  });
+
+  test("A-046: the expiry email names the last day, not the day after", () => {
+    const expires = localToUtc("2027-04-01", "00:00"); // last valid day is 31 March
+    const note = expiringNote(2, "reformer", expires);
+    assert.match(note, /can be used until Wednesday 31 March/);
+    assert.doesNotMatch(note, /1 April/);
+    assert.match(expiringNote(1, "mat", localToUtc("2026-10-26", "00:00")), /1 mat class can be used until Sunday 25 October/);
+  });
+
+  test("A-048: import dates accept ISO, DD.MM.YYYY and DD/MM/YYYY; rubbish is rejected", () => {
+    assert.equal(importDateKey("2026-12-31"), "2026-12-31");
+    assert.equal(importDateKey("31.12.2026"), "2026-12-31");
+    assert.equal(importDateKey("31/12/2026"), "2026-12-31");
+    assert.equal(importDateKey("1/2/2027"), "2027-02-01");
+    for (const bad of ["rubbish", "31.02.2026", "2026-13-01", "12/31/26", ""]) assert.equal(importDateKey(bad), null, bad);
+    // end of that day, studio time: the first instant after the last valid day
+    assert.equal(localToUtc(addDaysKey("2026-12-31", 1), "00:00"), "2026-12-31T22:00:00.000Z");
   });
 });

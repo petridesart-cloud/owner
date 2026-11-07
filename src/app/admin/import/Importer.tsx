@@ -58,7 +58,7 @@ export function Importer({ kind, defaults }: { kind: "clients" | "timetable"; de
       <Button className="w-full" variant="soft" disabled={!rows.length || pending} onClick={() => start(async () => {
         if (kind === "clients") {
           const r = await importClients(rows, adults);
-          setMsg(r.ok ? { ok: true, text: `Imported: ${r.data!.created} new, ${r.data!.updated} updated, ${r.data!.skipped} skipped (missing name or bad email).` } : { ok: false, text: r.error });
+          setMsg(r.ok ? { ok: true, text: `Imported: ${r.data!.created} new, ${r.data!.updated} updated, ${r.data!.skipped} skipped (missing name or bad email${r.data!.badDates ? `; ${r.data!.badDates} with an end date I couldn't read: use 31.12.2026 or 2026-12-31` : ""}).` } : { ok: false, text: r.error });
         } else {
           const r = await importTimetable(rows, meta.name, meta.from, meta.to);
           setMsg(r.ok ? { ok: true, text: r.message ?? "Imported." } : { ok: false, text: r.error });
