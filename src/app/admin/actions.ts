@@ -352,7 +352,7 @@ export async function giveClasses(profileId: string, _: ActionResult, form: Form
   });
   if (error) return { ok: false, error: "Couldn't add the classes." };
   revalidatePath(`/admin/clients/${profileId}`);
-  return { ok: true, message: `Gave ${amount} ${kind} class${amount === 1 ? "" : "es"}, usable until ${until.split("-").reverse().join(".")}.` };
+  return { ok: true, message: `Gave ${amount} ${await kindLabel(kind)} class${amount === 1 ? "" : "es"}, usable until ${until.split("-").reverse().join(".")}.` };
 }
 
 // ── Rewards and discount codes ─────────────────────────────────────────

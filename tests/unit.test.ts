@@ -367,3 +367,28 @@ describe("copy that matches the settings and the engine (WP10: A-024, A-073)", (
     assert.equal(seeYou("other"), "See you soon.");
   });
 });
+
+describe("class type labels in copy (A-025)", () => {
+  test("expiring and low-class messages use the label, not the key", () => {
+    assert.match(expiringNote(2, "Pre and post natal", "2026-12-01T22:00:00Z"), /^2 Pre and post natal classes can be used until/);
+    const low = render("credits_low", { name: "Maria", className: "Pre and post natal" });
+    assert.match(JSON.stringify(low), /1 Pre and post natal class left/);
+  });
+  test("no template string puts a credit_kind key into copy", () => {
+    const hits: string[] = [];
+    const walk = (dir: string) => {
+      for (const f of fs.readdirSync(dir, { withFileTypes: true })) {
+        const p = `${dir}/${f.name}`;
+        if (f.isDirectory()) walk(p);
+        else if (/\.tsx?$/.test(f.name)) {
+          fs.readFileSync(p, "utf8").split("\n").forEach((line, i) => {
+            // links like /packs?type=${kind} are fine; copy is not
+            if (/\$\{[^}]*(credit_kind|creditKind|\.kind)\}/.test(line) && !/(href|\?type=|redirect)/.test(line) && !line.includes("// kind-ok")) hits.push(`${p}:${i + 1}`);
+          });
+        }
+      }
+    };
+    walk("src");
+    assert.deepEqual(hits, []);
+  });
+});

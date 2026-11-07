@@ -44,4 +44,10 @@ test("client requests a pack, studio marks it paid, client books with a class cr
   await bookable.first().click();
   await client.getByRole("button", { name: /Secure your spot · 1 class/ }).click();
   await expect(client.getByText("Booking confirmed")).toBeVisible();
+
+  // A-025: the receipt names the class type and says it isn't a tax invoice.
+  const { data: paid } = await db.from("payments").select("id, profiles!inner(email)").eq("profiles.email", email).eq("status", "paid").limit(1).single();
+  await client.goto(`/receipts/${paid!.id}`);
+  await expect(client.getByText(/^Reformer · 4 classes/)).toBeVisible();
+  await expect(client.getByText(/Not a tax invoice\. No VAT charged/)).toBeVisible();
 });

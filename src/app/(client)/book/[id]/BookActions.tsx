@@ -96,7 +96,7 @@ export function BookActions(props: Props) {
     );
   }
   const canUseCredit = !!props.creditKind && props.credits >= props.creditCost;
-  const classes = (n: number) => `${n} ${props.creditLabel ?? props.creditKind} class${n === 1 ? "" : "es"}`;
+  const classes = (n: number) => `${n} ${props.creditLabel ? `${props.creditLabel} ` : "package "}class${n === 1 ? "" : "es"}`;
   const singles = !canUseCredit && !props.online ? props.singles ?? [] : [];
   if (singles.length) {
     return (

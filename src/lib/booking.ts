@@ -316,7 +316,8 @@ export { paymentReference, productPrice, paymentInstructions } from "@/lib/prici
 import { paymentInstructions, paymentReference, productPrice } from "@/lib/pricing";
 import { withDiscount } from "@/lib/discount";
 import { findCode } from "@/lib/rewards";
-import { getKinds, getTabs, kindLabel } from "@/lib/kinds";
+import { getKinds, getTabs, kindLabel, kindLabels } from "@/lib/kinds";
+import { labelOf } from "@/lib/kind-label";
 import { alertBooking, alertStudio } from "@/lib/studio-alerts";
 import { currentVersion } from "@/lib/policy-versions";
 
@@ -381,7 +382,7 @@ async function paidEmails(paymentId: string, res: PaidResult) {
       { bookingId: res.booking_id, sessionId: s.id, dedupeKey: `confirmed:${res.booking_id}` });
   } else if (res.status === "membership_active" && pay.products) {
     const { data: m } = await db().from("memberships").select("current_period_end").eq("profile_id", profile.id).in("status", ["active", "paused", "past_due"]).maybeSingle();
-    await notify(to, "credits_added", { name: profile.full_name ?? undefined, note: `${pay.products.credits} ${pay.products.credit_kind} classes are in your account${m ? `, valid until ${spokenDateTime(m.current_period_end).split(",")[0]}` : ""}.` },
+    await notify(to, "credits_added", { name: profile.full_name ?? undefined, note: `${pay.products.credits} ${await kindLabel(pay.products.credit_kind)} classes are in your account${m ? `, valid until ${spokenDateTime(m.current_period_end).split(",")[0]}` : ""}.` },
       { dedupeKey: `credits:${paymentId}` });
   } else if (res.status === "credits_added" && pay.products) {
     const extra = res.extra ?? 0;
@@ -681,8 +682,9 @@ async function creditAndRenewalNotices(cfg: Settings, step: Step) {
     const { data: expiring, error } = await db().from("credit_lots").select("id, profile_id, credit_kind, remaining, expires_at, membership_id")
       .gt("remaining", 0).gt("expires_at", new Date(now).toISOString()).lte("expires_at", in7).is("membership_id", null); // membership credits renew; the renewal notice covers them
     if (error) throw error;
+    const labels = await kindLabels(); // once per tick (A-025)
     for (const lot of expiring ?? []) notices.push({ profileId: lot.profile_id, key: `expiring:${lot.id}`, send: (p) => notify({ profileId: p.id, email: p.email }, "credits_expiring",
-      { name: p.full_name ?? undefined, note: expiringNote(lot.remaining, lot.credit_kind, lot.expires_at!) },
+      { name: p.full_name ?? undefined, note: expiringNote(lot.remaining, labelOf(labels, lot.credit_kind), lot.expires_at!) },
       { dedupeKey: `expiring:${lot.id}` }) });
   }, undefined);
 
@@ -690,8 +692,9 @@ async function creditAndRenewalNotices(cfg: Settings, step: Step) {
   await step("low_credits", async () => {
     const { data: low, error } = await db().rpc("low_credit_groups");
     if (error) throw error;
+    const labels = await kindLabels();
     for (const g of low ?? []) notices.push({ profileId: g.profile_id, key: `low:${g.lot_ids}`, send: (p) => notify({ profileId: p.id, email: p.email }, "credits_low",
-      { name: p.full_name ?? undefined, className: g.credit_kind }, { dedupeKey: `low:${g.lot_ids}` }) });
+      { name: p.full_name ?? undefined, className: labelOf(labels, g.credit_kind) }, { dedupeKey: `low:${g.lot_ids}` }) });
   }, undefined);
 
   // Renewal reminders 3 days ahead.
