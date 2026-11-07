@@ -133,8 +133,12 @@ describe("credits & booking", () => {
 
   test("admin adjustment requires a reason", async () => {
     const p = await client("reason");
-    const { error } = await db.rpc("admin_adjust_credits", { p_profile: p, p_kind: "reformer", p_delta: 2, p_days: 30, p_reason: " ", p_actor: p });
+    const lot = (await db.rpc("grant_lot", { p_profile: p, p_kind: "reformer", p_credits: 2, p_expires: new Date(Date.now() + 30 * 86_400_000).toISOString(), p_note: "reason test", p_entry: "admin_adjustment", p_actor: p })).data as unknown as string;
+    const { error } = await db.rpc("admin_adjust_lot", { p_lot: lot, p_action: "extend", p_days: 3, p_date: null as unknown as string, p_credits: 0, p_reason: " ", p_actor: p });
     assert.equal(error?.message, "reason_required");
+    // The superseded admin_adjust_credits is gone (A-069).
+    const gone = await db.rpc("admin_adjust_credits" as never, {} as never);
+    assert.ok(gone.error);
   });
 
   test("the ledger is append-only", async () => {

@@ -1844,17 +1844,6 @@ export type Database = {
       active_client_ids: { Args: Record<PropertyKey, never>; Returns: string[] };
       add_credit_kind: { Args: { p_label: string }; Returns: string };
       add_local_days: { Args: { p_days: number; p_ts: string }; Returns: string };
-      admin_adjust_credits: {
-        Args: {
-          p_actor: string;
-          p_days: number;
-          p_delta: number;
-          p_kind: Database["public"]["Enums"]["credit_kind"];
-          p_profile: string;
-          p_reason: string;
-        };
-        Returns: undefined;
-      };
       admin_adjust_lot: {
         Args: {
           p_action: string;
@@ -2094,6 +2083,7 @@ export type Database = {
       };
       save_timetable: { Args: { p_from: string; p_name: string; p_slots: Json }; Returns: number };
       seed_demo: { Args: Record<PropertyKey, never>; Returns: undefined };
+      seed_demo_base: { Args: Record<PropertyKey, never>; Returns: undefined };
       seed_demo_profiles: { Args: Record<PropertyKey, never>; Returns: undefined };
       session_availability: {
         Args: { p_events_only?: boolean; p_from: string; p_id?: string; p_to: string };

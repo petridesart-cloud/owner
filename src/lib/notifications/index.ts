@@ -1,4 +1,5 @@
 import "server-only";
+import { safeError } from "@/lib/log-safe";
 import { after } from "next/server";
 import { db } from "@/lib/supabase/admin";
 import { emailLive, smsLive, env } from "@/lib/env";
@@ -39,14 +40,14 @@ export async function notify(to: Recipient, template: TemplateName, data: Templa
   ]);
   return { email, sms };
 }
-const fail = (template: string) => (e: unknown) => { console.error(`notify ${template}`, e); return "failed" as const; };
+const fail = (template: string) => (e: unknown) => { console.error(`notify ${template}`, safeError(e)); return "failed" as const; };
 
 /**
  * Run post-commit messages after the response is sent (`after()`), so a slow email provider never
  * holds up a tap. Dedupe keys keep any retry safe. Outside a request (scripts, tests) it just runs.
  */
 export function later(label: string, fn: () => Promise<unknown>) {
-  const run = () => fn().catch((e) => console.error(label, e));
+  const run = () => fn().catch((e) => console.error(label, safeError(e)));
   try {
     after(run);
   } catch {

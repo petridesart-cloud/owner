@@ -420,12 +420,10 @@ export async function notifyOffers(rows: OfferRow[], cfg?: Settings) {
       if (!p) return;
       if (!r.offer_expires_at) {
         // Auto-booked from the waitlist with a class from their package.
-        const { data: b } = await db().from("bookings").select("id, free_cancel_until").eq("session_id", s.id).eq("profile_id", p.id).eq("status", "confirmed").maybeSingle();
-        // Booked inside the cancellation window: they get a short grace period to cancel for free.
-        const grace = b?.free_cancel_until ? ` Can't make it? Cancel in the app by ${time(b.free_cancel_until)} and the class goes back into your package.` : "";
+        const { data: b } = await db().from("bookings").select("id").eq("session_id", s.id).eq("profile_id", p.id).eq("status", "confirmed").maybeSingle();
         await alertBooking(p, s.id, "from the waitlist, with a class from their package", b?.id);
         await notify({ profileId: p.id, email: p.email, phone: p.phone }, "waitlist_booked",
-          { name: p.full_name ?? undefined, ...tmpl(s), note: `${classesUsedNote(s.type.credit_cost)}${grace}`, ...(grace ? { policy: undefined } : {}) },
+          { name: p.full_name ?? undefined, ...tmpl(s), note: classesUsedNote(s.type.credit_cost) },
           { sms, sessionId: s.id, bookingId: b?.id, dedupeKey: `waitlist-booked:${r.entry_id}` });
         return;
       }

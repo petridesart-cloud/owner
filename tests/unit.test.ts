@@ -414,3 +414,22 @@ describe("reminder wording follows Settings (A-073)", () => {
     assert.equal(reminderWhen([90]), "90 minutes");
   });
 });
+
+describe("config checks and safe logs (WP13: A-056, A-057)", () => {
+  test("production needs the https site URL, a long cron secret, the keys and email settings; Stripe and Twilio are all-or-none", async () => {
+    const { envProblems } = await import("../src/lib/env-check");
+    const ok = { APP_ENV: "production", NEXT_PUBLIC_SITE_URL: "https://book.example.com", CRON_SECRET: "x".repeat(32), NEXT_PUBLIC_SUPABASE_URL: "u", NEXT_PUBLIC_SUPABASE_ANON_KEY: "a", SUPABASE_SERVICE_ROLE_KEY: "s", RESEND_API_KEY: "r", EMAIL_FROM: "f" };
+    assert.deepEqual(envProblems(ok), []);
+    assert.deepEqual(envProblems({ ...ok, APP_ENV: undefined, NEXT_PUBLIC_SITE_URL: "" }), []); // not the real app: no rules
+    assert.match(envProblems({ ...ok, NEXT_PUBLIC_SITE_URL: "http://x.test" }).join(), /NEXT_PUBLIC_SITE_URL/);
+    assert.match(envProblems({ ...ok, CRON_SECRET: "short" }).join(), /CRON_SECRET/);
+    assert.match(envProblems({ ...ok, RESEND_API_KEY: "" }).join(), /RESEND_API_KEY/);
+    assert.match(envProblems({ ...ok, STRIPE_SECRET_KEY: "sk" }).join(), /STRIPE_WEBHOOK_SECRET/);
+    assert.match(envProblems({ ...ok, DEMO_ADMIN_CODE: "12ab34" }).join(), /DEMO_ADMIN_CODE/);
+  });
+  test("logs mask addresses and numbers", async () => {
+    const { redact, safeError } = await import("../src/lib/log-safe");
+    assert.equal(redact("invalid to: maria.k@example.com and +357 99 123456"), "invalid to: [email] and [number]");
+    assert.match(safeError(new Error("Resend 422: bad maria@x.io")), /\[email\]/);
+  });
+});

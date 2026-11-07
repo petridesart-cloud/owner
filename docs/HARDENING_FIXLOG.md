@@ -103,3 +103,8 @@
 | A-071 | Medium | (follow-up) ClassRow named from content + sr-only date/action; DayStrip text spaced; axe-core e2e on Sign-up, Home, Schedule, Packs, My classes, Account, Health | e2e/a11y.spec.ts | A-071: axe e2e |
 | A-075 | Medium | (follow-up) nowrap labels at 320px | screenshots 390/320 | A-075 follow-up |
 | A-021 | High | (follow-up, WP13) `loginExists()`: ensureProfile creates/links nothing and requireAdmin refuses when the Auth user is gone | notify.test.ts "a deleted login's leftover token" | A-021 follow-up |
+| A-056 | Medium | `redact()`/`safeError()` for provider bodies and notify logs; `/api/health` (tick age, 503 > 30 min). Not done: the daily developer alert email and Sentry (owner: who gets it) | unit.test.ts "config checks and safe logs" | A-056, A-057, A-058, A-069, A-084 |
+| A-057 | Medium | `envProblems()` (Zod) in migrate.mjs, instrumentation.ts (logs) — production needs https site URL, CRON_SECRET ≥ 32, Supabase keys, RESEND_API_KEY, EMAIL_FROM; Stripe/Twilio all-or-none; DEMO_ADMIN_CODE digits | unit.test.ts, tests/migrate.test.ts | A-056, A-057, A-058, A-069, A-084 |
+| A-058 | Medium | pg_advisory_lock(hashtext('app_migrations')) in migrate.mjs; expand/contract rule in CLAUDE.md | tests/migrate.test.ts (two parallel runs) | A-056, A-057, A-058, A-069, A-084 |
+| A-069 | Medium | `20261106000907`: drop admin_adjust_credits, cancel_booking without free_cancel_until, notifyOffers grace removed; column kept | engine.test.ts "admin adjustment requires a reason" | A-056, A-057, A-058, A-069, A-084 |
+| A-084 | Low | seed_demo → seed_demo_base + Mat classes to 4; Mat default capacity 4 | engine.test.ts (suite) | A-056, A-057, A-058, A-069, A-084 |
