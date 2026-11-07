@@ -72,5 +72,6 @@ test("signed out: the chosen package is announced and kept through Create accoun
   const next = new URL(page.url()).searchParams.get("next")!;
   await signUp(page, uniqueEmail("pick"), next);
   await expect(page).toHaveURL(/\/packs\?type=reformer&pick=/);
-  await expect(page.getByRole("radio", { name: /4 classes/ })).toBeChecked();
+  await expect(page.locator('input[name="package"]:checked')).toHaveCount(1);
+  await expect(page.getByRole("heading", { name: /^Reformer · 4 classes/ })).toBeVisible();
 });

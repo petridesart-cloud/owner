@@ -33,7 +33,7 @@ export function BottomNav() {
               <Link
                 href={href}
                 aria-current={active ? "page" : undefined}
-                className={`flex min-h-14 flex-col items-center justify-center gap-0.5 px-2 text-xs font-medium tracking-wide text-ink transition-colors`}
+                className={`flex min-h-14 flex-col items-center justify-center gap-0.5 whitespace-nowrap px-0.5 text-xs font-medium tracking-wide text-ink transition-colors`}
               >
                 <span className={`grid h-8 w-12 place-items-center transition-transform duration-300 [transition-timing-function:var(--ease-spring)] ${active ? "scale-110" : "scale-100"}`}>
                   <Icon aria-hidden size={20} strokeWidth={active ? 2.1 : 1.6} fill={active ? "currentColor" : "none"} fillOpacity={active ? 0.12 : 0} />
