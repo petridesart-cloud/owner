@@ -123,8 +123,8 @@ export default async function BookPage({ params, searchParams }: { params: Promi
   // Say up front what would otherwise only fail on tap: one unpaid class at a time; a package already requested.
   const [{ data: unpaid }, { data: requestedPack }] = profile && creditCount === 0
     ? await Promise.all([
-        db().from("bookings").select("id, class_sessions!inner(starts_at, title, class_types(name))").eq("profile_id", profile.id)
-          .eq("status", "confirmed").eq("paid_with", "pay_at_studio").gt("class_sessions.starts_at", new Date().toISOString()).limit(1).maybeSingle(),
+        db().from("bookings").select("id, class_sessions!inner(starts_at, ends_at, title, class_types(name))").eq("profile_id", profile.id)
+          .eq("status", "confirmed").eq("paid_with", "pay_at_studio").gt("class_sessions.ends_at", new Date().toISOString()).limit(1).maybeSingle(),
         c.credit_kind
           ? db().from("payments").select("id, products!inner(credit_kind)").eq("profile_id", profile.id).eq("status", "pending")
               .is("booking_id", null).eq("products.credit_kind", c.credit_kind).limit(1).maybeSingle()
