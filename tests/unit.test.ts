@@ -6,6 +6,7 @@ import { ipFrom, keyHash, limitOutcome, normEmail } from "../src/lib/request-key
 import { needsHealthConsent } from "../src/lib/health";
 import { cancelledOutcome, render } from "../src/lib/notifications/templates";
 import { friendlyError } from "../src/lib/errors";
+import { cronAuthorized } from "../src/lib/cron-auth";
 
 describe("rate limits and email keys (A-045, A-092, A-103, A-008)", () => {
   test("sign-in and code limits fail closed when the check errors; booking limits fail open", () => {
@@ -70,5 +71,17 @@ describe("studio-cancelled class: what happens to what they paid with (A-031)", 
     for (const k of ["waitlist_first", "code_used_up", "not_a_package", "type_locked", "moved_outside_package", "class_not_started"]) {
       assert.notEqual(friendlyError({ message: k }), "Something went wrong. Please try again.", k);
     }
+  });
+});
+
+describe("cron secret (A-089)", () => {
+  test("only the exact bearer secret passes (constant-time compare, any length)", () => {
+    assert.equal(cronAuthorized("Bearer s3cret", "s3cret"), true);
+    assert.equal(cronAuthorized("Bearer s3creT", "s3cret"), false);
+    assert.equal(cronAuthorized("Bearer s3cret-longer", "s3cret"), false);
+    assert.equal(cronAuthorized("", "s3cret"), false);
+    assert.equal(cronAuthorized(null, "s3cret"), false);
+    assert.equal(cronAuthorized("Bearer ", ""), false);
+    assert.equal(cronAuthorized("Bearer undefined", undefined), false);
   });
 });
