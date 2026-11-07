@@ -6,7 +6,7 @@ import { getSettings, requireAdmin } from "@/lib/auth";
 import { emailLive, env, paymentsLive } from "@/lib/env";
 import { db } from "@/lib/supabase/admin";
 import { EVENT_POLICY, cancelBooking, cancelSession, cancelSessions, notifyCancelled, notifyOffers, onPaymentPaid, policyLine, runTick, sessionInfo } from "@/lib/booking";
-import { notify, retryFailed } from "@/lib/notifications";
+import { later, notify, retryFailed } from "@/lib/notifications";
 import { applyRecurring } from "@/lib/recurring";
 import { rewardCode } from "@/lib/rewards";
 import { defaultTerms } from "@/lib/terms";
@@ -92,11 +92,14 @@ export async function manualBook(sessionId: string, _: ActionResult, form: FormD
   const note = String(form.get("note") ?? "").trim().slice(0, 300);
   if (note) await db().from("bookings").update({ note }).eq("id", (data as { booking_id: string }).booking_id);
   if (form.get("notify") === "on") {
-    const [{ data: p }, s] = await Promise.all([db().from("profiles").select("*").eq("id", profileId).single(), sessionInfo(sessionId)]);
-    if (p) await notify({ profileId: p.id, email: p.email, phone: p.phone }, "booking_confirmed",
-      { name: p.full_name ?? undefined, className: s.name, when: spokenDateTime(s.starts_at), location: s.where,
-        policy: s.type.kind === "event" ? s.event_policy ?? EVENT_POLICY : policyLine(s.cancelBy, s.cutoff) },
-      { bookingId: (data as { booking_id: string }).booking_id, sessionId });
+    const who = profileId!;
+    later("manual booking email", async () => {
+      const [{ data: p }, s] = await Promise.all([db().from("profiles").select("*").eq("id", who).single(), sessionInfo(sessionId)]);
+      if (p) await notify({ profileId: p.id, email: p.email, phone: p.phone }, "booking_confirmed",
+        { name: p.full_name ?? undefined, className: s.name, when: spokenDateTime(s.starts_at), location: s.where,
+          policy: s.type.kind === "event" ? s.event_policy ?? EVENT_POLICY : policyLine(s.cancelBy, s.cutoff) },
+        { bookingId: (data as { booking_id: string }).booking_id, sessionId });
+    });
   }
   revalidatePath(`/admin/classes/${sessionId}`);
   return { ok: true, message: mode === "pay_at_studio" ? "Added. It's under Awaiting payment on Today until you mark it paid." : "Added." };
@@ -176,7 +179,7 @@ export async function updateSession(sessionId: string, _: ActionResult, form: Fo
     return { ok: false, error: error.message in ERROR_KEYS ? friendlyError(error) : "Couldn't save changes." };
   }
   const res = data as { booked: number; moved: boolean; offers: { entry_id: string; profile_id: string; offer_expires_at: string | null }[] };
-  await notifyOffers(res.offers ?? []);
+  later("waitlist offers", () => notifyOffers(res.offers ?? []));
   revalidatePath(`/admin/classes/${sessionId}`);
   return { ok: true, message: res.moved && res.booked ? `Saved. ${res.booked} client${res.booked === 1 ? " is" : "s are"} booked: let them know about the new time.` : "Saved." };
 }
@@ -225,7 +228,7 @@ export async function saveTimetable(_: ActionResult, form: FormData): Promise<Ac
   const { data: kept } = await db().rpc("replace_timetable_from", { p_template: t.id });
   await db().rpc("generate_sessions", { p_template: t.id });
   await db().rpc("extend_timetable", {});
-  await applyRecurring();
+  await applyRecurring(undefined, { defer: true });
   revalidatePath("/admin/timetable");
   revalidatePath("/admin/classes");
   return { ok: true, message: `Saved. Your classes now repeat every week from ${from}.${kept ? ` ${kept} class${kept === 1 ? "" : "es"} from the old timetable already ${kept === 1 ? "has" : "have"} bookings and ${kept === 1 ? "was" : "were"} kept: check them in Classes.` : ""}` };
@@ -518,7 +521,7 @@ export async function confirmClosure(closureId: string): Promise<ActionResult> {
   const { data, error } = await db().rpc("confirm_closure", { p_closure: closureId });
   if (error) return { ok: false, error: friendlyError(error) };
   const res = data as { classes: number; frozen: number; people: { session_id: string; booking_id: string; profile_id: string }[] };
-  await notifyCancelled(res.people, `The studio is closed (${c.name}).`);
+  later("closure emails", () => notifyCancelled(res.people, `The studio is closed (${c.name}).`));
   revalidatePath("/admin/closures");
   return { ok: true, message: `${c.name} confirmed: ${res.classes} classes cancelled (${res.people.length} clients credited), ${res.frozen} packages extended.` };
 }

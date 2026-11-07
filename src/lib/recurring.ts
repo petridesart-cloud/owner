@@ -2,7 +2,7 @@ import { alertStudio } from "@/lib/studio-alerts";
 import "server-only";
 import { db } from "@/lib/supabase/admin";
 import { getSettings } from "@/lib/auth";
-import { notify } from "@/lib/notifications";
+import { later, notify } from "@/lib/notifications";
 import { env } from "@/lib/env";
 import { STUDIO_TZ, spokenDateTime, time } from "@/lib/time";
 
@@ -53,8 +53,10 @@ export async function weeklySlots() {
  * and while their package lasts. Classes they've already booked, cancelled or waitlisted
  * are left alone; full classes are skipped and the client gets a one-tap waitlist link.
  * Runs when rules are saved, when a package is marked paid, and on the background tick.
+ * `defer`: inside a tap, the emails go out after the response (A-017); the tick awaits them.
  */
-export async function applyRecurring(profileId?: string) {
+export async function applyRecurring(profileId?: string, opts: { defer?: boolean } = {}) {
+  const send = (label: string, fn: () => Promise<unknown>) => (opts.defer ? (later(label, fn), Promise.resolve()) : fn().catch((e) => console.error(label, e)));
   let q = db().from("recurring_rules").select("id, profile_id, class_type_id, weekday, start_time, profiles(id, email, phone, full_name)").eq("active", true);
   if (profileId) q = q.eq("profile_id", profileId);
   const { data: rules } = await q;
@@ -90,20 +92,23 @@ export async function applyRecurring(profileId?: string) {
       const name = s.title ?? s.class_types?.name ?? "Class";
       if (!error) { booked.push(`${spokenDateTime(s.starts_at).split(",")[0].split(" ").slice(0, 3).join(" ")} ${time(s.starts_at)}`); continue; }
       if (error.message === "full" || error.message === "waitlist_first") {
-        await notify({ profileId: pid, email: profile.email }, "weekly_full",
+        await send("weekly full email", () => notify({ profileId: pid, email: profile.email }, "weekly_full",
           { name: profile.full_name ?? undefined, className: name, when: spokenDateTime(s.starts_at), link: `${env.siteUrl}/book/${s.id}` },
-          { dedupeKey: `weekly-full:${pid}:${s.id}`, sessionId: s.id });
+          { dedupeKey: `weekly-full:${pid}:${s.id}`, sessionId: s.id }));
         continue;
       }
       if (error.message === "no_credits") usedUp.add(kind);   // package used up; beyond_expiry just skips this class
     }
     if (booked.length) {
       total += booked.length;
-      await notify({ profileId: pid, email: profile.email }, "weekly_booked",
-        { name: profile.full_name ?? undefined, when: booked.join(", "), note: `Free cancellation up to ${cfg.cancellation_cutoff_hours}h before each class.` });
-      // One email to the studio for the batch, rather than one per class.
-      await alertStudio("bookings", `Weekly classes booked: ${profile.full_name ?? profile.email ?? "a client"}`,
-        [`Booked from their usual days and times: ${booked.join(", ")}.`], { path: `/admin/clients/${pid}` });
+      const when = booked.join(", ");
+      await send("weekly booked emails", async () => {
+        await notify({ profileId: pid, email: profile.email }, "weekly_booked",
+          { name: profile.full_name ?? undefined, when, note: `Free cancellation up to ${cfg.cancellation_cutoff_hours}h before each class.` });
+        // One email to the studio for the batch, rather than one per class.
+        await alertStudio("bookings", `Weekly classes booked: ${profile.full_name ?? profile.email ?? "a client"}`,
+          [`Booked from their usual days and times: ${when}.`], { path: `/admin/clients/${pid}` });
+      });
     }
   }
   return { booked: total };
@@ -118,5 +123,5 @@ export async function saveRecurring(profileId: string, slots: { classTypeId: str
     );
     if (error) throw error;
   }
-  return applyRecurring(profileId);
+  return applyRecurring(profileId, { defer: true });
 }

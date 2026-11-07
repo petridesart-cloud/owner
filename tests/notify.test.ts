@@ -159,3 +159,17 @@ describe("A-016: only a real duplicate counts as 'duplicate'", () => {
     assert.equal((await N.notify({ email }, "birthday", { note: "Hi" }, { dedupeKey: key })).email, "duplicate");
   });
 });
+
+describe("A-017: a hanging provider can't hold anything up", () => {
+  test("Resend that never answers is aborted within 8 s and the row is retryable", async () => {
+    const email = mail("hang"), key = `test-hang:${email}`;
+    resend = (_b, init) => new Promise((_, reject) => init.signal?.addEventListener("abort", () => reject(init.signal!.reason)));
+    const t = Date.now();
+    const alive = setTimeout(() => {}, 12_000); // AbortSignal.timeout's timer doesn't keep the test process alive by itself
+    assert.equal((await N.notify({ email }, "birthday", { note: "Hi" }, { dedupeKey: key })).email, "failed");
+    clearTimeout(alive);
+    const took = Date.now() - t;
+    assert.ok(took >= 7_500 && took < 9_500, `aborted after ${took} ms`);
+    assert.ok((await row(key)).next_attempt_at);
+  });
+});
