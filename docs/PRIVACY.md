@@ -4,7 +4,7 @@ Last updated 7 November 2026. Shown in the app at /legal/privacy. Each version i
 
 ## Who we are
 
-[Trader full name], an individual trader (not a company), trading as Re·Form Pilates Studio, [Studio address, postcode, Limassol, Cyprus], is the controller of your personal data. For anything about your data, contact [Contact email] or [Contact phone]. We haven't appointed a data protection officer because the law doesn't require one for a studio of our size.
+[Trader full name], an individual trader (not a company), trading as Re·Form Pilates Studio, Limassol, Cyprus, is the controller of your personal data. For anything about your data, contact [Contact email] or [Contact phone]. We haven't appointed a data protection officer because the law doesn't require one for a studio of our size.
 
 ## What we collect, why, and on what legal basis
 

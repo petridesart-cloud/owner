@@ -13,7 +13,8 @@ export function business(s: IdentitySettings) {
   return {
     name: real(s.legal_name) ?? "Re·Form Pilates Studio",
     owner: real(s.trader_name),
-    address: real(s.address),
+    // Her choice (8 Nov): no street address, just the town. Empty means "Limassol, Cyprus".
+    address: real(s.address) ?? "Limassol, Cyprus",
     email: real(s.contact_email),
     phone: real(s.contact_phone),
   };
@@ -25,7 +26,7 @@ export function identity(s: IdentitySettings) {
   return {
     name: b.name,
     owner: b.owner ?? "[Trader full name]",
-    address: b.address ?? "[Studio address, postcode, Limassol, Cyprus]",
+    address: b.address,
     email: b.email ?? "[Contact email]",
     phone: b.phone ?? "[Contact phone]",
     instagram: `@${s.instagram_handle || "re_form_es"}`,

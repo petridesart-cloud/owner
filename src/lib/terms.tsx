@@ -14,7 +14,7 @@ export function defaultTerms(s: LegalSettings) {
   const weeks = Math.round(s.booking_window_days / 7);
   return [
     "## Who we are",
-    `${id.name} is run by ${id.owner}, an individual trader (not a registered company${s.vat_registered ? "" : " and not registered for VAT"}), at ${id.address}. Contact: ${id.email}, ${id.phone}, Instagram ${id.instagram}.`,
+    `${id.name} is run by ${id.owner}, an individual trader (not a registered company${s.vat_registered ? "" : " and not registered for VAT"}), based in ${id.address}. Contact: ${id.email}, ${id.phone}, Instagram ${id.instagram}.`,
     "## Who can book",
     "Our classes are for adults aged 18 or over. Each account is for one person: please keep your password to yourself.",
     "## How a booking or package is agreed",

@@ -4,7 +4,7 @@ Last updated 7 November 2026. Shown in the app at /legal/terms (the studio can e
 
 ## Who we are
 
-Re·Form Pilates Studio is run by [Trader full name], an individual trader (not a registered company and not registered for VAT), at [Studio address, postcode, Limassol, Cyprus]. Contact: [Contact email], [Contact phone], Instagram @re_form_es.
+Re·Form Pilates Studio is run by [Trader full name], an individual trader (not a registered company and not registered for VAT), based in Limassol, Cyprus. Contact: [Contact email], [Contact phone], Instagram @re_form_es.
 
 ## Who can book
 
@@ -36,7 +36,7 @@ Our classes are for adults aged 18 or over. Each account is for one person: plea
 - You can withdraw from a package within 14 days of the day we mark it paid, without giving a reason.
 - If you haven't used any class from it, you get a full refund.
 - If you book and take classes within those 14 days, you're asking us to start straight away. If you then withdraw, we refund the price minus the classes already used (attended, missed or cancelled late), each at the package price divided by its number of classes.
-- To withdraw, tell us clearly by email to [Contact email] or at the studio. You can use this model text, but you don't have to: "To [Trader full name], Re·Form Pilates Studio, [Studio address, postcode, Limassol, Cyprus], [Contact email]: I withdraw from my contract for the following package: [package], paid on [date]. Name: [your name]. Email: [your email]. Date: [today's date]."
+- To withdraw, tell us clearly by email to [Contact email] or at the studio. You can use this model text, but you don't have to: "To [Trader full name], Re·Form Pilates Studio, Limassol, Cyprus, [Contact email]: I withdraw from my contract for the following package: [package], paid on [date]. Name: [your name]. Email: [your email]. Date: [today's date]."
 - We refund you within 14 days of hearing from you, by the same method you paid, at no cost to you. Upcoming classes booked from that package are cancelled.
 - Single classes, trials, drop-ins and events are booked for a specific date and time, so the 14-day right of withdrawal doesn't apply to them (EU Directive 2011/83/EU, art. 16(l)). The cancellation rules below apply instead.
 

@@ -84,7 +84,7 @@ export default async function SettingsPage() {
             {t("legal_name", "Studio name", s.legal_name)}
             {t("trader_name", "Your full name", s.trader_name, "Shown in the footer (EU law).")}
           </div>
-          {t("address", "Studio address", s.address)}
+          {t("address", "Studio location", s.address, "Shown on your legal pages. Leave empty for “Limassol, Cyprus”.")}
           <div className="grid grid-cols-2 gap-3">
             {t("contact_email", "Email", s.contact_email)}
             {t("contact_phone", "Phone", s.contact_phone)}

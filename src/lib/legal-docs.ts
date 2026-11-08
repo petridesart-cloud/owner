@@ -6,7 +6,7 @@ import { defaultTerms } from "@/lib/terms";
 
 /** The defaults of studio_settings (schema and the WP7 retention columns), with no identity filled in. */
 export const DOC_SETTINGS: LegalSettings = {
-  legal_name: "Re·Form Pilates Studio", trader_name: "[Owner full name]", address: "[Street, Limassol, Cyprus]",
+  legal_name: "Re·Form Pilates Studio", trader_name: "[Owner full name]", address: "",
   contact_email: "hello@example.com", contact_phone: "+357 00 000000", instagram_handle: "re_form_es",
   cancellation_cutoff_hours: 6, booking_window_days: 28, unpaid_request_expiry_hours: 48, student_discount_pct: 10,
   waitlist_close_minutes: 60, online_payments_enabled: false, vat_registered: false, vat_rate: 19, refund_late_cancel_if_filled: false,
