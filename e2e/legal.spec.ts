@@ -1,9 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { serviceDb, signUp, uniqueEmail } from "./helpers";
 
-test("A-013, A-104: final legal pages, linked from the footer, with their version", async ({ page }) => {
-  await page.goto("/");
-  const footer = page.getByRole("navigation", { name: "Legal" });
+test("A-013, A-104: final legal pages, one tap from the footer's Terms & policies, with their version", async ({ page }) => {
   for (const [name, path, heading] of [
     ["Privacy", "/legal/privacy", "Privacy Policy"],
     ["Cookies", "/legal/cookies", "Cookies Policy"],
@@ -12,7 +10,9 @@ test("A-013, A-104: final legal pages, linked from the footer, with their versio
     ["Terms", "/legal/terms", "Terms & Conditions"],
   ] as const) {
     await page.goto("/");
-    await footer.getByRole("link", { name, exact: true }).click();
+    await page.getByRole("navigation", { name: "Legal" }).getByRole("link", { name: "Terms & policies" }).click();
+    await expect(page).toHaveURL("/legal");
+    await page.getByRole("main").getByRole("link", { name: name === "Terms" ? "Terms & Conditions" : name, exact: true }).click();
     await expect(page).toHaveURL(path);
     await expect(page.getByRole("heading", { name: heading })).toBeVisible();
     await expect(page.getByText(/draft placeholder/i)).toHaveCount(0);

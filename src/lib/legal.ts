@@ -148,7 +148,7 @@ export function waiverText(s: LegalSettings) {
   const id = identity(s);
   return [
     "## The activity",
-    "Reformer and mat Pilates are physical exercise with moving equipment (springs, a sliding carriage and straps). As with any exercise, there is a risk of strain or injury.",
+    "Mat Pilates is exercise that may include the use of props, and Reformer Pilates is exercise that uses equipment. As with any exercise, there is a risk of strain or injury.",
     "## You confirm that",
     "- to your knowledge, you're fit to take part in exercise;",
     "- you've answered the health questions truthfully, or you'll tell the instructor in person before your first class;",

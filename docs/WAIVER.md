@@ -4,7 +4,7 @@ Last updated 7 November 2026. Shown in the app at /legal/health. Each version is
 
 ## The activity
 
-Reformer and mat Pilates are physical exercise with moving equipment (springs, a sliding carriage and straps). As with any exercise, there is a risk of strain or injury.
+Mat Pilates is exercise that may include the use of props, and Reformer Pilates is exercise that uses equipment. As with any exercise, there is a risk of strain or injury.
 
 ## You confirm that
 

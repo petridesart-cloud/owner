@@ -14,7 +14,7 @@ export function defaultTerms(s: LegalSettings) {
   const weeks = Math.round(s.booking_window_days / 7);
   return [
     "## Who we are",
-    `${id.name} is run by ${id.owner}, an individual trader (not a registered company${s.vat_registered ? "" : " and not registered for VAT"}), based in ${id.address}. Contact: ${id.email}, ${id.phone}, Instagram ${id.instagram}.`,
+    `${id.name} is run by ${id.owner}, based in ${id.address}. Contact: ${id.email}, ${id.phone}, Instagram ${id.instagram}.`,
     "## Who can book",
     "Our classes are for adults aged 18 or over. Each account is for one person: please keep your password to yourself.",
     "## How a booking or package is agreed",
@@ -22,7 +22,7 @@ export function defaultTerms(s: LegalSettings) {
     "- Single classes, trials, drop-ins and events: booking reserves your spot for the class, date and time shown, and you pay before class.",
     `- You can book up to ${plural(weeks, "week")} ahead. Each booking is for one person.`,
     "## Prices and payment",
-    `- Prices are in euro and are the total price you pay.${s.vat_registered ? ` They include VAT at ${Number(s.vat_rate)}%.` : " No VAT is charged because we aren't registered for VAT."}`,
+    `- Prices are in euro and are the total price you pay.${s.vat_registered ? ` They include VAT at ${Number(s.vat_rate)}%.` : ""}`,
     s.online_payments_enabled
       ? "- Online payments are processed by Stripe; we never see or store your card details. You can also pay in advance by cash, Revolut or bank transfer."
       : "- Pay in advance by cash, Revolut or bank transfer (the details are shown when you request a package or book).",
@@ -36,20 +36,15 @@ export function defaultTerms(s: LegalSettings) {
       ? "- Monthly packages renew automatically until cancelled; cancel renewal any time on your Membership page, and it takes effect at the end of the current period. Other packages don't renew."
       : "- Packages don't renew automatically. When yours is used up or about to end, choose a new one in the app under Packages.",
     "- Packages are frozen while the studio is closed (for example at Christmas, Easter and in the summer) and during a freeze we agree with you: the end date moves by the same number of days.",
-    "## Your right to withdraw from a package (14 days)",
-    "- You can withdraw from a package within 14 days of the day we mark it paid, without giving a reason.",
-    "- If you haven't used any class from it, you get a full refund.",
-    "- If you book and take classes within those 14 days, you're asking us to start straight away. If you then withdraw, we refund the price minus the classes already used (attended, missed or cancelled late), each at the package price divided by its number of classes.",
-    `- To withdraw, tell us clearly by email to ${id.email} or at the studio. You can use this model text, but you don't have to: "To ${id.owner}, ${id.name}, ${id.address}, ${id.email}: I withdraw from my contract for the following package: [package], paid on [date]. Name: [your name]. Email: [your email]. Date: [today's date]."`,
-    "- We refund you within 14 days of hearing from you, by the same method you paid, at no cost to you. Upcoming classes booked from that package are cancelled.",
-    "- Single classes, trials, drop-ins and events are booked for a specific date and time, so the 14-day right of withdrawal doesn't apply to them (EU Directive 2011/83/EU, art. 16(l)). The cancellation rules below apply instead.",
+    "## Refunds",
+    "- Once a package, class or event is paid, it isn't refundable, except when the studio cancels (see below).",
     "## Cancelling a class",
     `- ${cut} hours or more before class: cancel in the app and the class goes back into the same package, with its original expiry date.`,
     `- Less than ${cut} hours before class, or not coming: the class is used.${s.refund_late_cancel_if_filled ? " If someone else takes your spot, we return your class." : ""} Please still cancel, so your spot goes to the waitlist.`,
     `- The waitlist: if a spot opens more than ${s.waitlist_close_minutes >= 60 ? plural(Math.round(s.waitlist_close_minutes / 60), "hour") : plural(s.waitlist_close_minutes, "minute")} before class, the first person waiting who has a package class is booked in automatically and emailed, and these cancellation rules apply to that booking.`,
     "- Events can't be cancelled in the app. If you can't come, message the studio.",
     "## Changes and cancellations by the studio",
-    "We may need to cancel or move a class (for example because of illness). If we cancel a class, the class always comes back into your package so you can book another time, even if you had already cancelled it late. If that leaves you too little time to use it before your package ends, we may extend your package. If we cancel an event, you get a full refund. Apart from these cases and your right to withdraw, unused or expired classes aren't refunded.",
+    "We may need to cancel or move a class (for example because of illness). If we cancel a class, the class always comes back into your package so you can book another time, even if you had already cancelled it late. If that leaves you too little time to use it before your package ends, we may extend your package. If we cancel an event, you get a full refund. Apart from these cases, unused or expired classes aren't refunded.",
     "## Health & safety",
     "Before your first booking you accept the [Health & Safety acknowledgement](/legal/health). A doctor's note is needed in the cases it lists.",
     "## Arriving late",
@@ -60,8 +55,8 @@ export function defaultTerms(s: LegalSettings) {
     "Nothing in these terms excludes or limits liability for death or personal injury caused by our negligence, or any other liability the law doesn't allow us to limit. Otherwise our liability is limited to the price you paid for the package or class concerned. We aren't responsible for personal belongings left at the studio, unless lost through our negligence.",
     "## Changes to these terms",
     "New versions apply to bookings and requests made after you've accepted them in the app. Packages already paid keep the terms they were bought under.",
-    "## Complaints and law",
-    `Please contact us first at ${id.email}. These terms are governed by the laws of the Republic of Cyprus and the Cyprus courts, without affecting your rights as a consumer where you live. You can also contact the Consumer Protection Service of Cyprus (www.consumer.gov.cy), which lists the out-of-court dispute resolution bodies.`,
+    "## Questions and complaints",
+    `Questions or complaints: please contact us at ${id.email}. These terms are governed by the laws of the Republic of Cyprus.`,
   ].join("\n");
 }
 

@@ -142,7 +142,7 @@ export function PackagePicker({ groups, methods, online, cutoff, rewards = [], s
             <li>Classes can&apos;t be booked after the expiry date; unused classes expire and are non-refundable.</li>
             <li>{online ? "Paid now by secure checkout." : "Paid in advance. Your classes appear as soon as your instructor confirms the payment."}</li>
             <li>Personal: packages can&apos;t be shared or transferred.</li>
-            <li>You can withdraw within 14 days of payment: a full refund if you haven&apos;t used a class, otherwise minus the classes used (see the Terms).</li>
+            <li>Once paid, packages aren&apos;t refundable (see the Terms).</li>
             <li>Total {eur(price(selected).cents)}{vatNote ? ` (${vatNote})` : ""}.{seller ? ` Sold by ${seller}.` : ""}</li>
           </ul>
           {signedIn ? (

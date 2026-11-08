@@ -54,7 +54,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
           {biz.name}{biz.owner ? ` · ${biz.owner}` : ""}<br />{biz.address ?? "Limassol, Cyprus"}{(biz.email || biz.phone) && <><br />{[biz.email, biz.phone].filter(Boolean).join(" · ")}</>}
         </address>
         <p className="mt-4 text-xs text-ink-soft">Payment confirmation. Thank you for practising with us.</p>
-        {!s.vat_registered && <p className="mt-1 text-xs text-ink-soft">Not a tax invoice. No VAT charged: the seller is not VAT-registered.</p>}
+        {!s.vat_registered && <p className="mt-1 text-xs text-ink-soft">Payment confirmation, not a tax invoice.</p>}
       </article>
     </div>
   );

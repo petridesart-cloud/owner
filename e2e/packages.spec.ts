@@ -11,9 +11,9 @@ test("client requests a pack, studio marks it paid, client books with a class cr
   await signUp(client, email, "/packs?type=reformer", name);
   await client.getByRole("group", { name: "Reformer packages, 1 month" }).getByText("4 classes", { exact: true }).click();
   await client.getByText("Cash", { exact: true }).click();
-  // A-012: before the request, the total, "no VAT charged", who sells it and the 14-day withdrawal summary.
-  await expect(client.getByText(/^Total €[\d.,]+ \(no VAT charged\)\. Sold by .*Re·Form Pilates Studio/)).toBeVisible();
-  await expect(client.getByText(/withdraw within 14 days of payment/)).toBeVisible();
+  // A-012 (her answer, 8 Nov): before the request, the total, who sells it, and that paid packages aren't refundable.
+  await expect(client.getByText(/^Total €[\d.,]+\. Sold by .*Re·Form Pilates Studio/)).toBeVisible();
+  await expect(client.getByText(/Once paid, packages aren.t refundable/)).toBeVisible();
   await client.locator("#accept").check();
   await client.getByRole("button", { name: "Request package" }).click();
   await expect(client.getByText(/Request sent/)).toBeVisible();
@@ -55,7 +55,7 @@ test("client requests a pack, studio marks it paid, client books with a class cr
   const { data: paid } = await db.from("payments").select("id, profiles!inner(email)").eq("profiles.email", email).eq("status", "paid").limit(1).single();
   await client.goto(`/receipts/${paid!.id}`);
   await expect(client.getByText(/^Reformer · 4 classes/)).toBeVisible();
-  await expect(client.getByText(/Not a tax invoice\. No VAT charged/)).toBeVisible();
+  await expect(client.getByText(/Payment confirmation, not a tax invoice/)).toBeVisible();
 });
 
 test("signed out: the chosen package is announced and kept through Create account (A-026, A-027)", async ({ page }) => {

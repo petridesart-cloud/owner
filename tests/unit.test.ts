@@ -162,10 +162,10 @@ describe("legal documents (A-012, A-013, A-060)", () => {
     assert.match(privacyText(DOC_SETTINGS), /\[Trader full name\]/);
     const filled = { ...DOC_SETTINGS, trader_name: "Ana Example", address: "1 Main St, 3000 Limassol, Cyprus", contact_email: "ana@studio.cy", contact_phone: "+357 99 123456" };
     assert.doesNotMatch(defaultTerms(filled), /\[Trader full name\]|\[Contact email\]|\[Studio address/);
-    assert.match(defaultTerms(filled), /Ana Example, an individual trader/);
+    assert.match(defaultTerms(filled), /run by Ana Example, based in 1 Main St, 3000 Limassol, Cyprus/);
   });
 
-  test("the Terms match her policy: 6h rule, validity from the first class, no auto-renew, refunds, 14-day withdrawal", () => {
+  test("the Terms match her policy: 6h rule, validity from the first class, no auto-renew, refunds (her answers, 8 Nov: no refunds once paid, no VAT wording)", () => {
     const t = defaultTerms(DOC_SETTINGS);
     assert.match(t, /6 hours or more before class: .*same package, with its original expiry date/);
     assert.match(t, /Less than 6 hours before class, or not coming: the class is used/);
@@ -173,9 +173,8 @@ describe("legal documents (A-012, A-013, A-060)", () => {
     assert.match(t, /don't renew automatically/);
     assert.match(t, /If we cancel an event, you get a full refund/);
     assert.match(t, /even if you had already cancelled it late/);
-    assert.match(t, /within 14 days of the day we mark it paid/);
-    assert.match(t, /art\. 16\(l\)/);
-    assert.match(t, /No VAT is charged/);
+    assert.match(t, /Once a package, class or event is paid, it isn't refundable, except when the studio cancels/);
+    assert.doesNotMatch(t, /14 days|withdraw|VAT|registered company|consumer\.gov/);
     assert.match(t, /adults aged 18 or over/);
     assert.doesNotMatch(t, /We don't give cash refunds/);
   });

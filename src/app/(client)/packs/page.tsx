@@ -81,7 +81,7 @@ export default async function PacksPage({ searchParams }: { searchParams: Promis
           {tab && !tab.visible && <div className="mb-4"><Notice>Only you can see this tab. Show it to clients in Settings → Packages page.</Notice></div>}
           {tab?.note && <p className="mb-4 rounded-2xl bg-mauve-soft px-4 py-3 text-sm leading-relaxed text-ink">{tab.note}</p>}
           {groups.length ? <PackagePicker key={tab?.key} tab={tab?.key} pick={pick ?? null} groups={groups} methods={methods} online={s.online_payments_enabled} cutoff={s.cancellation_cutoff_hours} rewards={rewards} signedIn={!!viewer}
-            seller={`${identity(s).owner}, ${identity(s).name}, ${identity(s).address}`} vatNote={s.vat_registered ? `incl. VAT ${Number(s.vat_rate)}%` : "no VAT charged"} />
+            seller={`${identity(s).owner}, ${identity(s).name}, ${identity(s).address}`} vatNote={s.vat_registered ? `incl. VAT ${Number(s.vat_rate)}%` : null} />
             : singles.length ? null : <Card className="px-5 py-6 text-sm text-ink-soft">{label} packages are coming soon.</Card>}
           {s.student_discount_pct > 0 && <p className="mt-3 text-xs leading-relaxed text-ink-soft">Students get {s.student_discount_pct}% off group packages: show your student card at the studio once and it&apos;s applied automatically.</p>}
         </div>

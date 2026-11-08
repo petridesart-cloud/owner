@@ -39,7 +39,6 @@ test("a new client without a package can book a trial (pay by Revolut) or get a 
   await signUp(page, uniqueEmail("nopack"), url);
   await expect(page.getByRole("button", { name: /Pay €/ })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Secure your package" })).toBeVisible();
-  await expect(page.getByText(/14-day right of withdrawal doesn't apply \(EU Directive 2011\/83\/EU, art\. 16\(l\)\)/)).toBeVisible(); // A-012
   await page.getByText("Revolut", { exact: true }).click();
   await page.getByRole("button", { name: /Book your trial · €/ }).click();
   await expect(page.getByText("Booking confirmed")).toBeVisible();
