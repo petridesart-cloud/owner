@@ -14,6 +14,7 @@ import { applyRecurring } from "@/lib/recurring";
 import { rewardCode } from "@/lib/rewards";
 import { eraseProfile } from "@/lib/erase";
 import { defaultTerms } from "@/lib/terms";
+import { waiverText } from "@/lib/legal";
 import { getKinds, kindLabel } from "@/lib/kinds";
 import { discountLabel, normaliseCode, targetsLabel } from "@/lib/discount";
 import { ERROR_KEYS, friendlyError, must, type ActionResult } from "@/lib/errors";
@@ -639,6 +640,8 @@ export async function saveSettings(_: ActionResult, form: FormData): Promise<Act
     cancellation_cutoff_hours: cur.cancellation_cutoff_hours, waitlist_window_hours: cur.waitlist_window_minutes / 60, waitlist_close_minutes: cur.waitlist_close_minutes,
     hold_minutes: cur.hold_minutes, rollover_max: cur.rollover_max, unpaid_request_expiry_hours: cur.unpaid_request_expiry_hours,
     expiry_reminder_days: cur.expiry_reminder_days, student_discount_pct: cur.student_discount_pct, booking_window_weeks: Math.round(cur.booking_window_days / 7),
+    retention_health_months: cur.retention_health_months ?? 12, retention_inactive_months: cur.retention_inactive_months ?? 24,
+    retention_payments_years: cur.retention_payments_years ?? 6,
   });
   if (!nums.ok) return { ok: false, error: `Please check: ${Object.values(nums.errors).join("; ")}.` };
   const num = (k: keyof typeof nums.values) => nums.values[k];
@@ -680,6 +683,9 @@ export async function saveSettings(_: ActionResult, form: FormData): Promise<Act
     legal_name: str("legal_name"), trader_name: str("trader_name"), address: str("address"),
     contact_email: str("contact_email"), contact_phone: str("contact_phone"), instagram_handle: str("instagram_handle").replace(/^@/, ""),
     booking_window_days: num("booking_window_weeks") * 7, // 1 week to 6 months
+    retention_health_months: num("retention_health_months"),
+    retention_inactive_months: num("retention_inactive_months"),
+    retention_payments_years: num("retention_payments_years"),
     updated_at: new Date().toISOString(),
   }).eq("id", 1);
   if (error) return { ok: false, error: "Some values are out of range. Please check them." };
@@ -1071,6 +1077,10 @@ export async function saveTexts(_: ActionResult, form: FormData): Promise<Action
   const terms = String(form.get("terms") ?? "").replace(/\r/g, "").trim().slice(0, 20000);
   if (!terms || terms === defaultTerms(await getSettings()).trim()) await db().from("site_content").delete().eq("key", "terms");
   else await db().from("site_content").upsert({ key: "terms", value: terms, updated_at: new Date().toISOString() });
+  // The Health & Safety acknowledgement: same rule as the Terms (owner's request, 8 Nov).
+  const waiver = String(form.get("waiver") ?? "").replace(/\r/g, "").trim().slice(0, 20000);
+  if (!waiver || waiver === waiverText(await getSettings()).trim()) await db().from("site_content").delete().eq("key", "waiver");
+  else await db().from("site_content").upsert({ key: "waiver", value: waiver, updated_at: new Date().toISOString() });
   const intro = String(form.get("intro_line") ?? "").trim();
   if (intro) await db().from("studio_settings").update({ intro_line: intro.slice(0, 300) }).eq("id", 1);
   revalidatePath("/", "layout");

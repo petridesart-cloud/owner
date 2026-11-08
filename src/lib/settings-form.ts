@@ -14,6 +14,10 @@ export const NUMBER_FIELDS = {
   expiry_reminder_days: { label: "Remind before package expires (days)", min: 0, max: 60, int: true },
   student_discount_pct: { label: "Student discount (%)", min: 0, max: 100, int: true },
   booking_window_weeks: { label: "Clients can book (weeks ahead)", min: 1, max: 26, int: true },
+  // Her data-keeping choices (owner's request, 8 Nov): the Privacy Policy follows them. Payments: 6 years minimum (tax law).
+  retention_health_months: { label: "Keep health answers (months after last class)", min: 1, max: 60, int: true },
+  retention_inactive_months: { label: "Erase inactive accounts after (months)", min: 6, max: 120, int: true },
+  retention_payments_years: { label: "Keep payments and package records (years)", min: 6, max: 10, int: true },
 } as const;
 export type NumberField = keyof typeof NUMBER_FIELDS;
 

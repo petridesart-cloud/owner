@@ -435,7 +435,14 @@ describe("config checks and safe logs (WP13: A-056, A-057)", () => {
 });
 
 describe("settings form and action arguments (WP13: A-065, A-066)", () => {
-  const cur = { cancellation_cutoff_hours: 6, waitlist_window_hours: 2, waitlist_close_minutes: 60, hold_minutes: 10, rollover_max: 0, unpaid_request_expiry_hours: 48, expiry_reminder_days: 7, student_discount_pct: 10, booking_window_weeks: 4 };
+  const cur = { cancellation_cutoff_hours: 6, waitlist_window_hours: 2, waitlist_close_minutes: 60, hold_minutes: 10, rollover_max: 0, unpaid_request_expiry_hours: 48, expiry_reminder_days: 7, student_discount_pct: 10, booking_window_weeks: 4, retention_health_months: 12, retention_inactive_months: 24, retention_payments_years: 6 };
+  test("her data-keeping periods: payments can't go under 6 years (owner request, 8 Nov)", async () => {
+    const { parseSettingsNumbers } = await import("../src/lib/settings-form");
+    const low = parseSettingsNumbers((k) => (k === "retention_payments_years" ? "3" : null), cur);
+    assert.ok(!low.ok && /payments/.test(low.errors.retention_payments_years!));
+    const ok = parseSettingsNumbers((k) => ({ retention_health_months: "18", retention_inactive_months: "36" })[k as string] ?? null, cur);
+    assert.ok(ok.ok && ok.values.retention_health_months === 18 && ok.values.retention_inactive_months === 36 && ok.values.retention_payments_years === 6);
+  });
   test("an empty box keeps the saved value; 0 hours of free cancellation is refused with the field named", async () => {
     const { parseSettingsNumbers } = await import("../src/lib/settings-form");
     const keep = parseSettingsNumbers((k) => (k === "cancellation_cutoff_hours" ? "" : null), cur);

@@ -133,6 +133,14 @@ export default async function SettingsPage() {
             <p className="text-xs text-ink-soft">Changes you make yourself in the studio don&apos;t email you. Health answers are never put in an email.</p>
           </Group>
 
+          <Group title="Keeping clients' data" sub="How long things are kept (your Privacy Policy follows these)">
+          <div className="grid grid-cols-2 gap-3">
+            {n("retention_health_months", "Keep health answers (months after last class)", s.retention_health_months ?? 12, "Clients get an email 30 days before.")}
+            {n("retention_inactive_months", "Erase inactive accounts after (months)", s.retention_inactive_months ?? 24, "Clients get an email 30 days before.")}
+            {n("retention_payments_years", "Keep payments (years)", s.retention_payments_years ?? 6, "At least 6, for your accounts.")}
+          </div>
+          </Group>
+
           <Group title="Message on every page" sub="A banner for news, e.g. a closed week">
           {t("status_banner", "Status banner (optional)", s.status_banner, "e.g. “Studio closed this week, see you Monday!” Leave empty to hide.")}
           </Group>

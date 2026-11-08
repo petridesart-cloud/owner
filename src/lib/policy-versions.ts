@@ -19,7 +19,10 @@ export const docText = cache(async (doc: LegalDoc): Promise<string> => {
     }
     case "studio_rules": return (await getTexts()).studio_rules.map((r) => `- ${r}`).join("\n");
     case "payments_policy": return (await getTexts()).payments_policy.map((r) => `- ${r}`).join("\n");
-    case "waiver": return waiverText(s);
+    case "waiver": {
+      const { data } = await db().from("site_content").select("value").eq("key", "waiver").maybeSingle();
+      return data?.value || waiverText(s);
+    }
     case "privacy": return privacyText(s);
     case "cookies": return cookiesText();
   }

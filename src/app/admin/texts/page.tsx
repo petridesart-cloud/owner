@@ -5,12 +5,14 @@ import { getTexts } from "@/lib/content";
 import { saveTexts } from "../actions";
 import { db } from "@/lib/supabase/admin";
 import { defaultTerms } from "@/lib/terms";
+import { waiverText } from "@/lib/legal";
 import { AdminTitle } from "../ui";
 
 export const dynamic = "force-dynamic";
 
 export default async function TextsPage() {
-  const [t, s, { data: terms }] = await Promise.all([getTexts(), getSettings(), db().from("site_content").select("value").eq("key", "terms").maybeSingle()]);
+  const [t, s, { data: terms }, { data: waiver }] = await Promise.all([getTexts(), getSettings(),
+    db().from("site_content").select("value").eq("key", "terms").maybeSingle(), db().from("site_content").select("value").eq("key", "waiver").maybeSingle()]);
   const area = (id: string, label: string, value: string, hint: string, rows = 6) => (
     <Field id={id} label={label} hint={hint}>
       <textarea id={id} name={id} rows={rows} defaultValue={value} className={`${inputClass} py-3 leading-relaxed`} />
@@ -30,6 +32,7 @@ export default async function TextsPage() {
           {area("studio_text", "The Studio (optional)", t.studio_text, "A few words under your studio photos. Leave an empty line between paragraphs; leave it all empty to show only the photos.", 3)}
           {area("events_intro", "Events intro (optional)", t.events_intro, "One line under the Events title. Leave empty to hide.", 2)}
           {area("terms", "Terms & Conditions", terms?.value || defaultTerms(s), "Start a line with ## for a heading and - for a bullet point. Empty it and save to go back to our default (which follows your settings).", 16)}
+          {area("waiver", "Health & Safety (accepted at sign-up)", waiver?.value || waiverText(s), "Same format as the Terms. Empty it and save to go back to our default. Clients who sign up after a change accept the new version.", 12)}
         </ActionForm>
       </div>
     </div>
