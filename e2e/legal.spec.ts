@@ -40,3 +40,30 @@ test("A-009, A-060: sign-up records each accepted document at its version, and n
   await expect(page.getByText("Health & Safety acknowledgement")).toBeVisible();
   await expect(page.getByText(/Accepted · .* \(version \d+\)/).first()).toBeVisible();
 });
+
+// Her notes (8 Nov): reading the terms from Create account keeps what was typed (even with the phone's Back
+// button), and a new client's first Home says "Welcome, name", then "Welcome back, name".
+test("terms open on the same page without losing the form; first Home says Welcome, then Welcome back", async ({ page }) => {
+  await page.goto("/signup");
+  await page.getByLabel("Name", { exact: true }).fill("Nora");
+  await page.getByLabel("Email").fill("nora@example.org");
+  await page.getByLabel("Password", { exact: true }).fill("keep-this-123");
+  await page.getByRole("button", { name: "terms and policies" }).click();
+  const sheet = page.getByRole("dialog", { name: "Terms and policies" });
+  await expect(sheet.getByRole("heading", { name: "Terms & Conditions" })).toBeVisible();
+  await page.goBack(); // the phone's Back button closes the sheet, not the form
+  await expect(sheet).toBeHidden();
+  await expect(page).toHaveURL(/\/signup/);
+  await page.getByRole("button", { name: "terms and policies" }).click();
+  await sheet.getByRole("button", { name: "Back to the form" }).click();
+  await expect(sheet).toBeHidden();
+  await expect(page.getByLabel("Name", { exact: true })).toHaveValue("Nora");
+  await expect(page.getByLabel("Email")).toHaveValue("nora@example.org");
+  await expect(page.getByLabel("Password", { exact: true })).toHaveValue("keep-this-123");
+
+  await signUp(page, uniqueEmail("greet"), "/", "Greta Green"); // lands on Home after the health questions
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole("heading", { name: "Welcome, Greta" })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Welcome back, Greta" })).toBeVisible();
+});

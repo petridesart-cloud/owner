@@ -2,12 +2,14 @@
 import Link from "next/link";
 import { useActionState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { PoliciesSheet } from "@/components/PoliciesSheet";
+import type { ReactNode } from "react";
 import { Button, Checkbox, Field, Notice, inputClass } from "@/components/ui";
 import { completeWelcome, type WelcomeState } from "./actions";
 import { PhotoConsentField } from "@/components/ProfileFields";
 import { keepValues } from "@/lib/keep-form";
 
-export function WelcomeForm({ email, first, last, phone, next }: { email: string; first: string; last: string; phone: string; next: string }) {
+export function WelcomeForm({ email, first, last, phone, next, policies }: { email: string; first: string; last: string; phone: string; next: string; policies: ReactNode }) {
   const router = useRouter();
   const [state, action, pending] = useActionState<WelcomeState, FormData>(completeWelcome, { ok: false });
   const e = state.errors ?? {};
@@ -41,7 +43,7 @@ export function WelcomeForm({ email, first, last, phone, next }: { email: string
       <fieldset className="space-y-1">
         <legend className="sr-only">Agreements</legend>
         <Checkbox id="policy" name="policy" required aria-describedby={e.policy ? "policy-error" : undefined}>
-          I accept the studio&apos;s <Link href="/legal" target="_blank" className="font-medium underline underline-offset-4">terms and policies</Link>.
+          I accept the studio&apos;s <PoliciesSheet label="terms and policies">{policies}</PoliciesSheet>.
         </Checkbox>
         {e.policy && <p id="policy-error" className="pl-8 text-xs font-medium text-burgundy">{e.policy}</p>}
       </fieldset>

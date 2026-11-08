@@ -6764,6 +6764,21 @@ revoke execute on function public.seed_demo() from public, anon, authenticated;
 grant execute on function public.seed_demo() to service_role;
 
 
+-- ===== 20261106000908_waiver_editable.sql =====
+-- Owner's request (8 Nov): Elysia can edit the Health & Safety acknowledgement in Your texts, like the Terms.
+-- Saved only when she changes it; empty goes back to the default that follows her settings.
+alter table public.site_content drop constraint site_content_key_check;
+alter table public.site_content add constraint site_content_key_check
+  check (key in ('studio_rules', 'payments_policy', 'what_to_bring', 'magic_text', 'studio_text', 'events_intro', 'terms', 'waiver'));
+
+
+-- ===== 20261106000909_home_greeting.sql =====
+-- Her note (8 Nov): a new client's first Home says "Welcome, name"; from the next visit on, "Welcome back, name".
+-- Existing clients have been here before, so they keep "Welcome back".
+alter table public.profiles add column if not exists home_seen_at timestamptz;
+update public.profiles set home_seen_at = coalesce(onboarded_at, created_at, now()) where home_seen_at is null;
+
+
 -- ===== seed.sql =====
 -- Demo data lives in public.seed_demo() (migration 20261011000400) so the admin
 -- "Reset demo data" button can rebuild it. Dates are relative to now().

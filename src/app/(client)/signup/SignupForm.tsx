@@ -2,13 +2,15 @@
 import Link from "next/link";
 import { useActionState, useRef } from "react";
 import { useFocusOnError } from "@/lib/focus-error";
+import { PoliciesSheet } from "@/components/PoliciesSheet";
+import type { ReactNode } from "react";
 import { Button, Checkbox, Field, Notice, inputClass } from "@/components/ui";
 import { PhotoConsentField } from "@/components/ProfileFields";
 import { keepValues } from "@/lib/keep-form";
 import { signUp, type AuthState } from "../login/actions";
 import { CodeStep } from "../login/LoginForm";
 
-export function SignupForm({ next }: { next: string }) {
+export function SignupForm({ next, policies }: { next: string; policies: ReactNode }) {
   const [state, action, pending] = useActionState<AuthState, FormData>(signUp, { ok: false });
   const form = useRef<HTMLFormElement>(null);
   useFocusOnError(form, state, !!state.error || Object.keys(state.errors ?? {}).length > 0);
@@ -48,7 +50,7 @@ export function SignupForm({ next }: { next: string }) {
       <fieldset className="space-y-1">
         <legend className="sr-only">Agreements</legend>
         <Checkbox id="policy" name="policy" required aria-invalid={!!e.policy} aria-describedby={e.policy ? "policy-error" : undefined}>
-          I accept the studio&apos;s <Link href="/legal" target="_blank" className="font-medium underline underline-offset-4">terms and policies</Link>.
+          I accept the studio&apos;s <PoliciesSheet label="terms and policies">{policies}</PoliciesSheet>.
         </Checkbox>
         {e.policy && <p id="policy-error" className="pl-8 text-xs font-medium text-burgundy">{e.policy}</p>}
         <Checkbox id="marketing_email" name="marketing_email">Send me news about new schedules and events (optional).</Checkbox>

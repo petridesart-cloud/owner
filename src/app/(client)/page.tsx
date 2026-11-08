@@ -13,6 +13,7 @@ import { db } from "@/lib/supabase/admin";
 import { getMedia, logoSrc } from "@/lib/media";
 import { eur } from "@/lib/money";
 import { scheduleTick } from "@/lib/tick";
+import { after } from "next/server";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +43,9 @@ export default async function Home() {
   const eventClientsOnly = !!event && !!eventExtrasMap.get(event.id)?.clients_only;
   const eventCover = eventCovers[0];
   const firstName = viewer?.profile.full_name?.split(" ")[0];
+  // Her note (8 Nov): "Welcome, name" the first time a new client sees Home, "Welcome back, name" after that.
+  const firstVisit = !!viewer && !viewer.profile.home_seen_at;
+  if (firstVisit) after(async () => { await db().from("profiles").update({ home_seen_at: new Date().toISOString() }).eq("id", viewer.profile.id); });
   return (
     <div className="pb-4">
       <section className="lilac-wash relative overflow-hidden rounded-b-[36px] px-6 pb-9 pt-8 text-center">
@@ -50,7 +54,7 @@ export default async function Home() {
         </div>
         {/* Only her own words on Home (her note): a greeting for clients, her intro line for everyone. */}
         {firstName
-          ? <h1 className="display mx-auto mt-5 max-w-xs animate-rise text-[1.25rem] text-ink [animation-delay:100ms]">Welcome back, {firstName}</h1>
+          ? <h1 className="display mx-auto mt-5 max-w-xs animate-rise text-[1.25rem] text-ink [animation-delay:100ms]">{firstVisit ? "Welcome" : "Welcome back"}, {firstName}</h1>
           : <h1 className="sr-only">{settings.studio_name || "Re·Form Pilates Studio"}</h1>}
         <p className="mx-auto mt-3 max-w-sm animate-rise text-[0.95rem] leading-relaxed text-ink-soft [animation-delay:140ms]">{settings.intro_line}</p>
         <ButtonLink href="/packs" className="mt-6 w-full max-w-xs animate-rise [animation-delay:180ms]">

@@ -1277,6 +1277,7 @@ export type Database = {
           goal: string | null;
           health_expiry_warned_at: string | null;
           health_mode: string | null;
+          home_seen_at: string | null;
           id: string;
           inactive_warned_at: string | null;
           last_name: string | null;
@@ -1308,6 +1309,7 @@ export type Database = {
           goal?: string | null;
           health_expiry_warned_at?: string | null;
           health_mode?: string | null;
+          home_seen_at?: string | null;
           id?: string;
           inactive_warned_at?: string | null;
           last_name?: string | null;
@@ -1338,6 +1340,7 @@ export type Database = {
           goal?: string | null;
           health_expiry_warned_at?: string | null;
           health_mode?: string | null;
+          home_seen_at?: string | null;
           id?: string;
           inactive_warned_at?: string | null;
           last_name?: string | null;
