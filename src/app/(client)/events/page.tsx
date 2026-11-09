@@ -22,7 +22,7 @@ export default async function EventsPage() {
     getTexts(),
     // A-050: events only, so the 1,000-row cap on a year of classes can't hide the later ones.
     availability(now, new Date(now.getTime() + 730 * 86_400_000), { eventsOnly: true }),
-    db().from("class_sessions").select("id, title, recap, starts_at, location, class_types!inner(kind)")
+    db().from("class_sessions").select("id, title, recap, description, starts_at, location, class_types!inner(kind)")
       .eq("class_types.kind", "event").eq("status", "scheduled").lt("starts_at", now.toISOString())
       .order("starts_at", { ascending: false }).limit(12),
   ]);
@@ -73,7 +73,8 @@ export default async function EventsPage() {
                   <p className="flex items-center gap-1.5 text-sm text-ink-soft">{longDate(e.starts_at)}{e.location && <><span aria-hidden>·</span><MapPin aria-hidden size={13} />{e.location}</>}</p>
                 </div>
                 {photos.some((p) => p.slot === `event:${e.id}`) && <PhotoStrip photos={photos.filter((p) => p.slot === `event:${e.id}`)} label={e.title ?? "Event"} slides />}
-                {e.recap && <p className="mt-3 px-5 text-[0.95rem] leading-relaxed text-ink-soft">{e.recap}</p>}
+                {/* Her words after the event, or else the event's description (her note, 9 Nov). */}
+                {(e.recap || e.description) && <p className="mt-3 whitespace-pre-line px-5 text-[0.95rem] leading-relaxed text-ink-soft">{e.recap || e.description}</p>}
               </li>
             ))}
           </ul>

@@ -39,7 +39,7 @@ export function SessionFields({ types, d = {}, event = false }: { types: Type[];
           <Field id="event_policy" label="Event terms (optional)" hint="Payment, refunds, weather… Shown instead of the studio's cancellation policy.">
             <textarea id="event_policy" name="event_policy" rows={3} defaultValue={d.event_policy ?? ""} className={`${inputClass} py-3`} />
           </Field>
-          <Field id="recap" label="After the event (optional)" hint="A few words for Previous events, shown with the photos you add below.">
+          <Field id="recap" label="After the event (optional)" hint="Shown under the event in Previous events, with the photos you add below. Leave empty to show the description instead.">
             <textarea id="recap" name="recap" rows={2} defaultValue={d.recap ?? ""} className={`${inputClass} py-3`} />
           </Field>
         </div>

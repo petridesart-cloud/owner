@@ -34,3 +34,25 @@ test("the studio signs in with email + password and lands in the studio", async 
   await expect(page.getByRole("heading", { name: "Classes" })).toBeVisible();
 });
 
+
+// Her note (9 Nov): she can find any past event and change the words shown under it in Previous events.
+test("the studio edits a past event's text from Past events, and Previous events shows it", async ({ page }) => {
+  const db = serviceDb();
+  const { data: type } = await db.from("class_types").select("id").eq("kind", "event").limit(1).single();
+  const start = new Date(Date.now() - 40 * 86_400_000);
+  const title = `Sunset SUP ${Date.now()}`;
+  const { data: ev } = await db.from("class_sessions").insert({
+    class_type_id: type!.id, starts_at: start.toISOString(), ends_at: new Date(start.getTime() + 90 * 60_000).toISOString(),
+    capacity: 8, price_cents: 0, title, status: "scheduled",
+  }).select("id").single();
+  await adminSignIn(page, process.env.E2E_ADMIN_EMAIL ?? "studio@example.com", process.env.E2E_ADMIN_CODE ?? "24681357");
+  await page.goto("/admin/classes");
+  await page.getByRole("link", { name: /Past events/ }).click();
+  await page.getByRole("link", { name: new RegExp(title) }).click();
+  await expect(page).toHaveURL(new RegExp(`/admin/classes/${ev!.id}`));
+  await page.getByLabel("After the event (optional)").fill("Calm water and a golden sky. Thank you all!");
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page.getByText("Saved.")).toBeVisible();
+  await page.goto("/events");
+  await expect(page.getByText("Calm water and a golden sky. Thank you all!")).toBeVisible();
+});

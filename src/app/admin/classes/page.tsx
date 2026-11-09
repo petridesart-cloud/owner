@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarRange, CalendarX } from "lucide-react";
+import { CalendarRange, CalendarX, History } from "lucide-react";
 import { Badge, ButtonLink } from "@/components/ui";
 import { DayStrip } from "@/components/DayStrip";
 import { db } from "@/lib/supabase/admin";
@@ -37,6 +37,7 @@ export default async function ClassesPage({ searchParams }: { searchParams: Prom
       <div className="mb-3 grid grid-cols-2 gap-2">
         <Link href="/admin/timetable" className="card flex min-h-14 items-center gap-2.5 px-4 py-2"><CalendarRange aria-hidden size={18} className="shrink-0 text-plum-700" /><span className="font-medium text-ink">Monthly timetable</span></Link>
         <Link href="/admin/closures" className="card flex min-h-14 items-center gap-2.5 px-4 py-2"><CalendarX aria-hidden size={18} className="shrink-0 text-plum-700" /><span className="font-medium text-ink">Holidays &amp; closures</span></Link>
+        <Link href="/admin/classes/past-events" className="card col-span-2 flex min-h-14 items-center gap-2.5 px-4 py-2"><History aria-hidden size={18} className="shrink-0 text-plum-700" /><span className="font-medium text-ink">Past events</span><span className="text-sm text-ink-soft">· edit their text and photos</span></Link>
       </div>
 
       <div className="-mx-4"><DayStrip keys={keys} counts={counts} selected={shown} today={today} href="/admin/classes" className="top-[6.5rem]" /></div>
