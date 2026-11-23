@@ -52,7 +52,7 @@ export default async function SessionAdmin({ params }: { params: Promise<{ id: s
         <h2 className="display border-b border-line px-4 py-3 text-[0.95rem]">Clients</h2>
         <ul className="divide-y divide-line">
           {roster.map((b) => (
-            <li key={b.id} className="flex items-center gap-3 px-4 py-3">
+            <li key={b.id} className="flex items-start gap-3 px-4 py-3">
               {!past && <CheckInToggle bookingId={b.id} checked={!!b.checked_in_at} name={b.profiles?.full_name ?? "Client"} />}
               <div className="min-w-0 flex-1">
                 <Link href={`/admin/clients/${b.profiles?.id}`} className="block truncate font-medium text-ink hover:underline">{b.profiles?.full_name ?? "Client"}</Link>
@@ -70,8 +70,9 @@ export default async function SessionAdmin({ params }: { params: Promise<{ id: s
                 {past && s.status === "scheduled" && (
                   <Attendance bookingId={b.id} name={b.profiles?.full_name ?? "client"} state={b.status === "no_show" ? "no_show" : b.checked_in_at ? "attended" : "unmarked"} />
                 )}
+                {/* On their own row under the name, so a phone never squeezes the name behind the buttons (her screenshot, 23 Nov). */}
+                {!past && b.status === "confirmed" && s.status === "scheduled" && <RosterActions bookingId={b.id} sessionId={s.id} name={b.profiles?.full_name ?? "client"} past={past} insideCutoff={insideCutoff} cutoffHours={cfg.cancellation_cutoff_hours} />}
               </div>
-              {!past && b.status === "confirmed" && s.status === "scheduled" && <RosterActions bookingId={b.id} sessionId={s.id} name={b.profiles?.full_name ?? "client"} past={past} insideCutoff={insideCutoff} cutoffHours={cfg.cancellation_cutoff_hours} />}
             </li>
           ))}
           {roster.length === 0 && <li className="px-4 py-4 text-sm text-ink-soft">Nobody booked yet.</li>}

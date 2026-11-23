@@ -13,7 +13,7 @@ export function RosterActions({ bookingId, sessionId, name, past, insideCutoff =
     if (confirm(question)) start(async () => { const r = await adminCancelBooking(bookingId, sessionId, returnClass); if (!r.ok) setErr(r.error); });
   };
   return (
-    <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
+    <div className="mt-2 flex flex-wrap gap-1.5">
       {past ? (
         <button disabled={pending} onClick={() => start(async () => { const r = await markNoShow(bookingId); if (!r.ok) setErr(r.error); })} className="min-h-11 rounded-full border border-line bg-white px-3 text-xs text-ink hover:bg-lilac-50" aria-label={`No-show, ${name}`}>No-show</button>
       ) : insideCutoff ? (
